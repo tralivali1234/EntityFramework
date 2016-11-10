@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -29,9 +30,15 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             [NotNull] Expression expression,
             [NotNull] QueryContext queryContext,
             [NotNull] IEvaluatableExpressionFilter evaluatableExpressionFilter,
-            [NotNull] ISensitiveDataLogger logger)
+            [NotNull] ISensitiveDataLogger logger,
+            bool parameterize)
         {
-            var visitor = new ParameterExtractingExpressionVisitor(evaluatableExpressionFilter, queryContext, logger);
+            var visitor 
+                = new ParameterExtractingExpressionVisitor(
+                    evaluatableExpressionFilter, 
+                    queryContext, 
+                    logger,
+                    parameterize);
 
             return visitor.ExtractParameters(expression);
         }
@@ -39,6 +46,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         private readonly IEvaluatableExpressionFilter _evaluatableExpressionFilter;
         private readonly QueryContext _queryContext;
         private readonly ISensitiveDataLogger _logger;
+        private readonly bool _parameterize;
 
         private PartialEvaluationInfo _partialEvaluationInfo;
 
@@ -47,11 +55,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         private ParameterExtractingExpressionVisitor(
             IEvaluatableExpressionFilter evaluatableExpressionFilter,
             QueryContext queryContext,
-            ISensitiveDataLogger logger)
+            ISensitiveDataLogger logger,
+            bool parameterize)
         {
             _evaluatableExpressionFilter = evaluatableExpressionFilter;
             _queryContext = queryContext;
             _logger = logger;
+            _parameterize = parameterize;
         }
 
         /// <summary>
@@ -261,8 +271,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (leftConstantExpression != null)
             {
                 var constantValue = (bool)leftConstantExpression.Value;
-                if ((constantValue && binaryExpression.NodeType == ExpressionType.OrElse)
-                    || (!constantValue && binaryExpression.NodeType == ExpressionType.AndAlso))
+                if (constantValue && binaryExpression.NodeType == ExpressionType.OrElse
+                    || !constantValue && binaryExpression.NodeType == ExpressionType.AndAlso)
                 {
                     return newLeftExpression;
                 }
@@ -274,8 +284,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (rightConstantExpression != null)
             {
                 var constantValue = (bool)rightConstantExpression.Value;
-                if ((constantValue && binaryExpression.NodeType == ExpressionType.OrElse)
-                    || (!constantValue && binaryExpression.NodeType == ExpressionType.AndAlso))
+                if (constantValue && binaryExpression.NodeType == ExpressionType.OrElse
+                    || !constantValue && binaryExpression.NodeType == ExpressionType.AndAlso)
                 {
                     return newRightExpression;
                 }
@@ -311,6 +321,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (parameterExpression != null)
             {
                 return parameterExpression;
+            }
+
+            if (!_parameterize)
+            {
+                return Expression.Constant(parameterValue);
             }
 
             if (parameterName == null)
