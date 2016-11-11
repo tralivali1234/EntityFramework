@@ -2385,6 +2385,15 @@ INNER JOIN [Level2] AS [l2] ON [l1].[Id] = (
                 Sql);
         }
 
+        public override void Complex_query_with_optional_navigations_and_client_side_evaluation()
+        {
+            base.Complex_query_with_optional_navigations_and_client_side_evaluation();
+
+            Assert.Equal(
+                @"",
+                Sql);
+        }
+
         private const string FileLineEnding = @"
 ";
 

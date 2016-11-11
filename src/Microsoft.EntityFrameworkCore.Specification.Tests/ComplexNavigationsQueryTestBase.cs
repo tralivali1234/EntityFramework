@@ -3094,6 +3094,26 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             }
         }
 
+        // Issue #6997
+        ////[ConditionalFact]
+        public virtual void Complex_query_with_optional_navigations_and_client_side_evaluation()
+        {
+            AssertQuery<Level1>(
+            l1s => l1s.Where(l1 => !l1.OneToMany_Optional.Select(l2 => l2.OneToOne_Optional_FK.OneToOne_Optional_FK.Id).All(l4 => ClientMethod(l4))),
+            l1s => l1s.Where(l1 => l1.OneToMany_Optional.Select(l2 => MaybeScalar(
+                l2.OneToOne_Optional_FK,
+                () => MaybeScalar<int>(
+                    l2.OneToOne_Optional_FK.OneToOne_Optional_FK,
+                    () => l2.OneToOne_Optional_FK.OneToOne_Optional_FK.Id))).All(a => true)),
+                e => e.Id,
+                (e, a) => Assert.Equal(e.Id, a.Id));
+        }
+
+        private bool ClientMethod(int? id)
+        {
+            return true;
+        }
+
         private static TResult Maybe<TResult>(object caller, Func<TResult> expression) where TResult : class
         {
             if (caller == null)
