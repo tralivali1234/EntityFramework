@@ -2,21 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Data.SqlClient;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Moq;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests.Migrations
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Migrations
 {
     public class SqlServerHistoryRepositoryTest
     {
@@ -140,50 +132,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests.Migrations
         }
 
         private static IHistoryRepository CreateHistoryRepository(string schema = null)
-        {
-            var annotationsProvider = new SqlServerAnnotationProvider();
-            var sqlGenerator = new SqlServerSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies());
-            var typeMapper = new SqlServerTypeMapper(new RelationalTypeMapperDependencies());
-
-            var commandBuilderFactory = new RelationalCommandBuilderFactory(
-                new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                    new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                    new DiagnosticListener("Fake")),
-                new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                    new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                    new DiagnosticListener("Fake")),
-                typeMapper);
-
-            return new SqlServerHistoryRepository(
-                new HistoryRepositoryDependencies(
-                    Mock.Of<IRelationalDatabaseCreator>(),
-                    Mock.Of<IRawSqlCommandBuilder>(),
-                    Mock.Of<ISqlServerConnection>(),
-                    new DbContextOptions<DbContext>(
-                        new Dictionary<Type, IDbContextOptionsExtension>
-                        {
-                            {
-                                typeof(SqlServerOptionsExtension),
-                                new SqlServerOptionsExtension().WithMigrationsHistoryTableSchema(schema)
-                            }
-                        }),
-                    new MigrationsModelDiffer(
-                        new SqlServerTypeMapper(new RelationalTypeMapperDependencies()),
-                        annotationsProvider,
-                        new SqlServerMigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies())),
-                    new SqlServerMigrationsSqlGenerator(
-                        new MigrationsSqlGeneratorDependencies(
-                            commandBuilderFactory,
-                            new SqlServerSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
-                            typeMapper,
-                            annotationsProvider),
-                        new SqlServerMigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies())),
-                    annotationsProvider,
-                    sqlGenerator));
-        }
-
-        private class Context : DbContext
-        {
-        }
+            => new DbContext(
+                    new DbContextOptionsBuilder()
+                        .UseInternalServiceProvider(SqlServerTestHelpers.Instance.CreateServiceProvider())
+                        .UseSqlServer(
+                            new SqlConnection("Database=DummyDatabase"),
+                            b => b.MigrationsHistoryTable(HistoryRepository.DefaultTableName, schema))
+                        .Options)
+                .GetService<IHistoryRepository>();
     }
 }

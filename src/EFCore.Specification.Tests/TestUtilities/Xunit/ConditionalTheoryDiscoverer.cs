@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit
+namespace Microsoft.EntityFrameworkCore.TestUtilities.Xunit
 {
     public class ConditionalTheoryDiscoverer : TheoryDiscoverer
     {
@@ -18,15 +18,15 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit
         {
             var skipReason = testMethod.EvaluateSkipConditions();
             return skipReason != null
-               ? new[] { new SkippedTestCase(skipReason, DiagnosticMessageSink, discoveryOptions.MethodDisplayOrDefault(), testMethod) }
-               : base.CreateTestCasesForTheory(discoveryOptions, testMethod, theoryAttribute);
+                ? new[] { new SkippedTestCase(skipReason, DiagnosticMessageSink, discoveryOptions.MethodDisplayOrDefault(), testMethod) }
+                : base.CreateTestCasesForTheory(discoveryOptions, testMethod, theoryAttribute);
         }
 
         protected override IEnumerable<IXunitTestCase> CreateTestCasesForDataRow(ITestFrameworkDiscoveryOptions discoveryOptions, ITestMethod testMethod, IAttributeInfo theoryAttribute, object[] dataRow)
         {
             var skipReason = testMethod.EvaluateSkipConditions();
             return skipReason != null
-                ? base.CreateTestCasesForSkippedDataRow(discoveryOptions, testMethod, theoryAttribute, dataRow, skipReason)
+                ? CreateTestCasesForSkippedDataRow(discoveryOptions, testMethod, theoryAttribute, dataRow, skipReason)
                 : base.CreateTestCasesForDataRow(discoveryOptions, testMethod, theoryAttribute, dataRow);
         }
     }

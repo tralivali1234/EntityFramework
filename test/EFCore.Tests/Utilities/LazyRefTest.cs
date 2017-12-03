@@ -4,7 +4,8 @@
 using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Utilities
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Utilities
 {
     public class LazyRefTest
     {
@@ -30,9 +31,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
         [Fact]
         public void Value_can_be_set_explicitly()
         {
-            var lazy = new LazyRef<string>(() => "Cherry Coke");
-
-            lazy.Value = "Fresca";
+            var lazy = new LazyRef<string>(() => "Cherry Coke")
+            {
+                Value = "Fresca"
+            };
 
             Assert.True(lazy.HasValue);
             Assert.Equal("Fresca", lazy.Value);

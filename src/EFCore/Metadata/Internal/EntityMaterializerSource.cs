@@ -18,10 +18,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
     /// </summary>
     public class EntityMaterializerSource : IEntityMaterializerSource
     {
-        private static readonly MethodInfo _readValue
-            = typeof(ValueBuffer).GetTypeInfo().DeclaredProperties
-                .Single(p => p.GetIndexParameters().Any()).GetMethod;
-
         private ConcurrentDictionary<IEntityType, Func<ValueBuffer, object>> _materializers;
 
         /// <summary>
@@ -29,15 +25,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual Expression CreateReadValueExpression(
-                Expression valueBuffer,
-                Type type,
-                int index,
-                IProperty property)
-            => Expression.Call(
+            Expression valueBuffer,
+            Type type,
+            int index,
+            IProperty property)
+        {
+            return Expression.Call(
                 TryReadValueMethod.MakeGenericMethod(type),
                 valueBuffer,
                 Expression.Constant(index),
                 Expression.Constant(property, typeof(IPropertyBase)));
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -62,7 +60,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 ThrowReadValueException<TValue>(e, untypedValue, property);
             }
 
-            return default(TValue);
+            return default;
         }
 
         /// <summary>
@@ -110,8 +108,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        [Obsolete("Use CreateReadValueExpression making sure to pass bound property if available.")]
         public virtual Expression CreateReadValueCallExpression(Expression valueBuffer, int index)
-            => Expression.Call(valueBuffer, _readValue, Expression.Constant(index));
+            => Expression.Call(valueBuffer, ValueBuffer.GetValueMethod, Expression.Constant(index));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -122,10 +121,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             Expression valueBufferExpression,
             int[] indexMap = null)
         {
-            // ReSharper disable once SuspiciousTypeConversion.Global
-            var materializer = entityType as IEntityMaterializer;
-
-            if (materializer != null)
+            if (entityType is IEntityMaterializer materializer)
             {
                 return Expression.Call(
                     Expression.Constant(materializer),
@@ -188,14 +184,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual Func<ValueBuffer, object> GetMaterializer(IEntityType entityType)
-            => Materializers.GetOrAdd(entityType, e =>
-                {
-                    var valueBufferParameter = Expression.Parameter(typeof(ValueBuffer), "values");
+            => Materializers.GetOrAdd(
+                entityType, e =>
+                    {
+                        var valueBufferParameter = Expression.Parameter(typeof(ValueBuffer), "values");
 
-                    return Expression.Lambda<Func<ValueBuffer, object>>(
-                        CreateMaterializeExpression(e, valueBufferParameter),
-                        valueBufferParameter)
-                        .Compile();
-                });
+                        return Expression.Lambda<Func<ValueBuffer, object>>(
+                                CreateMaterializeExpression(e, valueBufferParameter),
+                                valueBufferParameter)
+                            .Compile();
+                    });
     }
 }

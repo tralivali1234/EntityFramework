@@ -24,7 +24,9 @@ namespace Microsoft.EntityFrameworkCore.Tools
         private CommandOption _startupProject;
         private CommandOption _framework;
         private CommandOption _configuration;
+        private CommandOption _runtime;
         private CommandOption _msbuildprojectextensionspath;
+        private CommandOption _noBuild;
         private CommandOption _help;
         private IList<string> _args;
 
@@ -39,7 +41,9 @@ namespace Microsoft.EntityFrameworkCore.Tools
             _startupProject = options.StartupProject;
             _framework = options.Framework;
             _configuration = options.Configuration;
+            _runtime = options.Runtime;
             _msbuildprojectextensionspath = options.MSBuildProjectExtensionsPath;
+            _noBuild = options.NoBuild;
 
             command.VersionOption("--version", GetVersion);
             _help = command.Option("-h|--help", description: null);
@@ -76,9 +80,13 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 starupProjectFile,
                 _msbuildprojectextensionspath.Value(),
                 _framework.Value(),
-                _configuration.Value());
+                _configuration.Value(),
+                _runtime.Value());
 
-            startupProject.Build();
+            if (!_noBuild.HasValue())
+            {
+                startupProject.Build();
+            }
 
             string executable;
             var args = new List<string>();
@@ -106,19 +114,13 @@ namespace Microsoft.EntityFrameworkCore.Tools
             {
                 executable = Path.Combine(
                     toolsPath,
-                    "net46",
+                    "net461",
                     startupProject.PlatformTarget == "x86"
                         ? "ef.x86.exe"
                         : "ef.exe");
             }
-            else if (targetFramework.Identifier == ".NETCoreApp"
-                || targetFramework.Identifier == ".NETStandard")
+            else if (targetFramework.Identifier == ".NETCoreApp")
             {
-                if (targetFramework.Identifier == ".NETStandard")
-                {
-                    Reporter.WriteWarning(Resources.NETStandardStartupProject(startupProject.ProjectName));
-                }
-
                 executable = "dotnet";
                 args.Add("exec");
                 args.Add("--depsfile");
@@ -150,7 +152,11 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     args.Add(startupProject.RuntimeFrameworkVersion);
                 }
 
-                args.Add(Path.Combine(toolsPath, "netcoreapp1.0", "ef.dll"));
+                args.Add(Path.Combine(toolsPath, "netcoreapp2.0", "ef.dll"));
+            }
+            else if (targetFramework.Identifier == ".NETStandard")
+            {
+                throw new CommandException(Resources.NETStandardStartupProject(startupProject.ProjectName));
             }
             else
             {
@@ -165,6 +171,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
             args.Add(startupTargetPath);
             args.Add("--project-dir");
             args.Add(project.ProjectDir);
+            args.Add("--language");
+            args.Add(project.Language);
 
             if (Reporter.IsVerbose)
             {

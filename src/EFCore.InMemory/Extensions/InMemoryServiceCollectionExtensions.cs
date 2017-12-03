@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
+using Remotion.Linq.Parsing.ExpressionVisitors.TreeEvaluation;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection
@@ -64,12 +65,15 @@ namespace Microsoft.Extensions.DependencyInjection
                 .TryAdd<IQueryContextFactory, InMemoryQueryContextFactory>()
                 .TryAdd<IEntityQueryModelVisitorFactory, InMemoryQueryModelVisitorFactory>()
                 .TryAdd<IEntityQueryableExpressionVisitorFactory, InMemoryEntityQueryableExpressionVisitorFactory>()
-                .TryAddProviderSpecificServices(b => b
-                    .TryAddSingleton<IInMemoryStoreCache, InMemoryStoreCache>()
-                    .TryAddSingleton<IInMemoryTableFactory, InMemoryTableFactory>()
-                    .TryAddScoped<IInMemoryStoreSource, InMemoryStoreSource>()
-                    .TryAddScoped<IInMemoryDatabase, InMemoryDatabase>()
-                    .TryAddScoped<IMaterializerFactory, MaterializerFactory>());
+                .TryAdd<IEvaluatableExpressionFilter, EvaluatableExpressionFilter>()
+                .TryAdd<ISingletonOptions, IInMemorySingletonOptions>(p => p.GetService<IInMemorySingletonOptions>())
+                .TryAddProviderSpecificServices(
+                    b => b
+                        .TryAddSingleton<IInMemorySingletonOptions, InMemorySingletonOptions>()
+                        .TryAddSingleton<IInMemoryStoreCache, InMemoryStoreCache>()
+                        .TryAddSingleton<IInMemoryTableFactory, InMemoryTableFactory>()
+                        .TryAddScoped<IInMemoryDatabase, InMemoryDatabase>()
+                        .TryAddScoped<IMaterializerFactory, MaterializerFactory>());
 
             builder.TryAddCoreServices();
 

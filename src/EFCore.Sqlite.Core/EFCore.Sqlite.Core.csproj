@@ -1,16 +1,15 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\..\build\common.props" />
-
   <PropertyGroup>
     <AssemblyName>Microsoft.EntityFrameworkCore.Sqlite</AssemblyName>
     <PackageId>Microsoft.EntityFrameworkCore.Sqlite.Core</PackageId>
     <RootNamespace>Microsoft.EntityFrameworkCore</RootNamespace>
     <Description>SQLite database provider for Entity Framework Core.</Description>
-    <TargetFramework>netstandard1.3</TargetFramework>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <MinClientVersion>3.6</MinClientVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageTags>$(PackageTags);SQLite</PackageTags>
+    <CodeAnalysisRuleSet>..\EFCore.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,7 +21,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="$(AspNetCoreVersion)" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="$(MicrosoftDataSqliteCorePackageVersion)" />
+    <PackageReference Include="StyleCop.Analyzers" Version="$(StyleCopAnalyzersPackageVersion)" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>

@@ -14,7 +14,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class CompositeRelationalParameter : IRelationalParameter
+    public class CompositeRelationalParameter : RelationalParameterBase
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -36,7 +36,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string InvariantName { get; }
+        public override string InvariantName { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -48,14 +48,12 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void AddDbParameter(DbCommand command, object value)
+        public override void AddDbParameter(DbCommand command, object value)
         {
             Check.NotNull(command, nameof(command));
             Check.NotNull(value, nameof(value));
 
-            var innerValues = value as object[];
-
-            if (innerValues != null)
+            if (value is object[] innerValues)
             {
                 if (innerValues.Length < RelationalParameters.Count)
                 {

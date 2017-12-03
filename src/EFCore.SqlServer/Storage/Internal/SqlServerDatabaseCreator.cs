@@ -6,7 +6,9 @@ using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 
@@ -21,6 +23,10 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         private readonly ISqlServerConnection _connection;
         private readonly IRawSqlCommandBuilder _rawSqlCommandBuilder;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqlServerDatabaseCreator(
             [NotNull] RelationalDatabaseCreatorDependencies dependencies,
             [NotNull] ISqlServerConnection connection,
@@ -64,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override async Task CreateAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override async Task CreateAsync(CancellationToken cancellationToken = default)
         {
             using (var masterConnection = _connection.CreateMasterConnection())
             {
@@ -82,19 +88,16 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         protected override bool HasTables()
-            => Dependencies.ExecutionStrategyFactory.Create().Execute(
-                connection => (int)CreateHasTablesCommand().ExecuteScalar(connection) != 0,
-                _connection);
+            => Dependencies.ExecutionStrategyFactory.Create().Execute(_connection, connection => (int)CreateHasTablesCommand().ExecuteScalar(connection) != 0);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected override Task<bool> HasTablesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        protected override Task<bool> HasTablesAsync(CancellationToken cancellationToken = default)
             => Dependencies.ExecutionStrategyFactory.Create().ExecuteAsync(
-                async (connection, ct) => (int)await CreateHasTablesCommand().ExecuteScalarAsync(connection, cancellationToken: ct) != 0,
                 _connection,
-                cancellationToken);
+                async (connection, ct) => (int)await CreateHasTablesCommand().ExecuteScalarAsync(connection, cancellationToken: ct) != 0, cancellationToken);
 
         private IRelationalCommand CreateHasTablesCommand()
             => _rawSqlCommandBuilder
@@ -115,14 +118,17 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
         private bool Exists(bool retryOnNotExists)
             => Dependencies.ExecutionStrategyFactory.Create().Execute(
-                giveUp =>
+                DateTime.UtcNow + RetryTimeout, giveUp =>
                     {
                         while (true)
                         {
                             try
                             {
-                                _connection.Open();
-                                _connection.Close();
+                                using (new TransactionScope(TransactionScopeOption.Suppress))
+                                {
+                                    _connection.Open(errorsExpected: true);
+                                    _connection.Close();
+                                }
                                 return true;
                             }
                             catch (SqlException e)
@@ -142,26 +148,29 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                                 Thread.Sleep(RetryDelay);
                             }
                         }
-                    }, DateTime.UtcNow + RetryTimeout);
+                    });
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override Task<bool> ExistsAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override Task<bool> ExistsAsync(CancellationToken cancellationToken = default)
             => ExistsAsync(retryOnNotExists: false, cancellationToken: cancellationToken);
 
         private Task<bool> ExistsAsync(bool retryOnNotExists, CancellationToken cancellationToken)
             => Dependencies.ExecutionStrategyFactory.Create().ExecuteAsync(
-                async (giveUp, ct) =>
+                DateTime.UtcNow + RetryTimeout, async (giveUp, ct) =>
                     {
                         while (true)
                         {
                             try
                             {
-                                await _connection.OpenAsync(ct);
+                                using (new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled))
+                                {
+                                    await _connection.OpenAsync(ct, errorsExpected: true);
 
-                                _connection.Close();
+                                    _connection.Close();
+                                }
                                 return true;
                             }
                             catch (SqlException e)
@@ -181,7 +190,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                                 await Task.Delay(RetryDelay, ct);
                             }
                         }
-                    }, DateTime.UtcNow + RetryTimeout, cancellationToken);
+                    }, cancellationToken);
 
         // Login failed is thrown when database does not exist (See Issue #776)
         // Unable to attach database file is thrown when file does not exist (See Issue #2810)
@@ -210,11 +219,11 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             //   System.Data.SqlClient.SqlException: Unable to Attach database file as database xxxxxxx.
             // And (Number 5120)
             //   System.Data.SqlClient.SqlException: Unable to open the physical file xxxxxxx.
-            if ((exception.Number == 233
-                 || exception.Number == -2
-                 || exception.Number == 4060
-                 || exception.Number == 1832
-                 || exception.Number == 5120))
+            if (exception.Number == 233
+                || exception.Number == -2
+                || exception.Number == 4060
+                || exception.Number == 1832
+                || exception.Number == 5120)
             {
                 ClearPool();
                 return true;
@@ -241,7 +250,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override async Task DeleteAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override async Task DeleteAsync(CancellationToken cancellationToken = default)
         {
             ClearAllPools();
 
@@ -254,11 +263,15 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
         private IReadOnlyList<MigrationCommand> CreateDropCommands()
         {
+            var databaseName = _connection.DbConnection.Database;
+            if (string.IsNullOrEmpty(databaseName))
+            {
+                throw new InvalidOperationException(SqlServerStrings.NoInitialCatalog);
+            }
+
             var operations = new MigrationOperation[]
             {
-                // TODO Check DbConnection.Database always gives us what we want
-                // Issue #775
-                new SqlServerDropDatabaseOperation { Name = _connection.DbConnection.Database }
+                new SqlServerDropDatabaseOperation { Name = databaseName }
             };
 
             var masterCommands = Dependencies.MigrationsSqlGenerator.Generate(operations);

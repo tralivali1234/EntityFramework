@@ -1,16 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
-
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
+namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class SortableBindingListTest
     {
@@ -152,10 +149,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
             public static implicit operator ListElement(int i) => new ListElement(i);
 
             public int Int { get; }
-            public int? NullableInt { get; set; }
-            public string String { get; set; }
-            public Random Random { get; set; }
-            public byte[] ByteArray { get; set; }
+            public int? NullableInt { get; }
+            public string String { get; }
+            public Random Random { get; }
+            public byte[] ByteArray { get; }
 
             public static PropertyDescriptor Property(string name)
                 => TypeDescriptor.GetProperties(typeof(ListElement))[name];
@@ -180,7 +177,3 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         }
     }
 }
-#elif NETCOREAPP2_0
-#else
-#error target frameworks need to be updated.
-#endif

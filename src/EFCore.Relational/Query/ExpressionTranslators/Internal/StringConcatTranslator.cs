@@ -17,9 +17,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
     {
         private static readonly MethodInfo _stringConcatMethodInfo = typeof(string).GetTypeInfo()
             .GetDeclaredMethods(nameof(string.Concat))
-            .Single(m => m.GetParameters().Length == 2
-                         && m.GetParameters()[0].ParameterType == typeof(object)
-                         && m.GetParameters()[1].ParameterType == typeof(object));
+            .Single(
+                m => m.GetParameters().Length == 2
+                     && m.GetParameters()[0].ParameterType == typeof(object)
+                     && m.GetParameters()[1].ParameterType == typeof(object));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -27,9 +28,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
         /// </summary>
         public virtual Expression Translate(Expression expression)
         {
-            var binaryExpression = expression as BinaryExpression;
-            if (binaryExpression != null
-                && binaryExpression.NodeType == ExpressionType.Add
+            if (expression is BinaryExpression binaryExpression && binaryExpression.NodeType == ExpressionType.Add
                 && _stringConcatMethodInfo.Equals(binaryExpression.Method))
             {
                 var newLeft = binaryExpression.Left.Type != typeof(string)
@@ -51,12 +50,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
         }
 
         private static Expression HandleNullTypedConstant(Expression expression)
-        {
-            var constantExpression = expression as ConstantExpression;
-
-            return constantExpression != null && constantExpression.Type == typeof(object) && constantExpression.Value != null
+            => expression is ConstantExpression constantExpression
+            && constantExpression.Type == typeof(object)
+            && constantExpression.Value != null
                 ? Expression.Constant(constantExpression.Value)
                 : expression;
-        }
     }
 }

@@ -2,11 +2,12 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.Extensions.Caching.Memory;
@@ -194,7 +195,7 @@ namespace Microsoft.EntityFrameworkCore
         ///         and <see cref="EntityFrameworkQueryableExtensions.AsTracking{TEntity}(IQueryable{TEntity})" /> methods.
         ///     </para>
         ///     <para>
-        ///         The default value is <see cref="EntityFrameworkCore.QueryTrackingBehavior.TrackAll" />. This means 
+        ///         The default value is <see cref="EntityFrameworkCore.QueryTrackingBehavior.TrackAll" />. This means
         ///         the change tracker will keep track of changes for all entities that are returned from a LINQ query.
         ///     </para>
         /// </summary>
@@ -221,7 +222,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </summary>
         /// <example>
         ///     <code>
-        ///         optionsBuilder.ConfigureWarnings(warnings => 
+        ///         optionsBuilder.ConfigureWarnings(warnings =>
         ///             warnings.Default(WarningBehavior.Ignore)
         ///                     .Log(CoreEventId.IncludeIgnoredWarning, CoreEventId.ModelValidationWarning)
         ///                     .Throw(RelationalEventId.QueryClientEvaluationWarning))
@@ -259,7 +260,8 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="TService"> The type (usually an interface) that defines the contract of the service to replace. </typeparam>
         /// <typeparam name="TImplementation"> The new implementation type for the service. </typeparam>
         /// <returns> The same builder instance so that multiple calls can be chained. </returns>
-        public virtual DbContextOptionsBuilder ReplaceService<TService, TImplementation>() where TImplementation : TService
+        public virtual DbContextOptionsBuilder ReplaceService<TService, TImplementation>()
+            where TImplementation : TService
             => WithOption(e => e.WithReplacedService(typeof(TService), typeof(TImplementation)));
 
         /// <summary>
@@ -287,5 +289,31 @@ namespace Microsoft.EntityFrameworkCore
 
             return this;
         }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

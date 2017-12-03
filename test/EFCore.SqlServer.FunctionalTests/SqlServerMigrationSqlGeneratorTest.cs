@@ -8,14 +8,15 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.EntityFrameworkCore.Relational.Specification.Tests;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerMigrationSqlGeneratorTest : MigrationSqlGeneratorTestBase
     {
-        [Fact]
         public override void CreateIndexOperation_with_filter_where_clause()
         {
             base.CreateIndexOperation_with_filter_where_clause();
@@ -25,7 +26,6 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 Sql);
         }
 
-        [Fact]
         public override void CreateIndexOperation_with_filter_where_clause_and_is_unique()
         {
             base.CreateIndexOperation_with_filter_where_clause_and_is_unique();
@@ -52,7 +52,6 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 Sql);
         }
 
-        [Fact]
         public override void AddColumnOperation_with_computed_column_SQL()
         {
             base.AddColumnOperation_with_computed_column_SQL();
@@ -74,8 +73,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     ColumnType = "int",
                     DefaultValue = 0,
                     IsNullable = false,
-                    [SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy] =
-                        SqlServerValueGenerationStrategy.IdentityColumn
+                    [SqlServerAnnotationNames.ValueGenerationStrategy] =
+                    SqlServerValueGenerationStrategy.IdentityColumn
                 });
 
             Assert.Equal(
@@ -128,7 +127,6 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 Sql);
         }
 
-        [Fact]
         public override void AddColumnOperation_with_ansi()
         {
             base.AddColumnOperation_with_ansi();
@@ -138,7 +136,6 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 Sql);
         }
 
-        [Fact]
         public override void AddColumnOperation_with_unicode_overridden()
         {
             base.AddColumnOperation_with_unicode_overridden();
@@ -202,7 +199,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 {
                     Table = "People",
                     Columns = new[] { "Id" },
-                    [SqlServerFullAnnotationNames.Instance.Clustered] = false
+                    [SqlServerAnnotationNames.Clustered] = false
                 });
 
             Assert.Equal(
@@ -250,8 +247,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Table = "People",
                     Name = "Id",
                     ClrType = typeof(int),
-                    [SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy] =
-                        SqlServerValueGenerationStrategy.IdentityColumn
+                    [SqlServerAnnotationNames.ValueGenerationStrategy] =
+                    SqlServerValueGenerationStrategy.IdentityColumn
                 });
 
             Assert.Equal(
@@ -295,11 +292,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
-                    .Entity("Person", x =>
-                        {
-                            x.Property<string>("FullName").ForSqlServerHasComputedColumnSql("[FirstName] + ' ' + [LastName]");
-                            x.HasIndex("FullName");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.Property<string>("FullName").HasComputedColumnSql("[FirstName] + ' ' + [LastName]");
+                                x.HasIndex("FullName");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -333,12 +331,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
-                    .Entity("Person", x =>
-                        {
-                            x.ForSqlServerIsMemoryOptimized();
-                            x.Property<string>("Name");
-                            x.HasIndex("Name");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.ForSqlServerIsMemoryOptimized();
+                                x.Property<string>("Name");
+                                x.HasIndex("Name");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -348,8 +347,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     OldColumn = new ColumnOperation
                     {
                         ClrType = typeof(string)
-                    },
-                    [SqlServerFullAnnotationNames.Instance.MemoryOptimized] = true
+                    }
                 });
 
             Assert.Equal(
@@ -371,11 +369,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
-                    .Entity("Person", x =>
-                        {
-                            x.Property<string>("Name");
-                            x.HasIndex("Name");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.Property<string>("Name");
+                                x.HasIndex("Name");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -406,11 +405,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
-                    .Entity("Person", x =>
-                        {
-                            x.Property<string>("Name").HasMaxLength(30);
-                            x.HasIndex("Name");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.Property<string>("Name").HasMaxLength(30);
+                                x.HasIndex("Name");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -444,11 +444,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.0.0-rtm")
-                    .Entity("Person", x =>
-                        {
-                            x.Property<string>("Name").HasMaxLength(30);
-                            x.HasIndex("Name");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.Property<string>("Name").HasMaxLength(30);
+                                x.HasIndex("Name");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -476,12 +477,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
-                    .Entity("Person", x =>
-                        {
-                            x.Property<string>("FirstName").IsRequired();
-                            x.Property<string>("LastName");
-                            x.HasIndex("FirstName", "LastName");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.Property<string>("FirstName").IsRequired();
+                                x.Property<string>("LastName");
+                                x.HasIndex("FirstName", "LastName");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -514,11 +516,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Generate(
                 modelBuilder => modelBuilder
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
-                    .Entity("Person", x =>
-                        {
-                            x.Property<string>("Name").HasMaxLength(30);
-                            x.HasIndex("Name");
-                        }),
+                    .Entity(
+                        "Person", x =>
+                            {
+                                x.Property<string>("Name").HasMaxLength(30);
+                                x.HasIndex("Name");
+                            }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -563,11 +566,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Table = "Person",
                     Name = "Id",
                     ClrType = typeof(long),
-                    [SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn,
+                    [SqlServerAnnotationNames.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn,
                     OldColumn = new ColumnOperation
                     {
                         ClrType = typeof(int),
-                        [SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn
+                        [SqlServerAnnotationNames.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn
                     }
                 });
 
@@ -593,7 +596,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                         Table = "Person",
                         Name = "Id",
                         ClrType = typeof(int),
-                        [SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn,
+                        [SqlServerAnnotationNames.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn,
                         OldColumn = new ColumnOperation
                         {
                             ClrType = typeof(int)
@@ -617,7 +620,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                         OldColumn = new ColumnOperation
                         {
                             ClrType = typeof(int),
-                            [SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn
+                            [SqlServerAnnotationNames.ValueGenerationStrategy] = SqlServerValueGenerationStrategy.IdentityColumn
                         }
                     }));
 
@@ -655,8 +658,6 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 Sql);
         }
 
-#if NET46
-
         [Fact]
         public virtual void CreateDatabaseOperation_with_filename_and_datadirectory()
         {
@@ -677,7 +678,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 Sql);
         }
 
-        [Fact]
+        [ConditionalFact]
+        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Blocked by dotnet/coreclr#11453")]
         public virtual void CreateDatabaseOperation_with_filename_and_custom_datadirectory()
         {
             var dataDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
@@ -700,15 +702,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 "IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;');" + EOL,
                 Sql);
         }
-#elif NETCOREAPP2_0
-#else
-#error target frameworks need to be updated.
-#endif
 
         [Fact]
         public virtual void AlterDatabaseOperationOperation()
         {
-            Generate(new AlterDatabaseOperation { [SqlServerFullAnnotationNames.Instance.MemoryOptimized] = true });
+            Generate(new AlterDatabaseOperation { [SqlServerAnnotationNames.MemoryOptimized] = true });
 
             Assert.Contains(
                 "CONTAINS MEMORY_OPTIMIZED_DATA;",
@@ -742,7 +740,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Name = "IX_People_Name",
                     Table = "People",
                     Columns = new[] { "Name" },
-                    [SqlServerFullAnnotationNames.Instance.Clustered] = true
+                    [SqlServerAnnotationNames.Clustered] = true
                 });
 
             Assert.Equal(
@@ -760,7 +758,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Table = "People",
                     Columns = new[] { "Name" },
                     IsUnique = true,
-                    [SqlServerFullAnnotationNames.Instance.Clustered] = true
+                    [SqlServerAnnotationNames.Clustered] = true
                 });
 
             Assert.Equal(
@@ -790,14 +788,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         public virtual void CreateIndexOperation_memoryOptimized_unique_nullable()
         {
             Generate(
-                modelBuilder => modelBuilder.Entity("People").Property<string>("Name"),
+                modelBuilder => modelBuilder.Entity("People").ForSqlServerIsMemoryOptimized().Property<string>("Name"),
                 new CreateIndexOperation
                 {
                     Name = "IX_People_Name",
                     Table = "People",
                     Columns = new[] { "Name" },
-                    IsUnique = true,
-                    [SqlServerFullAnnotationNames.Instance.MemoryOptimized] = true
+                    IsUnique = true
                 });
 
             Assert.Equal(
@@ -809,15 +806,14 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         public virtual void CreateIndexOperation_memoryOptimized_unique_nullable_with_filter()
         {
             Generate(
-                modelBuilder => modelBuilder.Entity("People").Property<string>("Name"),
+                modelBuilder => modelBuilder.Entity("People").ForSqlServerIsMemoryOptimized().Property<string>("Name"),
                 new CreateIndexOperation
                 {
                     Name = "IX_People_Name",
                     Table = "People",
                     Columns = new[] { "Name" },
                     IsUnique = true,
-                    Filter = "[Name] IS NOT NULL AND <> ''",
-                    [SqlServerFullAnnotationNames.Instance.MemoryOptimized] = true
+                    Filter = "[Name] IS NOT NULL AND <> ''"
                 });
 
             Assert.Equal(
@@ -829,15 +825,14 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         public virtual void CreateIndexOperation_memoryOptimized_unique_nonclustered_not_nullable()
         {
             Generate(
-                modelBuilder => modelBuilder.Entity("People").Property<string>("Name").IsRequired(),
+                modelBuilder => modelBuilder.Entity("People").ForSqlServerIsMemoryOptimized().Property<string>("Name").IsRequired(),
                 new CreateIndexOperation
                 {
                     Name = "IX_People_Name",
                     Table = "People",
                     Columns = new[] { "Name" },
                     IsUnique = true,
-                    [SqlServerFullAnnotationNames.Instance.MemoryOptimized] = true,
-                    [SqlServerFullAnnotationNames.Instance.Clustered] = false
+                    [SqlServerAnnotationNames.Clustered] = false
                 });
 
             Assert.Equal(
@@ -906,11 +901,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         public virtual void DropIndexOperation_memoryOptimized()
         {
             Generate(
+                modelBuilder => modelBuilder.Entity("People").ForSqlServerIsMemoryOptimized(),
                 new DropIndexOperation
                 {
                     Name = "IX_People_Name",
-                    Table = "People",
-                    [SqlServerFullAnnotationNames.Instance.MemoryOptimized] = true
+                    Table = "People"
                 });
 
             Assert.Equal(
@@ -1038,7 +1033,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 new SqlOperation
                 {
                     Sql = @"-- Multiline \" + EOL +
-                        "comment"
+                          "comment"
                 });
 
             Assert.Equal(
@@ -1053,8 +1048,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 new SqlOperation
                 {
                     Sql = "-- Ready set" + EOL +
-                        "GO" + EOL +
-                        "GO"
+                          "GO" + EOL +
+                          "GO"
                 });
 
             Assert.Equal(
@@ -1069,8 +1064,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 new SqlOperation
                 {
                     Sql = "-- I" + EOL +
-                        "go" + EOL +
-                        "-- Too"
+                          "go" + EOL +
+                          "-- Too"
                 });
 
             Assert.Equal(
@@ -1088,7 +1083,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 new SqlOperation
                 {
                     Sql = "-- I" + EOL +
-                        "GO 2"
+                          "GO 2"
                 });
 
             Assert.Equal(
@@ -1110,6 +1105,104 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             Assert.Equal(
                 "-- I GO 2" + EOL,
+                Sql);
+        }
+
+        public override void InsertDataOperation()
+        {
+            base.InsertDataOperation();
+
+            Assert.Equal(
+                "IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [object_id] = OBJECT_ID(N'People'))" + EOL +
+                "    SET IDENTITY_INSERT [People] ON;" + EOL +
+                "INSERT INTO [People] ([Id], [Full Name])" + EOL +
+                "VALUES (0, NULL);" + EOL +
+                "INSERT INTO [People] ([Id], [Full Name])" + EOL +
+                "VALUES (1, N'Daenerys Targaryen');" + EOL +
+                "INSERT INTO [People] ([Id], [Full Name])" + EOL +
+                "VALUES (2, N'John Snow');" + EOL +
+                "INSERT INTO [People] ([Id], [Full Name])" + EOL +
+                "VALUES (3, N'Arya Stark');" + EOL +
+                "INSERT INTO [People] ([Id], [Full Name])" + EOL +
+                "VALUES (4, N'Harry Strickland');" + EOL +
+                "GO" + EOL + EOL +
+                "IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [object_id] = OBJECT_ID(N'People'))" + EOL +
+                "    SET IDENTITY_INSERT [People] OFF;" + EOL,
+                Sql);
+        }
+
+        public override void DeleteDataOperation_simple_key()
+        {
+            base.DeleteDataOperation_simple_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "DELETE FROM [People]" + EOL +
+                "WHERE [Id] = 2;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "DELETE FROM [People]" + EOL +
+                "WHERE [Id] = 4;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void DeleteDataOperation_composite_key()
+        {
+            base.DeleteDataOperation_composite_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "DELETE FROM [People]" + EOL +
+                "WHERE [First Name] = N'Hodor' AND [Last Name] IS NULL;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "DELETE FROM [People]" + EOL +
+                "WHERE [First Name] = N'Daenerys' AND [Last Name] = N'Targaryen';" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void UpdateDataOperation_simple_key()
+        {
+            base.UpdateDataOperation_simple_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "UPDATE [People] SET [Full Name] = N'Daenerys Stormborn'" + EOL +
+                "WHERE [Id] = 1;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "UPDATE [People] SET [Full Name] = N'Homeless Harry Strickland'" + EOL +
+                "WHERE [Id] = 4;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void UpdateDataOperation_composite_key()
+        {
+            base.UpdateDataOperation_composite_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "UPDATE [People] SET [First Name] = N'Hodor'" + EOL +
+                "WHERE [Id] = 0 AND [Last Name] IS NULL;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "UPDATE [People] SET [First Name] = N'Harry'" + EOL +
+                "WHERE [Id] = 4 AND [Last Name] = N'Strickland';" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void UpdateDataOperation_multiple_columns()
+        {
+            base.UpdateDataOperation_multiple_columns();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "UPDATE [People] SET [First Name] = N'Daenerys', [Nickname] = N'Dany'" + EOL +
+                "WHERE [Id] = 1;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "UPDATE [People] SET [First Name] = N'Harry', [Nickname] = N'Homeless'" + EOL +
+                "WHERE [Id] = 4;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
                 Sql);
         }
 

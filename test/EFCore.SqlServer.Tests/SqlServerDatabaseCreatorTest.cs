@@ -8,10 +8,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -19,7 +18,7 @@ using Xunit;
 
 // ReSharper disable ClassNeverInstantiated.Local
 // ReSharper disable MemberCanBePrivate.Local
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerDatabaseCreatorTest
     {
@@ -170,7 +169,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
             public int FailDelay { get; set; }
             public int OpenCount { get; set; }
 
-            public override bool Open()
+            public override bool Open(bool errorsExpected = false)
             {
                 if (++OpenCount < FailureCount)
                 {
@@ -181,7 +180,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 return true;
             }
 
-            public override async Task<bool> OpenAsync(CancellationToken cancellationToken = new CancellationToken())
+            public override async Task<bool> OpenAsync(CancellationToken cancellationToken, bool errorsExpected = false)
             {
                 if (++OpenCount < FailureCount)
                 {
@@ -192,7 +191,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 return await Task.FromResult(true);
             }
 
-            public override ISqlServerConnection CreateMasterConnection() 
+            public override ISqlServerConnection CreateMasterConnection()
                 => new FakeSqlServerConnection(_options, Dependencies);
         }
 
@@ -229,40 +228,15 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 return 0;
             }
 
-            int IRelationalCommand.ExecuteNonQuery(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<int> ExecuteNonQueryAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default(CancellationToken))
+            public Task<int> ExecuteNonQueryAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default)
                 => Task.FromResult(0);
-
-            Task<int> IRelationalCommand.ExecuteNonQueryAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
-            {
-                throw new NotImplementedException();
-            }
-
-            Task<object> IRelationalCommand.ExecuteScalarAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
-            {
-                throw new NotImplementedException();
-            }
 
             public RelationalDataReader ExecuteReader(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues)
             {
                 throw new NotImplementedException();
             }
 
-            RelationalDataReader IRelationalCommand.ExecuteReader(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<RelationalDataReader> ExecuteReaderAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default(CancellationToken))
-            {
-                throw new NotImplementedException();
-            }
-
-            Task<RelationalDataReader> IRelationalCommand.ExecuteReaderAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
+            public Task<RelationalDataReader> ExecuteReaderAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default)
             {
                 throw new NotImplementedException();
             }
@@ -272,12 +246,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 throw new NotImplementedException();
             }
 
-            object IRelationalCommand.ExecuteScalar(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-            {
-                throw new NotImplementedException();
-            }
-
-            public Task<object> ExecuteScalarAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default(CancellationToken))
+            public Task<object> ExecuteScalarAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default)
             {
                 throw new NotImplementedException();
             }

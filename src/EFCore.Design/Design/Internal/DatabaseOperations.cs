@@ -3,43 +3,55 @@
 
 using System.Collections.Generic;
 using System.Reflection;
-using System.Threading;
-using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Scaffolding;
 using Microsoft.EntityFrameworkCore.Scaffolding.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 
 namespace Microsoft.EntityFrameworkCore.Design.Internal
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class DatabaseOperations
     {
         private readonly IOperationReporter _reporter;
         private readonly string _projectDir;
         private readonly string _rootNamespace;
+        private readonly string _language;
         private readonly DesignTimeServicesBuilder _servicesBuilder;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public DatabaseOperations(
             [NotNull] IOperationReporter reporter,
             [NotNull] Assembly startupAssembly,
             [NotNull] string projectDir,
-            [NotNull] string rootNamespace)
+            [NotNull] string rootNamespace,
+            [NotNull] string language)
         {
             Check.NotNull(reporter, nameof(reporter));
             Check.NotNull(startupAssembly, nameof(startupAssembly));
             Check.NotNull(projectDir, nameof(projectDir));
             Check.NotNull(rootNamespace, nameof(rootNamespace));
+            Check.NotNull(language, nameof(language));
 
             _reporter = reporter;
             _projectDir = projectDir;
             _rootNamespace = rootNamespace;
+            _language = language;
 
-            _servicesBuilder = new DesignTimeServicesBuilder(startupAssembly);
+            _servicesBuilder = new DesignTimeServicesBuilder(startupAssembly, reporter);
         }
 
-        public virtual Task<ReverseEngineerFiles> ScaffoldContextAsync(
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual ReverseEngineerFiles ScaffoldContext(
             [NotNull] string provider,
             [NotNull] string connectionString,
             [CanBeNull] string outputDir,
@@ -48,7 +60,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             [NotNull] IEnumerable<string> tables,
             bool useDataAnnotations,
             bool overwriteFiles,
-            CancellationToken cancellationToken = default(CancellationToken))
+            bool useDatabaseNames)
         {
             Check.NotEmpty(provider, nameof(provider));
             Check.NotEmpty(connectionString, nameof(connectionString));
@@ -57,26 +69,25 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
 
             var services = _servicesBuilder.Build(provider);
 
-            var loggerFactory = services.GetService<ILoggerFactory>();
-#pragma warning disable CS0618 // Type or member is obsolete
-            loggerFactory.AddProvider(new LoggerProvider(categoryName => new OperationLogger(categoryName, _reporter)));
-#pragma warning restore CS0618 // Type or member is obsolete
+            var generator = services.GetRequiredService<IReverseEngineerScaffolder>();
 
-            var generator = services.GetRequiredService<ReverseEngineeringGenerator>();
-            var tableSelectionSet = new TableSelectionSet(tables, schemas);
-            var configuration = new ReverseEngineeringConfiguration
-            {
-                ConnectionString = connectionString,
-                ContextClassName = dbContextClassName,
-                ProjectPath = _projectDir,
-                ProjectRootNamespace = _rootNamespace,
-                OutputPath = outputDir,
-                TableSelectionSet = tableSelectionSet,
-                UseFluentApiOnly = !useDataAnnotations,
-                OverwriteFiles = overwriteFiles
-            };
+            var scaffoldedModel = generator.Generate(
+                connectionString,
+                tables,
+                schemas,
+                _projectDir,
+                outputDir,
+                _rootNamespace,
+                _language,
+                dbContextClassName,
+                useDataAnnotations,
+                useDatabaseNames);
 
-            return generator.GenerateAsync(configuration, cancellationToken);
+            return generator.Save(
+                scaffoldedModel,
+                _projectDir,
+                outputDir,
+                overwriteFiles);
         }
     }
 }

@@ -3,9 +3,8 @@
 
 using System.Collections.Generic;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Update;
-using Microsoft.Extensions.Logging;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.EntityFrameworkCore.Internal
@@ -21,20 +20,19 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static void TransactionIgnoredWarning(
-            [NotNull] this IDiagnosticsLogger<LoggerCategory.Database.Transaction> diagnostics)
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics)
         {
-            var eventId = InMemoryEventId.TransactionIgnoredWarning;
+            var definition = InMemoryStrings.LogTransactionsNotSupported;
 
-            if (diagnostics.Logger.IsEnabled(eventId, LogLevel.Warning))
-            {
-                diagnostics.Logger.LogWarning(
-                    eventId,
-                    InMemoryStrings.TransactionsNotSupported);
-            }
+            definition.Log(diagnostics);
 
-            if (diagnostics.DiagnosticSource.IsEnabled(eventId.Name))
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
-                diagnostics.DiagnosticSource.Write(eventId.Name, null);
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new EventData(
+                        definition,
+                        (d, p) => ((EventDefinition)d).GenerateMessage()));
             }
         }
 
@@ -43,29 +41,31 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static void ChangesSaved(
-            [NotNull] this IDiagnosticsLogger<LoggerCategory.Update> diagnostics,
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Update> diagnostics,
             [NotNull] IEnumerable<IUpdateEntry> entries,
             int rowsAffected)
         {
-            var eventId = InMemoryEventId.ChangesSaved;
+            var definition = InMemoryStrings.LogSavedChanges;
 
-            if (diagnostics.Logger.IsEnabled(eventId, LogLevel.Information))
-            {
-                diagnostics.Logger.LogInformation(
-                    eventId,
-                    InMemoryStrings.LogSavedChanges(rowsAffected));
-            }
+            definition.Log(diagnostics, rowsAffected);
 
-            if (diagnostics.DiagnosticSource.IsEnabled(eventId.Name))
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
                 diagnostics.DiagnosticSource.Write(
-                    eventId.Name,
-                    new
-                    {
-                        Entries = entries,
-                        RowsAffected = rowsAffected
-                    });
+                    definition.EventId.Name,
+                    new SaveChangesEventData(
+                        definition,
+                        ChangesSaved,
+                        entries,
+                        rowsAffected));
             }
+        }
+
+        private static string ChangesSaved(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<int>)definition;
+            var p = (SaveChangesEventData)payload;
+            return d.GenerateMessage(p.RowsAffected);
         }
     }
 }

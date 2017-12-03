@@ -4,15 +4,25 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public class BatchingTest
+    public class BatchingTest : IClassFixture<BatchingTest.BatchingTestFixture>
     {
-        private static readonly string DatabaseName = "BatchingTest";
+        public BatchingTest(BatchingTestFixture fixture)
+        {
+            Fixture = fixture;
+        }
+
+        protected BatchingTestFixture Fixture { get; }
 
         [Theory]
         [InlineData(true, true, true)]
@@ -25,142 +35,181 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [InlineData(false, false, false)]
         public void Inserts_are_batched_correctly(bool clientPk, bool clientFk, bool clientOrder)
         {
-            using (var testStore = SqlServerTestStore.Create(DatabaseName))
-            {
-                var options = new DbContextOptionsBuilder()
-                    .UseSqlServer(testStore.Connection, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(
-                        new ServiceCollection()
-                            .AddEntityFrameworkSqlServer()
-                            .BuildServiceProvider())
-                    .Options;
-
-                var expectedBlogs = new List<Blog>();
-                using (var context = new BloggingContext(options))
-                {
-                    context.Database.EnsureClean();
-
-                    var owner1 = new Owner();
-                    var owner2 = new Owner();
-                    context.Owners.Add(owner1);
-                    context.Owners.Add(owner2);
-
-                    for (var i = 1; i < 500; i++)
+            var expectedBlogs = new List<Blog>();
+            ExecuteWithStrategyInTransaction(
+                context =>
                     {
-                        var blog = new Blog();
-                        if (clientPk)
+                        var owner1 = new Owner();
+                        var owner2 = new Owner();
+                        context.Owners.Add(owner1);
+                        context.Owners.Add(owner2);
+
+                        for (var i = 1; i < 500; i++)
                         {
-                            blog.Id = Guid.NewGuid();
+                            var blog = new Blog();
+                            if (clientPk)
+                            {
+                                blog.Id = Guid.NewGuid();
+                            }
+
+                            if (clientFk)
+                            {
+                                blog.Owner = i % 2 == 0 ? owner1 : owner2;
+                            }
+
+                            if (clientOrder)
+                            {
+                                blog.Order = i;
+                            }
+
+                            context.Set<Blog>().Add(blog);
+                            expectedBlogs.Add(blog);
                         }
 
-                        if (clientFk)
-                        {
-                            blog.Owner = i % 2 == 0 ? owner1 : owner2;
-                        }
-
-                        if (clientOrder)
-                        {
-                            blog.Order = i;
-                        }
-
-                        context.Blogs.Add(blog);
-                        expectedBlogs.Add(blog);
-                    }
-
-                    context.SaveChanges();
-                }
-
-                AssertDatabaseState(clientOrder, expectedBlogs, options);
-            }
+                        context.SaveChanges();
+                    },
+                context => AssertDatabaseState(context, clientOrder, expectedBlogs));
         }
 
         [Fact]
         public void Inserts_and_updates_are_batched_correctly()
         {
-            using (var testStore = SqlServerTestStore.Create(DatabaseName))
-            {
-                var options = new DbContextOptionsBuilder()
-                    .UseSqlServer(testStore.Connection, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(
-                        new ServiceCollection()
-                            .AddEntityFrameworkSqlServer()
-                            .BuildServiceProvider())
-                    .Options;
-                var expectedBlogs = new List<Blog>();
-                using (var context = new BloggingContext(options))
-                {
-                    context.Database.EnsureClean();
+            var expectedBlogs = new List<Blog>();
 
-                    var owner1 = new Owner { Name = "0" };
-                    var owner2 = new Owner { Name = "1" };
-                    context.Owners.Add(owner1);
-                    context.Owners.Add(owner2);
-
-                    var blog1 = new Blog
+            ExecuteWithStrategyInTransaction(
+                context =>
                     {
-                        Id = Guid.NewGuid(),
-                        Owner = owner1,
-                        Order = 1
-                    };
+                        var owner1 = new Owner { Name = "0" };
+                        var owner2 = new Owner { Name = "1" };
+                        context.Owners.Add(owner1);
+                        context.Owners.Add(owner2);
 
-                    context.Blogs.Add(blog1);
-                    expectedBlogs.Add(blog1);
+                        var blog1 = new Blog
+                        {
+                            Id = Guid.NewGuid(),
+                            Owner = owner1,
+                            Order = 1
+                        };
 
-                    context.SaveChanges();
+                        context.Set<Blog>().Add(blog1);
+                        expectedBlogs.Add(blog1);
 
-                    owner2.Name = "2";
+                        context.SaveChanges();
 
-                    blog1.Order = 0;
-                    var blog2 = new Blog
-                    {
-                        Id = Guid.NewGuid(),
-                        Owner = owner1,
-                        Order = 1
-                    };
+                        owner2.Name = "2";
 
-                    context.Blogs.Add(blog2);
-                    expectedBlogs.Add(blog2);
+                        blog1.Order = 0;
+                        var blog2 = new Blog
+                        {
+                            Id = Guid.NewGuid(),
+                            Owner = owner1,
+                            Order = 1
+                        };
 
-                    var blog3 = new Blog
-                    {
-                        Id = Guid.NewGuid(),
-                        Owner = owner2,
-                        Order = 2
-                    };
+                        context.Set<Blog>().Add(blog2);
+                        expectedBlogs.Add(blog2);
 
-                    context.Blogs.Add(blog3);
-                    expectedBlogs.Add(blog3);
+                        var blog3 = new Blog
+                        {
+                            Id = Guid.NewGuid(),
+                            Owner = owner2,
+                            Order = 2
+                        };
 
-                    context.SaveChanges();
-                }
+                        context.Set<Blog>().Add(blog3);
+                        expectedBlogs.Add(blog3);
 
-                AssertDatabaseState(true, expectedBlogs, options);
-            }
+                        context.SaveChanges();
+                    },
+                context => AssertDatabaseState(context, true, expectedBlogs));
         }
 
-        private void AssertDatabaseState(bool clientOrder, List<Blog> expectedBlogs, DbContextOptions options)
+        [Fact]
+        public void Inserts_when_database_type_is_different()
+        {
+            ExecuteWithStrategyInTransaction(
+                context =>
+                    {
+                        var owner1 = new Owner { Id = "0", Name = "Zero" };
+                        var owner2 = new Owner { Id = "A", Name = string.Join("", Enumerable.Repeat('A', 900)) };
+                        context.Owners.Add(owner1);
+                        context.Owners.Add(owner2);
+
+                        context.SaveChanges();
+                    },
+                context => Assert.Equal(2, context.Owners.Count()));
+        }
+
+        [Theory]
+        [InlineData(3)]
+        [InlineData(4)]
+        public void Inserts_are_batched_only_when_necessary(int minBatchSize)
+        {
+            var expectedBlogs = new List<Blog>();
+            TestHelpers.ExecuteWithStrategyInTransaction(
+                () =>
+                    {
+                        var optionsBuilder = new DbContextOptionsBuilder(Fixture.CreateOptions());
+                        new SqlServerDbContextOptionsBuilder(optionsBuilder).MinBatchSize(minBatchSize);
+                        return new BloggingContext(optionsBuilder.Options);
+                    },
+                UseTransaction,
+                context =>
+                    {
+                        var owner = new Owner();
+                        context.Owners.Add(owner);
+
+                        for (var i = 1; i < 4; i++)
+                        {
+                            var blog = new Blog
+                            {
+                                Id = Guid.NewGuid(),
+                                Owner = owner
+                            };
+
+                            context.Set<Blog>().Add(blog);
+                            expectedBlogs.Add(blog);
+                        }
+
+                        Fixture.TestSqlLoggerFactory.Clear();
+
+                        context.SaveChanges();
+
+                        Assert.Equal(minBatchSize <= 3 ? 2 : 4, Fixture.TestSqlLoggerFactory.SqlStatements.Count);
+                    }, context => AssertDatabaseState(context, false, expectedBlogs));
+        }
+
+        private void AssertDatabaseState(DbContext context, bool clientOrder, List<Blog> expectedBlogs)
         {
             expectedBlogs = clientOrder
                 ? expectedBlogs.OrderBy(b => b.Order).ToList()
                 : expectedBlogs.OrderBy(b => b.Id).ToList();
-            using (var context = new BloggingContext(options))
-            {
-                var actualBlogs = clientOrder
-                    ? context.Blogs.OrderBy(b => b.Order).ToList()
-                    : expectedBlogs.OrderBy(b => b.Id).ToList();
-                Assert.Equal(expectedBlogs.Count, actualBlogs.Count);
+            var actualBlogs = clientOrder
+                ? context.Set<Blog>().OrderBy(b => b.Order).ToList()
+                : expectedBlogs.OrderBy(b => b.Id).ToList();
+            Assert.Equal(expectedBlogs.Count, actualBlogs.Count);
 
-                for (var i = 0; i < actualBlogs.Count; i++)
-                {
-                    var expected = expectedBlogs[i];
-                    var actual = actualBlogs[i];
-                    Assert.Equal(expected.Id, actual.Id);
-                    Assert.Equal(expected.Order, actual.Order);
-                    Assert.Equal(expected.OwnerId, actual.OwnerId);
-                    Assert.Equal(expected.Version, actual.Version);
-                }
+            for (var i = 0; i < actualBlogs.Count; i++)
+            {
+                var expected = expectedBlogs[i];
+                var actual = actualBlogs[i];
+                Assert.Equal(expected.Id, actual.Id);
+                Assert.Equal(expected.Order, actual.Order);
+                Assert.Equal(expected.OwnerId, actual.OwnerId);
+                Assert.Equal(expected.Version, actual.Version);
             }
         }
+
+        private BloggingContext CreateContext() => (BloggingContext)Fixture.CreateContext();
+
+        private void ExecuteWithStrategyInTransaction(
+            Action<BloggingContext> testOperation,
+            Action<BloggingContext> nestedTestOperation)
+            => TestHelpers.ExecuteWithStrategyInTransaction(
+                CreateContext, UseTransaction, testOperation, nestedTestOperation);
+
+        protected void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)
+            => facade.UseTransaction(transaction.GetDbTransaction());
 
         private class BloggingContext : DbContext
         {
@@ -171,14 +220,21 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Owner>().Property(e => e.Version).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
-                modelBuilder.Entity<Blog>(b =>
-                    {
-                        b.Property(e => e.Id).HasDefaultValueSql("NEWID()");
-                        b.Property(e => e.Version).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
-                    });
+                modelBuilder.Entity<Owner>(
+                    b =>
+                        {
+                            b.Property(e => e.Version).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
+                            b.Property(e => e.Name).HasColumnType("nvarchar(450)");
+                        });
+                modelBuilder.Entity<Blog>(
+                    b =>
+                        {
+                            b.Property(e => e.Id).HasDefaultValueSql("NEWID()");
+                            b.Property(e => e.Version).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
+                        });
             }
 
+            // ReSharper disable once UnusedMember.Local
             public DbSet<Blog> Blogs { get; set; }
             public DbSet<Owner> Owners { get; set; }
         }
@@ -187,16 +243,34 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             public Guid Id { get; set; }
             public int Order { get; set; }
-            public int? OwnerId { get; set; }
+            public string OwnerId { get; set; }
             public Owner Owner { get; set; }
             public byte[] Version { get; set; }
         }
 
-        public class Owner
+        private class Owner
         {
-            public int Id { get; set; }
+            public string Id { get; set; }
             public string Name { get; set; }
             public byte[] Version { get; set; }
+        }
+
+        public class BatchingTestFixture : SharedStoreFixtureBase<DbContext>
+        {
+            protected override string StoreName { get; } = "BatchingTest";
+            protected override ITestStoreFactory TestStoreFactory => SqlServerTestStoreFactory.Instance;
+            public TestSqlLoggerFactory TestSqlLoggerFactory => (TestSqlLoggerFactory)ServiceProvider.GetRequiredService<ILoggerFactory>();
+
+            protected override Type ContextType { get; } = typeof(BloggingContext);
+
+            protected override void Seed(DbContext context)
+            {
+                context.Database.EnsureCreated();
+                context.Database.ExecuteSqlCommand(
+                    @"
+ALTER TABLE dbo.Owners
+    ALTER COLUMN Name nvarchar(MAX);");
+            }
         }
     }
 }

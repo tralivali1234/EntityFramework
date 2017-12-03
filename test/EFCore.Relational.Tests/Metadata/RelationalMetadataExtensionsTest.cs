@@ -2,13 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
+namespace Microsoft.EntityFrameworkCore.Metadata
 {
     public class RelationalMetadataExtensionsTest
     {
@@ -235,7 +235,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
 
             var guid = new Guid("{3FDFC4F5-AEAB-4D72-9C96-201E004349FA}");
 
-            Assert.Equal(RelationalStrings.IncorrectDefaultValueType(guid, typeof(Guid), property.Name, property.ClrType, property.DeclaringEntityType.DisplayName()),
+            Assert.Equal(
+                RelationalStrings.IncorrectDefaultValueType(guid, typeof(Guid), property.Name, property.ClrType, property.DeclaringEntityType.DisplayName()),
                 Assert.Throws<InvalidOperationException>(() => property.Relational().DefaultValue = guid).Message);
         }
 
@@ -256,8 +257,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
 
             ConfigureProperty(propertyBuilder.Metadata, firstConfiguration, "first");
 
-            Assert.Equal(RelationalStrings.ConflictingColumnServerGeneration(secondConfiguration, nameof(Customer.Name), firstConfiguration),
-                Assert.Throws<InvalidOperationException>(() =>
+            Assert.Equal(
+                RelationalStrings.ConflictingColumnServerGeneration(secondConfiguration, nameof(Customer.Name), firstConfiguration),
+                Assert.Throws<InvalidOperationException>(
+                    () =>
                         ConfigureProperty(propertyBuilder.Metadata, secondConfiguration, "second")).Message);
         }
 
@@ -389,7 +392,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
                 .Metadata;
             derivedType.BaseType = entityType;
 
-            Assert.Equal(RelationalStrings.DiscriminatorPropertyMustBeOnRoot(nameof(SpecialCustomer)),
+            Assert.Equal(
+                RelationalStrings.DiscriminatorPropertyMustBeOnRoot(nameof(SpecialCustomer)),
                 Assert.Throws<InvalidOperationException>(() => derivedType.Relational().DiscriminatorProperty = property).Message);
         }
 
@@ -408,7 +412,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
 
             var property = entityType.AddProperty("D", typeof(string));
 
-            Assert.Equal(RelationalStrings.DiscriminatorPropertyNotFound("D", nameof(SpecialCustomer)),
+            Assert.Equal(
+                RelationalStrings.DiscriminatorPropertyNotFound("D", nameof(SpecialCustomer)),
                 Assert.Throws<InvalidOperationException>(() => otherType.Relational().DiscriminatorProperty = property).Message);
         }
 
@@ -444,8 +449,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
                 .Entity<Customer>()
                 .Metadata;
 
-            Assert.Equal(RelationalStrings.NoDiscriminatorForValue("Customer", "Customer"),
-                Assert.Throws<InvalidOperationException>(() =>
+            Assert.Equal(
+                RelationalStrings.NoDiscriminatorForValue("Customer", "Customer"),
+                Assert.Throws<InvalidOperationException>(
+                    () =>
                         entityType.Relational().DiscriminatorValue = "V").Message);
         }
 
@@ -461,8 +468,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
             var property = entityType.AddProperty("D", typeof(int));
             entityType.Relational().DiscriminatorProperty = property;
 
-            Assert.Equal(RelationalStrings.DiscriminatorValueIncompatible("V", "D", typeof(int)),
-                Assert.Throws<InvalidOperationException>(() =>
+            Assert.Equal(
+                RelationalStrings.DiscriminatorValueIncompatible("V", "D", typeof(int)),
+                Assert.Throws<InvalidOperationException>(
+                    () =>
                         entityType.Relational().DiscriminatorValue = "V").Message);
 
             entityType.Relational().DiscriminatorValue = null;
@@ -484,6 +493,23 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
             extensions.DefaultSchema = null;
 
             Assert.Null(extensions.DefaultSchema);
+        }
+
+        [Fact]
+        public void Can_get_and_set_dbfunction()
+        {
+            var testMethod = typeof(TestDbFunctions).GetTypeInfo().GetDeclaredMethod(nameof(TestDbFunctions.MethodA));
+
+            var modelBuilder = new ModelBuilder(new ConventionSet());
+            var model = modelBuilder.Model;
+
+            Assert.Null(model.Relational().FindDbFunction(testMethod));
+
+            var dbFunc = model.Relational().GetOrAddDbFunction(testMethod);
+
+            Assert.NotNull(dbFunc);
+            Assert.Null(dbFunc.FunctionName);
+            Assert.Null(dbFunc.Schema);
         }
 
         [Fact]

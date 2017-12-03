@@ -122,5 +122,36 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
             return true;
         }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static int IndexOf<T>([NotNull] this IEnumerable<T> source, [NotNull] T item)
+            => IndexOf(source, item, EqualityComparer<T>.Default);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static int IndexOf<T>([NotNull] this IEnumerable<T> source, [NotNull] T item,
+            [NotNull] IEqualityComparer<T> comparer)
+            => source.Select((x, index) =>
+                comparer.Equals(item, x) ? index : -1)
+                .FirstOr(x => x != -1, -1);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static T FirstOr<T>([NotNull] this IEnumerable<T> source, [NotNull] T alternate)
+            => source.DefaultIfEmpty(alternate).First();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static T FirstOr<T>([NotNull] this IEnumerable<T> source, [NotNull] Func<T, bool> predicate, [NotNull] T alternate)
+            => source.Where(predicate).FirstOr(alternate);
     }
 }

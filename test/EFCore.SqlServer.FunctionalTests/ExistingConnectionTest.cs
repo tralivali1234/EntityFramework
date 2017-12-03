@@ -5,11 +5,12 @@ using System;
 using System.Data;
 using System.Data.SqlClient;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class ExistingConnectionTest
     {
@@ -34,7 +35,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             using (var store = SqlServerTestStore.GetNorthwindStore())
             {
-                Assert.Equal(ConnectionState.Closed, store.Connection.State);
+                store.CloseConnection();
 
                 var openCount = 0;
                 var closeCount = 0;
@@ -49,13 +50,14 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
                     connection.StateChange += (_, a) =>
                         {
-                            if (a.CurrentState == ConnectionState.Open)
+                            switch (a.CurrentState)
                             {
-                                openCount++;
-                            }
-                            else if (a.CurrentState == ConnectionState.Closed)
-                            {
-                                closeCount++;
+                                case ConnectionState.Open:
+                                    openCount++;
+                                    break;
+                                case ConnectionState.Closed:
+                                    closeCount++;
+                                    break;
                             }
                         };
                     connection.Disposed += (_, __) => disposeCount++;
@@ -94,6 +96,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 _connection = connection;
             }
 
+            // ReSharper disable once UnusedAutoPropertyAccessor.Local
             public DbSet<Customer> Customers { get; set; }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -102,17 +105,23 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     .UseInternalServiceProvider(_serviceProvider);
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<Customer>(b =>
-                    {
-                        b.HasKey(c => c.CustomerID);
-                        b.ForSqlServerToTable("Customers");
-                    });
+                => modelBuilder.Entity<Customer>(
+                    b =>
+                        {
+                            b.HasKey(c => c.CustomerID);
+                            b.ToTable("Customers");
+                        });
         }
 
+        // ReSharper disable once ClassNeverInstantiated.Local
         private class Customer
         {
+            // ReSharper disable once UnusedAutoPropertyAccessor.Local
             public string CustomerID { get; set; }
+
+            // ReSharper disable UnusedMember.Local
             public string CompanyName { get; set; }
+
             public string Fax { get; set; }
         }
     }

@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class CustomValueGeneratorTest
     {
@@ -208,10 +208,10 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
         private class CustomGuidValueGenerator : ValueGenerator<Guid>
         {
             public static Guid[] SpecialGuids { get; } =
-                {
-                    Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
-                    Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
-                };
+            {
+                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+                Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()
+            };
 
             private int _counter = -1;
 
@@ -237,8 +237,8 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
             {
                 if (property.ClrType == typeof(Guid))
                 {
-                    return property["SpecialGuid"] != null ?
-                        (ValueGenerator)new CustomGuidValueGenerator()
+                    return property["SpecialGuid"] != null
+                        ? (ValueGenerator)new CustomGuidValueGenerator()
                         : new SequentialGuidValueGenerator();
                 }
 

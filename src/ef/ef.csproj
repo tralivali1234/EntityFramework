@@ -1,15 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\..\build\common.props" />
-
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp1.0;net46</TargetFrameworks>
-    <Description>Entity Framework Core Command Line Tools</Description>
+    <TargetFrameworks>netcoreapp2.0;net461</TargetFrameworks>
+    <Description>Entity Framework Core Command-line Tools</Description>
     <OutputType>Exe</OutputType>
     <AssemblyName Condition="'$(Platform)' == 'x86'">ef.x86</AssemblyName>
     <IsPackable>false</IsPackable>
     <RootNamespace>Microsoft.EntityFrameworkCore.Tools</RootNamespace>
-    <RuntimeFrameworkVersion>1.0.0</RuntimeFrameworkVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,7 +17,7 @@
     <Compile Include="..\EFCore.Design\Design\OperationResultHandler.cs" />
   </ItemGroup>
 
-  <ItemGroup Condition=" '$(TargetFramework)' == 'net46' ">
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
 
@@ -43,8 +40,8 @@
     </Compile>
   </ItemGroup>
 
-  <Target Name="BuildX86" AfterTargets="Build">
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="Platform=x86;Configuration=$(Configuration)" Targets="Build" />
+  <Target Name="BuildX86" AfterTargets="Build" Condition=" '$(Platform)' != 'x86' ">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="Platform=x86;Configuration=$(Configuration);BuildNumber=$(BuildNumber)" Targets="Build" />
   </Target>
 
 </Project>

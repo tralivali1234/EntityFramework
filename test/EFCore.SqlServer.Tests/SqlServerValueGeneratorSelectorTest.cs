@@ -5,13 +5,13 @@ using System;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerValueGeneratorSelectorTest
     {
@@ -28,12 +28,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
             Assert.IsType<TemporaryLongValueGenerator>(selector.Select(entityType.FindProperty("Long"), entityType));
             Assert.IsType<TemporaryShortValueGenerator>(selector.Select(entityType.FindProperty("Short"), entityType));
             Assert.IsType<TemporaryByteValueGenerator>(selector.Select(entityType.FindProperty("Byte"), entityType));
-            Assert.IsType<TemporaryCharValueGenerator>(selector.Select(entityType.FindProperty("Char"), entityType));
             Assert.IsType<TemporaryIntValueGenerator>(selector.Select(entityType.FindProperty("NullableInt"), entityType));
             Assert.IsType<TemporaryLongValueGenerator>(selector.Select(entityType.FindProperty("NullableLong"), entityType));
             Assert.IsType<TemporaryShortValueGenerator>(selector.Select(entityType.FindProperty("NullableShort"), entityType));
             Assert.IsType<TemporaryByteValueGenerator>(selector.Select(entityType.FindProperty("NullableByte"), entityType));
-            Assert.IsType<TemporaryCharValueGenerator>(selector.Select(entityType.FindProperty("NullableChar"), entityType));
             Assert.IsType<TemporaryDecimalValueGenerator>(selector.Select(entityType.FindProperty("Decimal"), entityType));
             Assert.IsType<StringValueGenerator>(selector.Select(entityType.FindProperty("String"), entityType));
             Assert.IsType<SequentialGuidValueGenerator>(selector.Select(entityType.FindProperty("Guid"), entityType));
@@ -56,6 +54,36 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         }
 
         [Fact]
+        public void Returns_temp_string_generator_when_default_sql_set()
+        {
+            var model = BuildModel();
+            var entityType = model.FindEntityType(typeof(AnEntity));
+
+            entityType.FindProperty("String").SqlServer().DefaultValueSql = "Foo";
+
+            var selector = SqlServerTestHelpers.Instance.CreateContextServices(model).GetRequiredService<IValueGeneratorSelector>();
+
+            var generator = selector.Select(entityType.FindProperty("String"), entityType);
+            Assert.IsType<StringValueGenerator>(generator);
+            Assert.True(generator.GeneratesTemporaryValues);
+        }
+
+        [Fact]
+        public void Returns_temp_binary_generator_when_default_sql_set()
+        {
+            var model = BuildModel();
+            var entityType = model.FindEntityType(typeof(AnEntity));
+
+            entityType.FindProperty("Binary").SqlServer().DefaultValueSql = "Foo";
+
+            var selector = SqlServerTestHelpers.Instance.CreateContextServices(model).GetRequiredService<IValueGeneratorSelector>();
+
+            var generator = selector.Select(entityType.FindProperty("Binary"), entityType);
+            Assert.IsType<BinaryValueGenerator>(generator);
+            Assert.True(generator.GeneratesTemporaryValues);
+        }
+
+        [Fact]
         public void Returns_sequence_value_generators_when_configured_for_model()
         {
             var model = BuildModel();
@@ -70,12 +98,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<long>>(selector.Select(entityType.FindProperty("Long"), entityType));
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<short>>(selector.Select(entityType.FindProperty("Short"), entityType));
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<byte>>(selector.Select(entityType.FindProperty("Byte"), entityType));
-            Assert.IsType<SqlServerSequenceHiLoValueGenerator<char>>(selector.Select(entityType.FindProperty("Char"), entityType));
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<int>>(selector.Select(entityType.FindProperty("NullableInt"), entityType));
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<long>>(selector.Select(entityType.FindProperty("NullableLong"), entityType));
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<short>>(selector.Select(entityType.FindProperty("NullableShort"), entityType));
             Assert.IsType<SqlServerSequenceHiLoValueGenerator<byte>>(selector.Select(entityType.FindProperty("NullableByte"), entityType));
-            Assert.IsType<SqlServerSequenceHiLoValueGenerator<char>>(selector.Select(entityType.FindProperty("NullableChar"), entityType));
             Assert.IsType<TemporaryDecimalValueGenerator>(selector.Select(entityType.FindProperty("Decimal"), entityType));
             Assert.IsType<StringValueGenerator>(selector.Select(entityType.FindProperty("String"), entityType));
             Assert.IsType<SequentialGuidValueGenerator>(selector.Select(entityType.FindProperty("Guid"), entityType));
@@ -144,12 +170,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
             public long Long { get; set; }
             public short Short { get; set; }
             public byte Byte { get; set; }
-            public char Char { get; set; }
             public int? NullableInt { get; set; }
             public long? NullableLong { get; set; }
             public short? NullableShort { get; set; }
             public byte? NullableByte { get; set; }
-            public char? NullableChar { get; set; }
             public string String { get; set; }
             public Guid Guid { get; set; }
             public byte[] Binary { get; set; }

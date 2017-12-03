@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class ShadowStateUpdateTest : IClassFixture<InMemoryFixture>
     {
@@ -32,13 +32,11 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
             {
                 context.Add(customer);
 
-                // TODO: Better API for shadow state access
-                var customerEntry = context.Entry(customer).GetInfrastructure();
-                customerEntry[customerType.FindProperty("Name")] = "Daenerys";
+                context.Entry(customer).Property("Name").CurrentValue = "Daenerys";
 
                 await context.SaveChangesAsync();
 
-                customerEntry[customerType.FindProperty("Name")] = "Changed!";
+                context.Entry(customer).Property("Name").CurrentValue = "Changed!";
             }
 
             using (var context = new DbContext(optionsBuilder.Options))

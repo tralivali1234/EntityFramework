@@ -1,6 +1,8 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.IO;
+using System.Reflection;
 using Microsoft.DotNet.Cli.CommandLine;
 using Microsoft.EntityFrameworkCore.Tools.Properties;
 
@@ -13,16 +15,16 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
         private CommandOption _dataDir;
         private CommandOption _projectDir;
         private CommandOption _rootNamespace;
-        private CommandOption _noAppDomain;
+        private CommandOption _language;
 
         public override void Configure(CommandLineApplication command)
         {
             _assembly = command.Option("-a|--assembly <PATH>", Resources.AssemblyDescription);
-            _noAppDomain = command.Option("--no-appdomain", Resources.NoAppDomainDescription);
             _startupAssembly = command.Option("-s|--startup-assembly <PATH>", Resources.StartupAssemblyDescription);
             _dataDir = command.Option("--data-dir <PATH>", Resources.DataDirDescription);
             _projectDir = command.Option("--project-dir <PATH>", Resources.ProjectDirDescription);
             _rootNamespace = command.Option("--root-namespace <NAMESPACE>", Resources.RootNamespaceDescription);
+            _language = command.Option("--language <LANGUAGE>", Resources.LanguageDescription);
 
             base.Configure(command);
         }
@@ -39,27 +41,37 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
 
         protected IOperationExecutor CreateExecutor()
         {
-            // TODO: Re-throw TypeLoadException and FileNotFoundException?
-#if NET46
-            if (!_noAppDomain.HasValue())
+            try
             {
+#if NET461
                 return new AppDomainOperationExecutor(
                     _assembly.Value(),
                     _startupAssembly.Value(),
                     _projectDir.Value(),
                     _dataDir.Value(),
-                    _rootNamespace.Value());
-            }
-#elif NETCOREAPP1_0
+                    _rootNamespace.Value(),
+                    _language.Value());
+#elif NETCOREAPP2_0
+                return new ReflectionOperationExecutor(
+                    _assembly.Value(),
+                    _startupAssembly.Value(),
+                    _projectDir.Value(),
+                    _dataDir.Value(),
+                    _rootNamespace.Value(),
+                    _language.Value());
 #else
 #error target frameworks need to be updated.
 #endif
-            return new ReflectionOperationExecutor(
-                _assembly.Value(),
-                _startupAssembly.Value(),
-                _projectDir.Value(),
-                _dataDir.Value(),
-                _rootNamespace.Value());
+            }
+            catch (FileNotFoundException ex)
+                when (new AssemblyName(ex.FileName).Name == OperationExecutorBase.DesignAssemblyName)
+            {
+                throw new CommandException(
+                    Resources.DesignNotFound(
+                        Path.GetFileNameWithoutExtension(
+                            _startupAssembly.HasValue() ? _startupAssembly.Value() : _assembly.Value())),
+                    ex);
+            }
         }
     }
 }

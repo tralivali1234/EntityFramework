@@ -18,19 +18,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         IEntityType BaseType { get; }
 
         /// <summary>
-        ///     Gets the name of the defining navigation if this entity type with delegated identity.
+        ///     Gets the name of the defining navigation.
         /// </summary>
         string DefiningNavigationName { get; }
 
         /// <summary>
-        ///     Gets the defining entity type if this entity type with delegated identity.
+        ///     Gets the defining entity type.
         /// </summary>
         IEntityType DefiningEntityType { get; }
 
         /// <summary>
         ///     Gets the LINQ expression filter automatically applied to queries for this entity type.
         /// </summary>
-        LambdaExpression Filter { get; }
+        LambdaExpression QueryFilter { get; }
 
         /// <summary>
         ///     <para>

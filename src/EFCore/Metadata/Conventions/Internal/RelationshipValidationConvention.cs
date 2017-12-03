@@ -12,7 +12,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class RelationshipValidationConvention : IModelConvention
+    public class RelationshipValidationConvention : IModelBuiltConvention
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -29,9 +29,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     if (foreignKey.IsUnique
                         && foreignKey.GetPrincipalEndConfigurationSource() == null)
                     {
-                        throw new InvalidOperationException(CoreStrings.AmbiguousOneToOneRelationship(
-                            foreignKey.DeclaringEntityType.DisplayName() + (foreignKey.DependentToPrincipal == null ? "" : "." + foreignKey.DependentToPrincipal.Name),
-                            foreignKey.PrincipalEntityType.DisplayName() + (foreignKey.PrincipalToDependent == null ? "" : "." + foreignKey.PrincipalToDependent.Name)));
+                        throw new InvalidOperationException(
+                            CoreStrings.AmbiguousOneToOneRelationship(
+                                foreignKey.DeclaringEntityType.DisplayName() + (foreignKey.DependentToPrincipal == null ? "" : "." + foreignKey.DependentToPrincipal.Name),
+                                foreignKey.PrincipalEntityType.DisplayName() + (foreignKey.PrincipalToDependent == null ? "" : "." + foreignKey.PrincipalToDependent.Name)));
                     }
                 }
             }

@@ -3,19 +3,16 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations
+namespace Microsoft.EntityFrameworkCore.Migrations
 {
     public class MigrationCommandExecutorTest
     {
@@ -264,13 +261,15 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations
 
             if (async)
             {
-                await Assert.ThrowsAsync<InvalidOperationException>(async ()
-                    => await migrationCommandExecutor.ExecuteNonQueryAsync(commandList, fakeConnection));
+                await Assert.ThrowsAsync<InvalidOperationException>(
+                    async ()
+                        => await migrationCommandExecutor.ExecuteNonQueryAsync(commandList, fakeConnection));
             }
             else
             {
-                Assert.Throws<InvalidOperationException>(()
-                    => migrationCommandExecutor.ExecuteNonQuery(commandList, fakeConnection));
+                Assert.Throws<InvalidOperationException>(
+                    ()
+                        => migrationCommandExecutor.ExecuteNonQuery(commandList, fakeConnection));
             }
 
             Assert.Equal(1, fakeDbConnection.OpenCount);
@@ -292,24 +291,18 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations
             var optionsBuilder = new DbContextOptionsBuilder();
 
             ((IDbContextOptionsBuilderInfrastructure)optionsBuilder)
-                .AddOrUpdateExtension(optionsExtension
-                                      ?? new FakeRelationalOptionsExtension().WithConnectionString(ConnectionString));
+                .AddOrUpdateExtension(
+                    optionsExtension
+                    ?? new FakeRelationalOptionsExtension().WithConnectionString(ConnectionString));
 
             return optionsBuilder.Options;
         }
 
         private IRelationalCommand CreateRelationalCommand(
-            IInterceptingLogger<LoggerCategory.Database.Sql> logger = null,
-            DiagnosticSource diagnosticSource = null,
             string commandText = "Command Text",
             IReadOnlyList<IRelationalParameter> parameters = null)
             => new RelationalCommand(
-                new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                    logger ?? new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                    diagnosticSource ?? new DiagnosticListener("Fake")),
-                new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                    new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                    diagnosticSource ?? new DiagnosticListener("Fake")),
+                new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
                 commandText,
                 parameters ?? new IRelationalParameter[0]);
     }

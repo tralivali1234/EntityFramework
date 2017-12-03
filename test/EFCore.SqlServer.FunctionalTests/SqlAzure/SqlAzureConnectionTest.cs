@@ -3,16 +3,21 @@
 
 using System.Data;
 using System.Data.SqlClient;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.SqlAzure.Model;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.SqlAzure.Model;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.SqlAzure
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.SqlAzure
 {
     [SqlServerCondition(SqlServerCondition.IsSqlAzure)]
     public class SqlAzureConnectionTest : IClassFixture<SqlAzureFixture>
     {
+        public SqlAzureConnectionTest(SqlAzureFixture fixture)
+        {
+        }
+
         [ConditionalTheory]
         [InlineData(true)]
         [InlineData(false)]
@@ -30,10 +35,6 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.SqlAzure
                 context.Database.OpenConnection();
                 Assert.Equal(ConnectionState.Open, context.Database.GetDbConnection().State);
             }
-        }
-
-        public SqlAzureConnectionTest(SqlAzureFixture fixture)
-        {
         }
     }
 }

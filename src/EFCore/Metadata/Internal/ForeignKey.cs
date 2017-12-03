@@ -225,7 +225,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [CanBeNull] string name,
             // ReSharper disable once MethodOverloadWithOptionalParameter
             ConfigurationSource configurationSource = ConfigurationSource.Explicit)
-            => Navigation(PropertyIdentity.Create(name), configurationSource,  pointsToPrincipal: false);
+            => Navigation(PropertyIdentity.Create(name), configurationSource, pointsToPrincipal: false);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -350,8 +350,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual bool IsUnique
         {
-            get { return _isUnique ?? DefaultIsUnique; }
-            set { SetIsUnique(value, ConfigurationSource.Explicit); }
+            get => _isUnique ?? DefaultIsUnique;
+            set => SetIsUnique(value, ConfigurationSource.Explicit);
         }
 
         /// <summary>
@@ -364,15 +364,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             _isUnique = unique;
             UpdateIsUniqueConfigurationSource(configurationSource);
 
-            if (isChanging)
-            {
-                return DeclaringEntityType.Model.ConventionDispatcher.OnForeignKeyUniquenessChanged(Builder)?.Metadata;
-            }
-
-            return this;
+            return isChanging
+                ? DeclaringEntityType.Model.ConventionDispatcher.OnForeignKeyUniquenessChanged(Builder)?.Metadata
+                : this;
         }
 
-        private bool DefaultIsUnique => false;
+        private static bool DefaultIsUnique => false;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -394,7 +391,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         public virtual bool IsRequired
         {
             get { return !Properties.Any(p => p.IsNullable); }
-            set { SetIsRequired(value, ConfigurationSource.Explicit); }
+            set => SetIsRequired(value, ConfigurationSource.Explicit);
         }
 
         /// <summary>
@@ -454,8 +451,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual DeleteBehavior DeleteBehavior
         {
-            get { return _deleteBehavior ?? DefaultDeleteBehavior; }
-            set { SetDeleteBehavior(value, ConfigurationSource.Explicit); }
+            get => _deleteBehavior ?? DefaultDeleteBehavior;
+            set => SetDeleteBehavior(value, ConfigurationSource.Explicit);
         }
 
         /// <summary>
@@ -468,7 +465,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             UpdateDeleteBehaviorConfigurationSource(configurationSource);
         }
 
-        private DeleteBehavior DefaultDeleteBehavior => DeleteBehavior.Restrict;
+        private static DeleteBehavior DefaultDeleteBehavior => DeleteBehavior.ClientSetNull;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -489,8 +486,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual bool IsOwnership
         {
-            get { return _isOwnership ?? DefaultIsOwnership; }
-            set { SetIsOwnership(value, ConfigurationSource.Explicit); }
+            get => _isOwnership ?? DefaultIsOwnership;
+            set => SetIsOwnership(value, ConfigurationSource.Explicit);
         }
 
         /// <summary>
@@ -511,7 +508,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             return this;
         }
 
-        private bool DefaultIsOwnership => false;
+        private static bool DefaultIsOwnership => false;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -618,13 +615,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             Check.NotNull(principalEntityType, nameof(principalEntityType));
             Check.NotNull(dependentEntityType, nameof(dependentEntityType));
 
-            if (principalEntityType.HasDelegatedIdentity()
-                && principalEntityType.ClrType == dependentEntityType.ClrType)
+            if (principalEntityType.HasDefiningNavigation()
+                && principalEntityType.Name == dependentEntityType.Name)
             {
                 if (shouldThrow)
                 {
                     throw new InvalidOperationException(
-                        CoreStrings.ForeignKeySelfReferencingDelegatedIdentity(dependentEntityType.DisplayName()));
+                        CoreStrings.ForeignKeySelfReferencingDependentEntityType(dependentEntityType.DisplayName()));
                 }
                 return false;
             }
@@ -651,11 +648,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 return false;
             }
 
-            // FKs are not allowed to use properties from inherited keys since this could result in an ambiguous value space
+            // FKs are not allowed to use properties with value generation from inherited keys since this could result in an ambiguous value space
             if (dependentProperties != null
                 && dependentEntityType.BaseType != null)
             {
-                var inheritedKey = dependentProperties.SelectMany(p => p.GetContainingKeys().Where(k => k.DeclaringEntityType != dependentEntityType)).FirstOrDefault();
+                var inheritedKey = dependentProperties.Where(p => p.ValueGenerated != ValueGenerated.Never)
+                    .SelectMany(p => p.GetContainingKeys().Where(k => k.DeclaringEntityType != dependentEntityType)).FirstOrDefault();
                 if (inheritedKey != null)
                 {
                     if (shouldThrow)
@@ -716,8 +714,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             {
                 if (shouldThrow)
                 {
-                    throw new InvalidOperationException(CoreStrings.ForeignKeyCannotBeOptional(
-                        Property.Format(properties), entityType.DisplayName()));
+                    throw new InvalidOperationException(
+                        CoreStrings.ForeignKeyCannotBeOptional(
+                            Property.Format(properties), entityType.DisplayName()));
                 }
                 return false;
             }

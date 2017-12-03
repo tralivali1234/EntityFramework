@@ -2,16 +2,14 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public class StoreGeneratedFixupInMemoryTest
-        : StoreGeneratedFixupTestBase<InMemoryTestStore, StoreGeneratedFixupInMemoryTest.StoreGeneratedFixupInMemoryFixture>
+    public class StoreGeneratedFixupInMemoryTest : StoreGeneratedFixupTestBase<StoreGeneratedFixupInMemoryTest.StoreGeneratedFixupInMemoryFixture>
     {
         public StoreGeneratedFixupInMemoryTest(StoreGeneratedFixupInMemoryFixture fixture)
             : base(fixture)
@@ -37,157 +35,136 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
             }
         }
 
+        protected override void ExecuteWithStrategyInTransaction(Action<DbContext> testOperation)
+        {
+            base.ExecuteWithStrategyInTransaction(testOperation);
+            Fixture.Reseed();
+        }
+
         protected override bool EnforcesFKs => false;
 
         public class StoreGeneratedFixupInMemoryFixture : StoreGeneratedFixupFixtureBase
         {
-            private const string DatabaseName = "StoreGeneratedFixup";
+            protected override ITestStoreFactory TestStoreFactory => InMemoryTestStoreFactory.Instance;
 
-            private readonly IServiceProvider _serviceProvider;
+            public override DbContextOptionsBuilder AddOptions(DbContextOptionsBuilder builder)
+                => base.AddOptions(builder).ConfigureWarnings(w => w.Log(InMemoryEventId.TransactionIgnoredWarning));
 
-            public StoreGeneratedFixupInMemoryFixture()
+            protected override void OnModelCreating(ModelBuilder modelBuilder, DbContext context)
             {
-                _serviceProvider = new ServiceCollection()
-                    .AddEntityFrameworkInMemoryDatabase()
-                    .AddSingleton(TestModelSource.GetFactory(OnModelCreating))
-                    .BuildServiceProvider();
-            }
+                base.OnModelCreating(modelBuilder, context);
 
-            public override InMemoryTestStore CreateTestStore()
-            {
-                var store = new InMemoryStoreGeneratedFixupTestStore(_serviceProvider);
+                modelBuilder.Entity<Parent>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                using (var context = CreateContext(store))
-                {
-                    Seed(context);
-                }
+                modelBuilder.Entity<Child>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                return store;
-            }
+                modelBuilder.Entity<ParentPN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-            public override DbContext CreateContext(InMemoryTestStore testStore)
-                => new StoreGeneratedFixupContext(new DbContextOptionsBuilder()
-                    .UseInMemoryDatabase(DatabaseName)
-                    .UseInternalServiceProvider(_serviceProvider)
-                    .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
-                    .Options);
+                modelBuilder.Entity<ChildPN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-            public class InMemoryStoreGeneratedFixupTestStore : InMemoryTestStore
-            {
-                private readonly IServiceProvider _serviceProvider;
+                modelBuilder.Entity<ParentDN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                public InMemoryStoreGeneratedFixupTestStore(IServiceProvider serviceProvider)
-                {
-                    _serviceProvider = serviceProvider;
-                }
+                modelBuilder.Entity<ChildDN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                public override void Dispose()
-                {
-                    _serviceProvider.GetRequiredService<IInMemoryStoreSource>().GetPersistentStore(DatabaseName).Clear();
+                modelBuilder.Entity<ParentNN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                    base.Dispose();
-                }
-            }
+                modelBuilder.Entity<ChildNN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-            protected override void OnModelCreating(ModelBuilder modelBuilder)
-            {
-                base.OnModelCreating(modelBuilder);
+                modelBuilder.Entity<CategoryDN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<Parent>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<ProductDN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<Child>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<CategoryPN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<ParentPN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<ProductPN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<ChildPN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<CategoryNN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<ParentDN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<ProductNN>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<ChildDN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<Category>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<ParentNN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<ChildNN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<CategoryDN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<ProductDN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<CategoryPN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<ProductPN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<CategoryNN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<ProductNN>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<Category>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
-
-                modelBuilder.Entity<Product>(b =>
-                    {
-                        b.Property(e => e.Id1).ValueGeneratedOnAdd();
-                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<Product>(
+                    b =>
+                        {
+                            b.Property(e => e.Id1).ValueGeneratedOnAdd();
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
 
                 modelBuilder.Entity<Item>(b => { b.Property(e => e.Id).ValueGeneratedOnAdd(); });
 

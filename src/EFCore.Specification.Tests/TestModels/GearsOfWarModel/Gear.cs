@@ -4,7 +4,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.GearsOfWarModel
+namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
 {
     public class Gear
     {
@@ -15,6 +15,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.GearsOfWa
 
         // composite key
         public string Nickname { get; set; }
+
         public int SquadId { get; set; }
 
         public string FullName { get; set; }

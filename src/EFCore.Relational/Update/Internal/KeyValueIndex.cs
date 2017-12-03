@@ -51,10 +51,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public override bool Equals(object obj)
-            => !ReferenceEquals(null, obj)
+            => !(obj is null)
                && (ReferenceEquals(this, obj)
-                   || (obj.GetType() == GetType()
-                       && Equals((KeyValueIndex<TKey>)obj)));
+                   || obj.GetType() == GetType()
+                   && Equals((KeyValueIndex<TKey>)obj));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

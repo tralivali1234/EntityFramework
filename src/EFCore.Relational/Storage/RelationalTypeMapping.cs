@@ -4,7 +4,9 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Storage
@@ -18,37 +20,25 @@ namespace Microsoft.EntityFrameworkCore.Storage
     ///         not used in application code.
     ///     </para>
     /// </summary>
-    public class RelationalTypeMapping
+    public abstract class RelationalTypeMapping : CoreTypeMapping
     {
         /// <summary>
         ///     Gets the mapping to be used when the only piece of information is that there is a null value.
         /// </summary>
-        public static readonly RelationalTypeMapping NullMapping = new RelationalTypeMapping("NULL");
+        public static readonly RelationalTypeMapping NullMapping = new NullTypeMapping("NULL");
 
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="RelationalTypeMapping" /> class.
-        /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="clrType"> The .NET type. </param>
-        public RelationalTypeMapping(
-            [NotNull] string storeType,
-            [NotNull] Type clrType)
-            : this(storeType, clrType, dbType: null)
+        private class NullTypeMapping : RelationalTypeMapping
         {
-        }
+            public NullTypeMapping(string storeType)
+                : base(storeType, typeof(object))
+            {
+            }
 
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="RelationalTypeMapping" /> class.
-        /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="clrType"> The .NET type. </param>
-        /// <param name="dbType"> The <see cref="System.Data.DbType" /> to be used. </param>
-        public RelationalTypeMapping(
-            [NotNull] string storeType,
-            [NotNull] Type clrType,
-            [CanBeNull] DbType? dbType)
-            : this(storeType, clrType, dbType, unicode: false, size: null)
-        {
+            public override RelationalTypeMapping Clone(string storeType, int? size)
+                => this;
+
+            public override CoreTypeMapping Clone(ValueConverter converter)
+                => this;
         }
 
         /// <summary>
@@ -59,33 +49,40 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="dbType"> The <see cref="System.Data.DbType" /> to be used. </param>
         /// <param name="unicode"> A value indicating whether the type should handle Unicode data or not. </param>
         /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
-        /// <param name="hasNonDefaultUnicode"> A value indicating whether the Unicode setting has been manually configured to a non-default value. </param>
-        /// <param name="hasNonDefaultSize"> A value indicating whether the size setting has been manually configured to a non-default value. </param>
-        public RelationalTypeMapping(
+        protected RelationalTypeMapping(
             [NotNull] string storeType,
             [NotNull] Type clrType,
-            [CanBeNull] DbType? dbType,
-            bool unicode,
-            int? size,
-            bool hasNonDefaultUnicode = false,
-            bool hasNonDefaultSize = false)
-            : this(storeType)
+            DbType? dbType = null,
+            bool unicode = false,
+            int? size = null)
+            : this(storeType, clrType, null, dbType, unicode, size)
         {
-            Check.NotNull(clrType, nameof(clrType));
-
-            ClrType = clrType;
-            DbType = dbType;
-            IsUnicode = unicode;
-            Size = size;
-            HasNonDefaultUnicode = hasNonDefaultUnicode;
-            HasNonDefaultSize = hasNonDefaultSize;
         }
 
-        private RelationalTypeMapping([NotNull] string storeType)
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="RelationalTypeMapping" /> class.
+        /// </summary>
+        /// <param name="storeType"> The name of the database type. </param>
+        /// <param name="clrType"> The .NET type. </param>
+        /// <param name="converter"> Converts types to and from the store whenever this mapping is used. </param>
+        /// <param name="dbType"> The <see cref="System.Data.DbType" /> to be used. </param>
+        /// <param name="unicode"> A value indicating whether the type should handle Unicode data or not. </param>
+        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        protected RelationalTypeMapping(
+            [NotNull] string storeType,
+            [NotNull] Type clrType,
+            [CanBeNull] ValueConverter converter,
+            DbType? dbType = null,
+            bool unicode = false,
+            int? size = null)
+            : base(clrType, converter)
         {
             Check.NotEmpty(storeType, nameof(storeType));
 
             StoreType = storeType;
+            DbType = dbType;
+            IsUnicode = unicode;
+            Size = size;
         }
 
         /// <summary>
@@ -94,25 +91,21 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="storeType"> The name of the database type. </param>
         /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
         /// <returns> The newly created mapping. </returns>
-        public virtual RelationalTypeMapping CreateCopy([NotNull] string storeType, int? size)
-            => new RelationalTypeMapping(
-                storeType,
-                ClrType,
-                DbType,
-                IsUnicode,
-                size,
-                HasNonDefaultUnicode,
-                hasNonDefaultSize: size != Size);
+        public abstract RelationalTypeMapping Clone([NotNull] string storeType, int? size);
+
+        /// <summary>
+        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
+        ///    added.
+        /// </summary>
+        /// <param name="converter"> The converter to use. </param>
+        /// <returns> A new type mapping </returns>
+        public override CoreTypeMapping Clone(ValueConverter converter)
+            => throw new NotImplementedException(CoreStrings.ConverterCloneNotImplemented(GetType().ShortDisplayName()));
 
         /// <summary>
         ///     Gets the name of the database type.
         /// </summary>
         public virtual string StoreType { get; }
-
-        /// <summary>
-        ///     Gets the .NET type.
-        /// </summary>
-        public virtual Type ClrType { get; }
 
         /// <summary>
         ///     Gets the <see cref="System.Data.DbType" /> to be used.
@@ -130,14 +123,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public virtual int? Size { get; }
 
         /// <summary>
-        ///     Gets a value indicating whether the Unicode setting has been manually configured to a non-default value.
+        ///     Gets the string format to be used to generate SQL literals of this type.
         /// </summary>
-        public virtual bool HasNonDefaultUnicode { get; }
-
-        /// <summary>
-        ///     Gets a value indicating whether the size setting has been manually configured to a non-default value.
-        /// </summary>
-        public virtual bool HasNonDefaultSize { get; }
+        protected virtual string SqlLiteralFormatString { get; } = "{0}";
 
         /// <summary>
         ///     Creates a <see cref="DbParameter" /> with the appropriate type information configured.
@@ -146,7 +134,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="name"> The name of the parameter. </param>
         /// <param name="value"> The value to be assigned to the parameter. </param>
         /// <param name="nullable"> A value indicating whether the parameter should be a nullable type. </param>
-        /// <returns></returns>
+        /// <returns> The newly created parameter. </returns>
         public virtual DbParameter CreateParameter(
             [NotNull] DbCommand command,
             [NotNull] string name,
@@ -158,6 +146,18 @@ namespace Microsoft.EntityFrameworkCore.Storage
             var parameter = command.CreateParameter();
             parameter.Direction = ParameterDirection.Input;
             parameter.ParameterName = name;
+
+            if (Converter != null)
+            {
+                value = Converter.ConvertToStore(value);
+            }
+
+            if (value != null
+                && value.GetType().IsEnum)
+            {
+                value = Convert.ChangeType(value, value.GetType().UnwrapEnumType());
+            }
+
             parameter.Value = value ?? DBNull.Value;
 
             if (nullable.HasValue)
@@ -187,5 +187,27 @@ namespace Microsoft.EntityFrameworkCore.Storage
         protected virtual void ConfigureParameter([NotNull] DbParameter parameter)
         {
         }
+
+        /// <summary>
+        ///     Generates the SQL representation of a literal value.
+        /// </summary>
+        /// <param name="value">The literal value.</param>
+        /// <returns>
+        ///     The generated string.
+        /// </returns>
+        public virtual string GenerateSqlLiteral([CanBeNull] object value)
+            => value == null
+                ? "NULL"
+                : GenerateNonNullSqlLiteral(value);
+
+        /// <summary>
+        ///     Generates the SQL representation of a non-null literal value.
+        /// </summary>
+        /// <param name="value">The literal value.</param>
+        /// <returns>
+        ///     The generated string.
+        /// </returns>
+        protected virtual string GenerateNonNullSqlLiteral([NotNull] object value)
+            => string.Format(CultureInfo.InvariantCulture, SqlLiteralFormatString, Check.NotNull(value, nameof(value)));
     }
 }

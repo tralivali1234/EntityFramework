@@ -3,16 +3,13 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.Update;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.EntityFrameworkCore.Update;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Update
+namespace Microsoft.EntityFrameworkCore.Update
 {
     public class SqliteUpdateSqlGeneratorTest : UpdateSqlGeneratorTestBase
     {
@@ -20,7 +17,10 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Update
             => new SqliteUpdateSqlGenerator(
                 new UpdateSqlGeneratorDependencies(
                     new SqliteSqlGenerationHelper(
-                        new RelationalSqlGenerationHelperDependencies())));
+                        new RelationalSqlGenerationHelperDependencies()),
+                    new SqliteTypeMapper(
+                        new CoreTypeMapperDependencies(),
+                        new RelationalTypeMapperDependencies())));
 
         protected override TestHelpers TestHelpers => SqliteTestHelpers.Instance;
 

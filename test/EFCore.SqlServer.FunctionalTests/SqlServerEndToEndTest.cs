@@ -5,32 +5,37 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Data.Common;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable StringStartsWithIsCultureSpecific
+// ReSharper disable VirtualMemberCallInConstructor
+// ReSharper disable ClassNeverInstantiated.Local
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerEndToEndTest : IClassFixture<SqlServerFixture>
     {
+        private const string DatabaseName = "SqlServerEndToEndTest";
+
+        protected SqlServerFixture Fixture { get; }
+
+        public SqlServerEndToEndTest(SqlServerFixture fixture)
+        {
+            Fixture = fixture;
+            Fixture.TestSqlLoggerFactory.Clear();
+        }
+
         [Fact]
         public void Can_use_decimal_and_byte_as_identity_columns()
         {
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .UseSqlServer(testDatabase.ConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(_fixture.ServiceProvider);
-
                 var nownNum1 = new NownNum { Id = 77.0m, TheWalrus = "Crying" };
                 var nownNum2 = new NownNum { Id = 78.0m, TheWalrus = "Walrus" };
 
@@ -58,7 +63,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 decimal[] preSaveValues;
                 byte[] preSaveByteValues;
 
-                using (var context = new NumNumContext(optionsBuilder.Options))
+                var options = Fixture.CreateOptions(testDatabase);
+                using (var context = new NumNumContext(options))
                 {
                     context.Database.EnsureCreated();
 
@@ -79,23 +85,23 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     context.SaveChanges();
                 }
 
-                using (var context = new NumNumContext(optionsBuilder.Options))
+                using (var context = new NumNumContext(options))
                 {
                     Assert.Equal(nownNum1.Id, context.NownNums.Single(e => e.TheWalrus == "Crying").Id);
                     Assert.Equal(nownNum2.Id, context.NownNums.Single(e => e.TheWalrus == "Walrus").Id);
-                    Assert.Equal(nownNum1.Id, 77.0m);
-                    Assert.Equal(nownNum2.Id, 78.0m);
+                    Assert.Equal(77.0m, nownNum1.Id);
+                    Assert.Equal(78.0m, nownNum2.Id);
 
                     Assert.Equal(numNum1.Id, context.NumNums.Single(e => e.TheWalrus == "I").Id);
                     Assert.Equal(numNum2.Id, context.NumNums.Single(e => e.TheWalrus == "Am").Id);
                     Assert.NotEqual(numNum1.Id, preSaveValues[0]);
                     Assert.NotEqual(numNum2.Id, preSaveValues[1]);
-                    
+
                     Assert.Equal(anNum1.Id, context.AnNums.Single(e => e.TheWalrus == "Goo goo").Id);
                     Assert.Equal(anNum2.Id, context.AnNums.Single(e => e.TheWalrus == "g'joob").Id);
                     Assert.NotEqual(adNum1.Id, preSaveValues[2]);
                     Assert.NotEqual(adNum2.Id, preSaveValues[3]);
-                    
+
                     Assert.Equal(adNum1.Id, context.AdNums.Single(e => e.TheWalrus == "Eggman").Id);
                     Assert.Equal(adNum2.Id, context.AdNums.Single(e => e.TheWalrus == "Eggmen").Id);
                     Assert.NotEqual(anNum1.Id, preSaveValues[4]);
@@ -103,8 +109,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
                     Assert.Equal(byteNownNum1.Id, context.ByteNownNums.Single(e => e.Lucy == "Tangerine").Id);
                     Assert.Equal(byteNownNum2.Id, context.ByteNownNums.Single(e => e.Lucy == "Trees").Id);
-                    Assert.Equal(byteNownNum1.Id, 77);
-                    Assert.Equal(byteNownNum2.Id, 78);
+                    Assert.Equal(77, byteNownNum1.Id);
+                    Assert.Equal(78, byteNownNum2.Id);
 
                     Assert.Equal(byteNum1.Id, context.ByteNums.Single(e => e.Lucy == "Marmalade").Id);
                     Assert.Equal(byteNum2.Id, context.ByteNums.Single(e => e.Lucy == "Skies").Id);
@@ -164,6 +170,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     .Entity<ByteAdNum>()
                     .Property(e => e.Id)
                     .ValueGeneratedOnAdd();
+
+                modelBuilder
+                    .Entity<NownNum>()
+                    .Property(e => e.Id)
+                    .HasColumnType("numeric(18, 0)");
             }
         }
 
@@ -220,34 +231,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             public string Lucy { get; set; }
         }
 
-        private class VariableDataTypes
-        {
-            public int Id { get; set; }
-            public string String { get; set; }
-            public byte[] ByteArray { get; set; }
-            public double Double { get; set; }
-            public decimal Decimal { get; set; }
-        }
-
-        private void AssertEqual(VariableDataTypes expected, VariableDataTypes actual)
-        {
-            Assert.Equal(expected.Id, actual.Id);
-
-            Assert.Equal(expected.String, actual.String);
-            Assert.Equal(expected.ByteArray, actual.ByteArray);
-            Assert.Equal(expected.Double, actual.Double);
-            Assert.Equal(expected.Decimal, actual.Decimal);
-        }
-
         [Fact]
         public void Can_use_string_enum_or_byte_array_as_key()
         {
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .UseSqlServer(testDatabase.ConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(_fixture.ServiceProvider);
-
                 var sNum1 = new SNum { TheWalrus = "I" };
                 var sNum2 = new SNum { TheWalrus = "Am" };
 
@@ -257,7 +245,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                 var bNum1 = new BNum { TheWalrus = "Eggman" };
                 var bNum2 = new BNum { TheWalrus = "Eggmen" };
 
-                using (var context = new ENumContext(optionsBuilder.Options))
+                var options = Fixture.CreateOptions(testDatabase);
+                using (var context = new ENumContext(options))
                 {
                     context.Database.EnsureCreated();
 
@@ -266,7 +255,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     context.SaveChanges();
                 }
 
-                using (var context = new ENumContext(optionsBuilder.Options))
+                using (var context = new ENumContext(options))
                 {
                     Assert.Equal(sNum1.Id, context.SNums.Single(e => e.TheWalrus == "I").Id);
                     Assert.Equal(sNum2.Id, context.SNums.Single(e => e.TheWalrus == "Am").Id);
@@ -307,6 +296,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         private enum ENum
         {
+            // ReSharper disable once UnusedMember.Local
             ANum,
             BNum,
             CNum
@@ -321,9 +311,9 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [Fact]
         public void Can_run_linq_query_on_entity_set()
         {
-            using (SqlServerTestStore.GetNorthwindStore())
+            using (var testStore = SqlServerTestStore.GetNorthwindStore())
             {
-                using (var db = new NorthwindContext(_fixture.ServiceProvider))
+                using (var db = new NorthwindContext(Fixture.CreateOptions(testStore)))
                 {
                     var results = db.Customers
                         .Where(c => c.CompanyName.StartsWith("A"))
@@ -347,16 +337,9 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [Fact]
         public void Can_run_linq_query_on_entity_set_with_value_buffer_reader()
         {
-            using (SqlServerTestStore.GetNorthwindStore())
+            using (var testStore = SqlServerTestStore.GetNorthwindStore())
             {
-                var serviceCollection = new ServiceCollection();
-                serviceCollection
-                    .AddEntityFrameworkSqlServer();
-
-                serviceCollection.AddSingleton<IRelationalValueBufferFactoryFactory, TestTypedValueBufferFactoryFactory>();
-                var serviceProvider = serviceCollection.BuildServiceProvider();
-
-                using (var db = new NorthwindContext(serviceProvider))
+                using (var db = new NorthwindContext(Fixture.CreateOptions(testStore)))
                 {
                     var results = db.Customers
                         .Where(c => c.CompanyName.StartsWith("A"))
@@ -377,20 +360,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             }
         }
 
-        public class TestTypedValueBufferFactoryFactory : TypedRelationalValueBufferFactoryFactory
-        {
-            public TestTypedValueBufferFactoryFactory(RelationalValueBufferFactoryDependencies dependencies)
-                : base(dependencies)
-            {
-            }
-        }
-
         [Fact]
         public void Can_enumerate_entity_set()
         {
-            using (SqlServerTestStore.GetNorthwindStore())
+            using (var testStore = SqlServerTestStore.GetNorthwindStore())
             {
-                using (var db = new NorthwindContext(_fixture.ServiceProvider))
+                using (var db = new NorthwindContext(Fixture.CreateOptions(testStore)))
                 {
                     var results = new List<Customer>();
                     foreach (var item in db.Customers)
@@ -408,27 +383,17 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [Fact]
         public async Task Can_save_changes()
         {
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var loggingFactory = new TestSqlLoggerFactory();
-                var serviceProvider = new ServiceCollection()
-                    .AddEntityFrameworkSqlServer()
-                    .AddSingleton<ILoggerFactory>(loggingFactory)
-                    .BuildServiceProvider();
-
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .EnableSensitiveDataLogging()
-                    .UseSqlServer(testDatabase.ConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(serviceProvider);
-
-                using (var db = new BloggingContext(optionsBuilder.Options))
+                var options = Fixture.CreateOptions(testDatabase);
+                using (var db = new BloggingContext(options))
                 {
                     await CreateBlogDatabaseAsync<Blog>(db);
                 }
 
-                loggingFactory.Clear();
+                Fixture.TestSqlLoggerFactory.Clear();
 
-                using (var db = new BloggingContext(optionsBuilder.Options))
+                using (var db = new BloggingContext(options))
                 {
                     var toUpdate = db.Blogs.Single(b => b.Name == "Blog1");
                     toUpdate.Name = "Blog is Updated";
@@ -440,19 +405,20 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     db.Entry(toUpdate).State = EntityState.Modified;
                     db.Entry(toDelete).State = EntityState.Deleted;
 
-                    var toAdd = db.Add(new Blog
-                    {
-                        Name = "Blog to Insert",
-                        George = true,
-                        TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
-                        NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
-                        ToEat = 64,
-                        OrNothing = 0.123456789,
-                        Fuse = 777,
-                        WayRound = 9876543210,
-                        Away = 0.12345f,
-                        AndChew = new byte[16]
-                    }).Entity;
+                    var toAdd = db.Add(
+                        new Blog
+                        {
+                            Name = "Blog to Insert",
+                            George = true,
+                            TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
+                            NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
+                            ToEat = 64,
+                            OrNothing = 0.123456789,
+                            Fuse = 777,
+                            WayRound = 9876543210,
+                            Away = 0.12345f,
+                            AndChew = new byte[16]
+                        }).Entity;
 
                     await db.SaveChangesAsync();
 
@@ -463,13 +429,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Assert.Equal(EntityState.Unchanged, db.Entry(toAdd).State);
                     Assert.DoesNotContain(toDelete, db.ChangeTracker.Entries().Select(e => e.Entity));
 
-                    Assert.Equal(3, loggingFactory.SqlStatements.Count);
-                    Assert.Contains("SELECT", loggingFactory.SqlStatements[0]);
-                    Assert.Contains("SELECT", loggingFactory.SqlStatements[1]);
-                    Assert.Contains("@p0: " + deletedId, loggingFactory.SqlStatements[2]);
-                    Assert.Contains("DELETE", loggingFactory.SqlStatements[2]);
-                    Assert.Contains("UPDATE", loggingFactory.SqlStatements[2]);
-                    Assert.Contains("INSERT", loggingFactory.SqlStatements[2]);
+                    Assert.Equal(5, Fixture.TestSqlLoggerFactory.SqlStatements.Count);
+                    Assert.Contains("SELECT", Fixture.TestSqlLoggerFactory.SqlStatements[0]);
+                    Assert.Contains("SELECT", Fixture.TestSqlLoggerFactory.SqlStatements[1]);
+                    Assert.Contains("@p0='" + deletedId, Fixture.TestSqlLoggerFactory.SqlStatements[2]);
+                    Assert.Contains("DELETE", Fixture.TestSqlLoggerFactory.SqlStatements[2]);
+                    Assert.Contains("UPDATE", Fixture.TestSqlLoggerFactory.SqlStatements[3]);
+                    Assert.Contains("INSERT", Fixture.TestSqlLoggerFactory.SqlStatements[4]);
 
                     var rows = await testDatabase.ExecuteScalarAsync<int>(
                         $@"SELECT Count(*) FROM [dbo].[Blog] WHERE Id = {updatedId} AND Name = 'Blog is Updated'");
@@ -492,32 +458,30 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [Fact]
         public async Task Can_save_changes_in_tracked_entities()
         {
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .UseSqlServer(testDatabase.ConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(_fixture.ServiceProvider);
-
                 int updatedId;
                 int deletedId;
                 int addedId;
-                using (var db = new BloggingContext(optionsBuilder.Options))
+                var options = Fixture.CreateOptions(testDatabase);
+                using (var db = new BloggingContext(options))
                 {
                     var blogs = await CreateBlogDatabaseAsync<Blog>(db);
 
-                    var toAdd = db.Blogs.Add(new Blog
-                    {
-                        Name = "Blog to Insert",
-                        George = true,
-                        TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
-                        NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
-                        ToEat = 64,
-                        OrNothing = 0.123456789,
-                        Fuse = 777,
-                        WayRound = 9876543210,
-                        Away = 0.12345f,
-                        AndChew = new byte[16]
-                    }).Entity;
+                    var toAdd = db.Blogs.Add(
+                        new Blog
+                        {
+                            Name = "Blog to Insert",
+                            George = true,
+                            TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
+                            NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
+                            ToEat = 64,
+                            OrNothing = 0.123456789,
+                            Fuse = 777,
+                            WayRound = 9876543210,
+                            Away = 0.12345f,
+                            AndChew = new byte[16]
+                        }).Entity;
                     db.Entry(toAdd).State = EntityState.Detached;
 
                     var toUpdate = blogs[0];
@@ -540,7 +504,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Assert.DoesNotContain(toDelete, db.ChangeTracker.Entries().Select(e => e.Entity));
                 }
 
-                using (var db = new BloggingContext(optionsBuilder.Options))
+                using (var db = new BloggingContext(options))
                 {
                     var toUpdate = db.Blogs.Single(b => b.Id == updatedId);
                     Assert.Equal("Blog is Updated", toUpdate.Name);
@@ -553,13 +517,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [Fact]
         public void Can_track_an_entity_with_more_than_10_properties()
         {
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .UseSqlServer(testDatabase.ConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(_fixture.ServiceProvider);
-
-                using (var context = new GameDbContext(optionsBuilder.Options))
+                var options = Fixture.CreateOptions(testDatabase);
+                using (var context = new GameDbContext(options))
                 {
                     context.Database.EnsureCreated();
 
@@ -568,10 +529,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     context.SaveChanges();
                 }
 
-                using (var context = new GameDbContext(optionsBuilder.Options))
+                using (var context = new GameDbContext(options))
                 {
                     var character = context.Characters
                         .Include(c => c.Level.Game)
+                        .OrderBy(c => c.Id)
                         .First();
 
                     Assert.NotNull(character.Game);
@@ -655,40 +617,42 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             {
                 modelBuilder.Entity<Level>(eb => { eb.HasKey(l => new { l.GameId, l.Id }); });
 
-                modelBuilder.Entity<Actor>(eb =>
-                    {
-                        eb.HasKey(a => new { a.GameId, a.Id });
-                        eb.HasOne(a => a.Level)
-                            .WithMany()
-                            .HasForeignKey(nameof(Actor.GameId), "LevelId")
-                            .IsRequired();
-                    });
+                modelBuilder.Entity<Actor>(
+                    eb =>
+                        {
+                            eb.HasKey(a => new { a.GameId, a.Id });
+                            eb.HasOne(a => a.Level)
+                                .WithMany()
+                                .HasForeignKey(nameof(Actor.GameId), "LevelId")
+                                .IsRequired();
+                        });
 
                 modelBuilder.Entity<PlayerCharacter>();
 
-                modelBuilder.Entity<Game>(eb =>
-                    {
-                        eb.Property(g => g.Id)
-                            .ValueGeneratedOnAdd();
-                        eb.HasMany(g => g.Levels)
-                            .WithOne(l => l.Game)
-                            .HasForeignKey(l => l.GameId);
-                        eb.HasMany(g => g.Actors)
-                            .WithOne(a => a.Game)
-                            .HasForeignKey(a => a.GameId)
-                            .OnDelete(DeleteBehavior.Restrict);
-                    });
+                modelBuilder.Entity<Game>(
+                    eb =>
+                        {
+                            eb.Property(g => g.Id)
+                                .ValueGeneratedOnAdd();
+                            eb.HasMany(g => g.Levels)
+                                .WithOne(l => l.Game)
+                                .HasForeignKey(l => l.GameId);
+                            eb.HasMany(g => g.Actors)
+                                .WithOne(a => a.Game)
+                                .HasForeignKey(a => a.GameId)
+                                .OnDelete(DeleteBehavior.Restrict);
+                        });
             }
         }
 
         [Fact]
         public async Task Tracking_entities_asynchronously_returns_tracked_entities_back()
         {
-            using (SqlServerTestStore.GetNorthwindStore())
+            using (var testStore = SqlServerTestStore.GetNorthwindStore())
             {
-                using (var db = new NorthwindContext(_fixture.ServiceProvider))
+                using (var db = new NorthwindContext(Fixture.CreateOptions(testStore)))
                 {
-                    var customer = await db.Customers.FirstOrDefaultAsync();
+                    var customer = await db.Customers.OrderBy(c => c.CustomerID).FirstOrDefaultAsync();
 
                     var trackedCustomerEntry = db.ChangeTracker.Entries().Single();
                     Assert.Same(trackedCustomerEntry.Entity, customer);
@@ -702,30 +666,23 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         [Fact] // Issue #931
         public async Task Can_save_and_query_with_schema()
         {
-            var serviceProvider
-                = new ServiceCollection()
-                    .AddEntityFrameworkSqlServer()
-                    .BuildServiceProvider();
-
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testStore = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                await testDatabase.ExecuteNonQueryAsync("CREATE SCHEMA Apple");
-                await testDatabase.ExecuteNonQueryAsync("CREATE TABLE Apple.Jack (MyKey int)");
-                await testDatabase.ExecuteNonQueryAsync("CREATE TABLE Apple.Black (MyKey int)");
+                var options = Fixture.CreateOptions(testStore);
 
-                using (var context = new SchemaContext(serviceProvider))
+                await testStore.ExecuteNonQueryAsync("CREATE SCHEMA Apple");
+                await testStore.ExecuteNonQueryAsync("CREATE TABLE Apple.Jack (MyKey int)");
+                await testStore.ExecuteNonQueryAsync("CREATE TABLE Apple.Black (MyKey int)");
+
+                using (var context = new SchemaContext(options))
                 {
-                    context.Connection = testDatabase.Connection;
-
                     context.Add(new Jack { MyKey = 1 });
                     context.Add(new Black { MyKey = 2 });
                     context.SaveChanges();
                 }
 
-                using (var context = new SchemaContext(serviceProvider))
+                using (var context = new SchemaContext(options))
                 {
-                    context.Connection = testDatabase.Connection;
-
                     Assert.Equal(1, context.Jacks.Count());
                     Assert.Equal(1, context.Blacks.Count());
                 }
@@ -734,20 +691,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         private class SchemaContext : DbContext
         {
-            private readonly IServiceProvider _serviceProvider;
-
-            public SchemaContext(IServiceProvider serviceProvider)
+            public SchemaContext(DbContextOptions options)
+                : base(options)
             {
-                _serviceProvider = serviceProvider;
             }
-
-            public DbConnection Connection { get; set; }
 
             public DbSet<Jack> Jacks { get; set; }
             public DbSet<Black> Blacks { get; set; }
-
-            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                => optionsBuilder.UseSqlServer(Connection, b => b.ApplyConfiguration()).UseInternalServiceProvider(_serviceProvider);
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
@@ -758,7 +708,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
                 modelBuilder
                     .Entity<Black>()
-                    .ForSqlServerToTable("Black", "Apple")
+                    .ToTable("Black", "Apple")
                     .HasKey(e => e.MyKey);
             }
         }
@@ -791,19 +741,18 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             await RoundTripChanges<ChangedOnlyBlog>();
         }
 
-        private async Task RoundTripChanges<TBlog>() where TBlog : class, IBlog, new()
+        private async Task RoundTripChanges<TBlog>()
+            where TBlog : class, IBlog, new()
         {
-            using (var testDatabase = SqlServerTestStore.Create(DatabaseName))
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .UseSqlServer(testDatabase.ConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(_fixture.ServiceProvider);
+                var options = Fixture.CreateOptions(testDatabase);
 
                 int blog1Id;
                 int blog2Id;
                 int blog3Id;
 
-                using (var context = new BloggingContext<TBlog>(optionsBuilder.Options))
+                using (var context = new BloggingContext<TBlog>(options))
                 {
                     var blogs = await CreateBlogDatabaseAsync<TBlog>(context);
                     blog1Id = blogs[0].Id;
@@ -814,7 +763,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Assert.NotEqual(blog1Id, blog2Id);
                 }
 
-                using (var context = new BloggingContext<TBlog>(optionsBuilder.Options))
+                using (var context = new BloggingContext<TBlog>(options))
                 {
                     var blogs = context.Blogs.ToList();
                     Assert.Equal(2, blogs.Count);
@@ -850,7 +799,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     Assert.NotEqual(0, blog3Id);
                 }
 
-                using (var context = new BloggingContext<TBlog>(optionsBuilder.Options))
+                using (var context = new BloggingContext<TBlog>(options))
                 {
                     var blogs = context.Blogs.ToList();
                     Assert.Equal(3, blogs.Count);
@@ -870,84 +819,71 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             }
         }
 
-        private static async Task<TBlog[]> CreateBlogDatabaseAsync<TBlog>(DbContext context) where TBlog : class, IBlog, new()
+        private static async Task<TBlog[]> CreateBlogDatabaseAsync<TBlog>(DbContext context)
+            where TBlog : class, IBlog, new()
         {
             context.Database.EnsureCreated();
 
-            var blog1 = context.Add(new TBlog
-            {
-                Name = "Blog1",
-                George = true,
-                TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
-                NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
-                ToEat = 64,
-                //CupOfChar = 'C', // TODO: Conversion failed when converting the nvarchar value 'C' to data type int.
-                OrNothing = 0.123456789,
-                Fuse = 777,
-                WayRound = 9876543210,
-                //NotToEat = -64, // TODO: The parameter data type of SByte is invalid.
-                Away = 0.12345f,
-                //OrULong = 888, // TODO: The parameter data type of UInt16 is invalid.
-                //OrUSkint = 8888888, // TODO: The parameter data type of UInt32 is invalid.
-                //OrUShort = 888888888888888, // TODO: The parameter data type of UInt64 is invalid.
-                AndChew = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
-            }).Entity;
-            var blog2 = context.Add(new TBlog
-            {
-                Name = "Blog2",
-                George = false,
-                TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9CF"),
-                NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 778),
-                ToEat = 65,
-                //CupOfChar = 'D', // TODO: Conversion failed when converting the nvarchar value 'C' to data type int.
-                OrNothing = 0.987654321,
-                Fuse = 778,
-                WayRound = 98765432100,
-                //NotToEat = -64, // TODO: The parameter data type of SByte is invalid.
-                Away = 0.12345f,
-                //OrULong = 888, // TODO: The parameter data type of UInt16 is invalid.
-                //OrUSkint = 8888888, // TODO: The parameter data type of UInt32 is invalid.
-                //OrUShort = 888888888888888, // TODO: The parameter data type of UInt64 is invalid.
-                AndChew = new byte[16]
-            }).Entity;
+            var blog1 = context.Add(
+                new TBlog
+                {
+                    Name = "Blog1",
+                    George = true,
+                    TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
+                    NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
+                    ToEat = 64,
+                    //CupOfChar = 'C', // TODO: Conversion failed when converting the nvarchar value 'C' to data type int.
+                    OrNothing = 0.123456789,
+                    Fuse = 777,
+                    WayRound = 9876543210,
+                    //NotToEat = -64, // TODO: The parameter data type of SByte is invalid.
+                    Away = 0.12345f,
+                    //OrULong = 888, // TODO: The parameter data type of UInt16 is invalid.
+                    //OrUSkint = 8888888, // TODO: The parameter data type of UInt32 is invalid.
+                    //OrUShort = 888888888888888, // TODO: The parameter data type of UInt64 is invalid.
+                    AndChew = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
+                }).Entity;
+            var blog2 = context.Add(
+                new TBlog
+                {
+                    Name = "Blog2",
+                    George = false,
+                    TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9CF"),
+                    NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 778),
+                    ToEat = 65,
+                    //CupOfChar = 'D', // TODO: Conversion failed when converting the nvarchar value 'C' to data type int.
+                    OrNothing = 0.987654321,
+                    Fuse = 778,
+                    WayRound = 98765432100,
+                    //NotToEat = -64, // TODO: The parameter data type of SByte is invalid.
+                    Away = 0.12345f,
+                    //OrULong = 888, // TODO: The parameter data type of UInt16 is invalid.
+                    //OrUSkint = 8888888, // TODO: The parameter data type of UInt32 is invalid.
+                    //OrUShort = 888888888888888, // TODO: The parameter data type of UInt64 is invalid.
+                    AndChew = new byte[16]
+                }).Entity;
             await context.SaveChangesAsync();
 
             return new[] { blog1, blog2 };
         }
 
-        private const string DatabaseName = "SqlServerEndToEndTest";
-
-        private readonly SqlServerFixture _fixture;
-
-        public SqlServerEndToEndTest(SqlServerFixture fixture)
-        {
-            _fixture = fixture;
-            _fixture.TestSqlLoggerFactory.Clear();
-        }
-
         private class NorthwindContext : DbContext
         {
-            private readonly IServiceProvider _serviceProvider;
-
-            public NorthwindContext(IServiceProvider serviceProvider)
+            public NorthwindContext(DbContextOptions options)
+                : base(options)
             {
-                _serviceProvider = serviceProvider;
             }
 
             public DbSet<Customer> Customers { get; set; }
 
-            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                => optionsBuilder
-                    .UseSqlServer(SqlServerTestStore.NorthwindConnectionString, b => b.ApplyConfiguration())
-                    .UseInternalServiceProvider(_serviceProvider);
-
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Customer>(b =>
-                    {
-                        b.HasKey(c => c.CustomerID);
-                        b.ForSqlServerToTable("Customers");
-                    });
+                modelBuilder.Entity<Customer>(
+                    b =>
+                        {
+                            b.HasKey(c => c.CustomerID);
+                            b.ToTable("Customers");
+                        });
             }
         }
 
@@ -973,13 +909,19 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             public bool George { get; set; }
             public Guid TheGu { get; set; }
             public DateTime NotFigTime { get; set; }
+
             public byte ToEat { get; set; }
+
             //public char CupOfChar { get; set; }
             public double OrNothing { get; set; }
+
             public short Fuse { get; set; }
+
             public long WayRound { get; set; }
+
             //public sbyte NotToEat { get; set; }
             public float Away { get; set; }
+
             //public ushort OrULong { get; set; }
             //public uint OrUSkint { get; set; }
             //public ulong OrUShort { get; set; }
@@ -1017,13 +959,19 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             bool George { get; set; }
             Guid TheGu { get; set; }
             DateTime NotFigTime { get; set; }
+
             byte ToEat { get; set; }
+
             //char CupOfChar { get; set; }
             double OrNothing { get; set; }
+
             short Fuse { get; set; }
+
             long WayRound { get; set; }
+
             //sbyte NotToEat { get; set; }
             float Away { get; set; }
+
             //ushort OrULong { get; set; }
             //uint OrUSkint { get; set; }
             //ulong OrUShort { get; set; }
@@ -1037,13 +985,19 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             private bool _george;
             private Guid _theGu;
             private DateTime _notFigTime;
+
             private byte _toEat;
+
             //private char _cupOfChar;
             private double _orNothing;
+
             private short _fuse;
+
             private long _wayRound;
+
             //private sbyte _notToEat;
             private float _away;
+
             //private ushort _orULong;
             //private uint _orUSkint;
             //private ulong _orUShort;
@@ -1290,13 +1244,19 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             private bool _george;
             private Guid _theGu;
             private DateTime _notFigTime;
+
             private byte _toEat;
+
             //private char _cupOfChar;
             private double _orNothing;
+
             private short _fuse;
+
             private long _wayRound;
+
             //private sbyte _notToEat;
             private float _away;
+
             //private ushort _orULong;
             //private uint _orUSkint;
             //private ulong _orUShort;

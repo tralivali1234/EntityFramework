@@ -3,14 +3,14 @@
 
 using System;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class InMemoryDatabaseCreatorTest
     {
@@ -19,13 +19,13 @@ namespace Microsoft.EntityFrameworkCore.InMemory.Tests
         {
             var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
             var model = CreateModel();
-            var creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider, persist: true), model);
+            var creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider), model);
 
             Assert.True(creator.EnsureCreated());
             Assert.False(creator.EnsureCreated());
             Assert.False(creator.EnsureCreated());
 
-            creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider, persist: true), model);
+            creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider), model);
 
             Assert.False(creator.EnsureCreated());
         }
@@ -35,18 +35,18 @@ namespace Microsoft.EntityFrameworkCore.InMemory.Tests
         {
             var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
             var model = CreateModel();
-            var creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider, persist: true), model);
+            var creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider), model);
 
             Assert.True(await creator.EnsureCreatedAsync());
             Assert.False(await creator.EnsureCreatedAsync());
             Assert.False(await creator.EnsureCreatedAsync());
 
-            creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider, persist: true), model);
+            creator = new InMemoryDatabaseCreator(CreateStore(serviceProvider), model);
 
             Assert.False(await creator.EnsureCreatedAsync());
         }
 
-        private static IInMemoryDatabase CreateStore(IServiceProvider serviceProvider, bool persist)
+        private static IInMemoryDatabase CreateStore(IServiceProvider serviceProvider)
         {
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseInMemoryDatabase(nameof(InMemoryDatabaseCreatorTest));

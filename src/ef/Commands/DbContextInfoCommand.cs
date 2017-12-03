@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Tools.Properties;
 
 namespace Microsoft.EntityFrameworkCore.Tools.Commands
 {
+    // ReSharper disable once ArrangeTypeModifiers
     partial class DbContextInfoCommand
     {
         protected override int Execute()
@@ -27,15 +28,19 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
         private static void ReportJsonResult(IDictionary result)
         {
             Reporter.WriteData("{");
-            Reporter.WriteData("  \"databaseName\": \"" + Json.Escape(result["DatabaseName"] as string) + "\",");
-            Reporter.WriteData("  \"dataSource\": \"" + Json.Escape(result["DataSource"] as string) + "\"");
+            Reporter.WriteData("  \"providerName\": " + Json.Literal(result["ProviderName"] as string) + ",");
+            Reporter.WriteData("  \"databaseName\": " + Json.Literal(result["DatabaseName"] as string) + ",");
+            Reporter.WriteData("  \"dataSource\": " + Json.Literal(result["DataSource"] as string) + ",");
+            Reporter.WriteData("  \"options\": " + Json.Literal(result["Options"] as string));
             Reporter.WriteData("}");
         }
 
         private static void ReportResult(IDictionary result)
         {
+            Reporter.WriteData(Resources.ProviderName(result["ProviderName"]));
             Reporter.WriteData(Resources.DatabaseName(result["DatabaseName"]));
             Reporter.WriteData(Resources.DataSource(result["DataSource"]));
+            Reporter.WriteData(Resources.Options(result["Options"]));
         }
     }
 }

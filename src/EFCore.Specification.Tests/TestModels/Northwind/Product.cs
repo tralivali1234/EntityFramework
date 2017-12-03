@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
+namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
 {
     public class Product
     {
@@ -18,9 +18,9 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
         public int? CategoryID { get; set; }
         public string QuantityPerUnit { get; set; }
         public decimal? UnitPrice { get; set; }
-        public short UnitsInStock { get; set; }
-        public short? UnitsOnOrder { get; set; }
-        public short? ReorderLevel { get; set; }
+        public ushort UnitsInStock { get; set; }
+        public ushort? UnitsOnOrder { get; set; }
+        public ushort? ReorderLevel { get; set; }
         public bool Discontinued { get; set; }
 
         public virtual List<OrderDetail> OrderDetails { get; set; }
@@ -29,7 +29,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

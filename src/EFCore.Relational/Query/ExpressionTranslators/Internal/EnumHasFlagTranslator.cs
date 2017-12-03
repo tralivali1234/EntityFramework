@@ -5,6 +5,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Query.Expressions;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
@@ -35,8 +36,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                 var objectEnumType = methodCallExpression.Object.Type.UnwrapNullableType();
                 var argumentEnumType = argument.Type.UnwrapNullableType();
 
-                var constantExpression = argument as ConstantExpression;
-                if (constantExpression != null)
+                if (argument is ConstantExpression constantExpression)
                 {
                     if (constantExpression.Value == null)
                     {
@@ -57,10 +57,15 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                 var convertedObjectExpression = Expression.Convert(methodCallExpression.Object, objectType);
                 var convertedArgumentExpression = Expression.Convert(argument, objectType);
 
+                var bitwiseArgumentExpression
+                    = objectType == typeof(long) && argument is ConstantExpression
+                        ? (Expression)new ExplicitCastExpression(argument, objectType)
+                        : convertedArgumentExpression;
+
                 return Expression.Equal(
                     Expression.And(
                         convertedObjectExpression,
-                        convertedArgumentExpression),
+                        bitwiseArgumentExpression),
                     convertedArgumentExpression);
             }
 

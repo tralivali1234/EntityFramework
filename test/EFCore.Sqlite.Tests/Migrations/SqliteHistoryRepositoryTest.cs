@@ -2,21 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Moq;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Migrations
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Migrations
 {
     public class SqliteHistoryRepositoryTest
     {
@@ -99,44 +91,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Migrations
         }
 
         private static IHistoryRepository CreateHistoryRepository()
-        {
-            var annotationsProvider = new SqliteAnnotationProvider();
-            var sqlGenerator = new SqliteSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies());
-            var typeMapper = new SqliteTypeMapper(new RelationalTypeMapperDependencies());
-
-            return new SqliteHistoryRepository(
-                new HistoryRepositoryDependencies(
-                    Mock.Of<IRelationalDatabaseCreator>(),
-                    Mock.Of<IRawSqlCommandBuilder>(),
-                    Mock.Of<IRelationalConnection>(),
-                    new DbContextOptions<DbContext>(
-                        new Dictionary<Type, IDbContextOptionsExtension>
-                        {
-                            { typeof(SqliteOptionsExtension), new SqliteOptionsExtension() }
-                        }),
-                    new MigrationsModelDiffer(
-                        new SqliteTypeMapper(new RelationalTypeMapperDependencies()),
-                        annotationsProvider,
-                        new SqliteMigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies())),
-                    new SqliteMigrationsSqlGenerator(
-                        new MigrationsSqlGeneratorDependencies(
-                            new RelationalCommandBuilderFactory(
-                                new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                                    new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                                    new DiagnosticListener("Fake")),
-                                new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                                    new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                                    new DiagnosticListener("Fake")),
-                                typeMapper),
-                            new SqliteSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
-                            typeMapper,
-                            annotationsProvider)),
-                    annotationsProvider,
-                    sqlGenerator));
-        }
-
-        private class Context : DbContext
-        {
-        }
+            => SqliteTestHelpers.Instance.CreateContextServices()
+                .GetRequiredService<IHistoryRepository>();
     }
 }

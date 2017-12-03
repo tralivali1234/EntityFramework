@@ -3,22 +3,33 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNavigationsModel
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.TestModels.ComplexNavigationsModel
 {
-    public static class ComplexNavigationsData
+    public abstract class ComplexNavigationsData : IExpectedData
     {
-        public static IReadOnlyList<Level1> LevelOnes { get; }
-        public static IReadOnlyList<Level2> LevelTwos { get; }
-        public static IReadOnlyList<Level3> LevelThrees { get; }
-        public static IReadOnlyList<Level4> LevelFours { get; }
+        public IReadOnlyList<Level1> LevelOnes { get; }
+        public IReadOnlyList<Level2> LevelTwos { get; }
+        public IReadOnlyList<Level3> LevelThrees { get; }
+        public IReadOnlyList<Level4> LevelFours { get; }
 
-        public static IReadOnlyList<Level1> SplitLevelOnes { get; }
-        public static IReadOnlyList<Level2> SplitLevelTwos { get; }
-        public static IReadOnlyList<Level3> SplitLevelThrees { get; }
-        public static IReadOnlyList<Level4> SplitLevelFours { get; }
+        public IReadOnlyList<Level1> SplitLevelOnes { get; }
+        public IReadOnlyList<Level2> SplitLevelTwos { get; }
+        public IReadOnlyList<Level3> SplitLevelThrees { get; }
+        public IReadOnlyList<Level4> SplitLevelFours { get; }
 
-        static ComplexNavigationsData()
+        public IReadOnlyList<InheritanceBase1> InheritanceBaseOnes { get; }
+        public IReadOnlyList<InheritanceBase2> InheritanceBaseTwos { get; }
+        public IReadOnlyList<InheritanceLeaf1> InheritanceLeafOnes { get; }
+        public IReadOnlyList<InheritanceLeaf2> InheritanceLeafTwos { get; }
+
+        public abstract IQueryable<TEntity> Set<TEntity>() 
+            where TEntity : class;
+
+        public ComplexNavigationsData()
         {
             LevelOnes = CreateLevelOnes(tableSplitting: false);
             LevelTwos = CreateLevelTwos(tableSplitting: false);
@@ -41,6 +52,14 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
 
             WireUpPart2(SplitLevelOnes, SplitLevelTwos, SplitLevelThrees, SplitLevelFours, tableSplitting: true);
             WireUpInversePart2(SplitLevelOnes, SplitLevelTwos, SplitLevelThrees, SplitLevelFours, tableSplitting: true);
+
+            InheritanceBaseOnes = CreateInheritanceBaseOnes();
+            InheritanceBaseTwos = CreateInheritanceBaseTwos();
+            InheritanceLeafOnes = CreateInheritanceLeafOnes();
+            InheritanceLeafTwos = CreateInheritanceLeafTwos();
+
+            WireUpInheritancePart1(InheritanceBaseOnes, InheritanceBaseTwos, InheritanceLeafOnes, InheritanceLeafTwos);
+            WireUpInheritancePart2(InheritanceBaseTwos, InheritanceLeafTwos);
         }
 
         public static IReadOnlyList<Level1> CreateLevelOnes(bool tableSplitting)
@@ -61,7 +80,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
 
             if (!tableSplitting)
             {
-                result.AddRange(new List<Level1>
+                result.AddRange(
+                    new List<Level1>
                 {
                     new Level1 { Id = 11, Name = "L1 11", Date = new DateTime(2009, 11, 11) },
                     new Level1 { Id = 12, Name = "L1 12", Date = new DateTime(2008, 12, 12) },
@@ -98,7 +118,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
 
             if (!tableSplitting)
             {
-                result.AddRange(new List<Level2>
+                result.AddRange(
+                    new List<Level2>
                 {
                     new Level2 { Id = 11, Name = "L2 11", Date = new DateTime(2000, 1, 1) }
                 });
@@ -165,6 +186,83 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
             }
 
             return result;
+        }
+
+        public static IReadOnlyList<InheritanceBase1> CreateInheritanceBaseOnes()
+        {
+            var result = new List<InheritanceBase1>
+            {
+                new InheritanceDerived1 { Id = 1, Name = "ID1 01" },
+                new InheritanceDerived1 { Id = 2, Name = "ID1 02" },
+                new InheritanceDerived2 { Id = 3, Name = "ID2 01" }
+            };
+
+            return result;
+        }
+
+        public static IReadOnlyList<InheritanceBase2> CreateInheritanceBaseTwos()
+        {
+            var result = new List<InheritanceBase2>
+            {
+                new InheritanceBase2 { Id = 1, Name = "IB2 01" },
+            };
+
+            return result;
+        }
+
+        public static IReadOnlyList<InheritanceLeaf1> CreateInheritanceLeafOnes()
+        {
+            var result = new List<InheritanceLeaf1>
+            {
+                new InheritanceLeaf1 { Id = 1, Name = "IL1 01" },
+                new InheritanceLeaf1 { Id = 2, Name = "IL1 02" },
+                new InheritanceLeaf1 { Id = 3, Name = "IL1 03" }
+            };
+
+            return result;
+        }
+
+        public static IReadOnlyList<InheritanceLeaf2> CreateInheritanceLeafTwos()
+        {
+            var result = new List<InheritanceLeaf2>
+            {
+                new InheritanceLeaf2 { Id = 1, Name = "IL2 01" },
+            };
+
+            return result;
+        }
+
+        public static void WireUpInheritancePart1(
+            IReadOnlyList<InheritanceBase1> ib1s,
+            IReadOnlyList<InheritanceBase2> ib2s,
+            IReadOnlyList<InheritanceLeaf1> il1s,
+            IReadOnlyList<InheritanceLeaf2> il2s)
+        {
+            ib2s[0].Reference = ib1s[0];
+            ib2s[0].Collection = new List<InheritanceBase1> { ib1s[1], ib1s[2] };
+
+            ((InheritanceDerived1)ib1s[0]).ReferenceSameType = il1s[0];
+            ((InheritanceDerived1)ib1s[1]).ReferenceSameType = il1s[1];
+            ((InheritanceDerived2)ib1s[2]).ReferenceSameType = il1s[2];
+
+            ((InheritanceDerived1)ib1s[0]).ReferenceDifferentType = il1s[0];
+            ((InheritanceDerived1)ib1s[1]).ReferenceDifferentType = il1s[1];
+            ((InheritanceDerived2)ib1s[2]).ReferenceDifferentType = il2s[0];
+
+            ((InheritanceDerived1)ib1s[0]).CollectionSameType = new List<InheritanceLeaf1> { il1s[0] };
+            ((InheritanceDerived1)ib1s[1]).CollectionSameType = new List<InheritanceLeaf1>();
+            ((InheritanceDerived2)ib1s[2]).CollectionSameType = new List<InheritanceLeaf1> { il1s[1], il1s[2] };
+
+            ((InheritanceDerived1)ib1s[0]).CollectionDifferentType = new List<InheritanceLeaf1> { il1s[0] };
+            ((InheritanceDerived1)ib1s[1]).CollectionDifferentType = new List<InheritanceLeaf1> { il1s[1], il1s[2] };
+            ((InheritanceDerived2)ib1s[2]).CollectionDifferentType = new List<InheritanceLeaf2> { il2s[0] };
+        }
+
+        public static void WireUpInheritancePart2(
+            IReadOnlyList<InheritanceBase2> ib2s,
+            IReadOnlyList<InheritanceLeaf2> il2s)
+        {
+            il2s[0].BaseCollection = new List<InheritanceBase2> { ib2s[0] };
         }
 
         public static void WireUpPart1(
@@ -840,6 +938,62 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
             l4s[4].OneToMany_Optional_Self_Inverse = l4s[5];
             l4s[6].OneToMany_Optional_Self_Inverse = l4s[7];
             l4s[8].OneToMany_Optional_Self_Inverse = l4s[9];
+        }
+
+        public static void Seed(ComplexNavigationsContext context, bool tableSplitting = false)
+        {
+            var l1s = CreateLevelOnes(tableSplitting);
+            var l2s = CreateLevelTwos(tableSplitting);
+            var l3s = CreateLevelThrees(tableSplitting);
+            var l4s = CreateLevelFours(tableSplitting);
+
+            context.LevelOne.AddRange(l1s);
+
+            WireUpPart1(l1s, l2s, l3s, l4s, tableSplitting);
+
+            context.SaveChanges();
+
+            WireUpPart2(l1s, l2s, l3s, l4s, tableSplitting);
+
+            var globalizations = new List<ComplexNavigationGlobalization>();
+            for (var i = 0; i < 10; i++)
+            {
+                var language = new ComplexNavigationLanguage { Name = "Language" + i, CultureString = "Foo" + i };
+                var globalization = new ComplexNavigationGlobalization { Text = "Globalization" + i, Language = language };
+                globalizations.Add(globalization);
+
+                context.Languages.Add(language);
+                context.Globalizations.Add(globalization);
+            }
+
+            var ib1s = CreateInheritanceBaseOnes();
+            var ib2s = CreateInheritanceBaseTwos();
+            var il1s = CreateInheritanceLeafOnes();
+            var il2s = CreateInheritanceLeafTwos();
+
+            context.InheritanceOne.AddRange(ib1s);
+            context.InheritanceTwo.AddRange(ib2s);
+            context.InheritanceLeafOne.AddRange(il1s);
+            context.InheritanceLeafTwo.AddRange(il2s);
+
+            WireUpInheritancePart1(ib1s, ib2s, il1s, il2s);
+            context.SaveChanges();
+
+            WireUpInheritancePart2(ib2s, il2s);
+            context.SaveChanges();
+
+            var mls1 = new ComplexNavigationString { DefaultText = "MLS1", Globalizations = globalizations.Take(3).ToList() };
+            var mls2 = new ComplexNavigationString { DefaultText = "MLS2", Globalizations = globalizations.Skip(3).Take(3).ToList() };
+            var mls3 = new ComplexNavigationString { DefaultText = "MLS3", Globalizations = globalizations.Skip(6).Take(3).ToList() };
+            var mls4 = new ComplexNavigationString { DefaultText = "MLS4", Globalizations = globalizations.Skip(9).ToList() };
+
+            context.MultilingualStrings.AddRange(mls1, mls2, mls3, mls4);
+
+            var field1 = new ComplexNavigationField { Name = "Field1", Label = mls1, Placeholder = null };
+            var field2 = new ComplexNavigationField { Name = "Field2", Label = mls3, Placeholder = mls4 };
+
+            context.Fields.AddRange(field1, field2);
+            context.SaveChanges();
         }
     }
 }

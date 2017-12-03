@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerConnectionTest
     {
@@ -80,16 +80,16 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
 
             return new RelationalConnectionDependencies(
                 options,
-                new DiagnosticsLogger<LoggerCategory.Database.Transaction>(
-                    new InterceptingLogger<LoggerCategory.Database.Transaction>(
-                        new LoggerFactory(),
-                        new LoggingOptions()),
+                new DiagnosticsLogger<DbLoggerCategory.Database.Transaction>(
+                    new LoggerFactory(),
+                    new LoggingOptions(),
                     new DiagnosticListener("FakeDiagnosticListener")),
-                new DiagnosticsLogger<LoggerCategory.Database.Connection>(
-                    new InterceptingLogger<LoggerCategory.Database.Connection>(
-                        new LoggerFactory(),
-                        new LoggingOptions()),
-                    new DiagnosticListener("FakeDiagnosticListener")));
+                new DiagnosticsLogger<DbLoggerCategory.Database.Connection>(
+                    new LoggerFactory(),
+                    new LoggingOptions(),
+                    new DiagnosticListener("FakeDiagnosticListener")),
+                new NamedConnectionStringResolver(options),
+                new RelationalTransactionFactory(new RelationalTransactionFactoryDependencies()));
         }
     }
 }

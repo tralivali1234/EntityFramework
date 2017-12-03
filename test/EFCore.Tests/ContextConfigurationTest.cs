@@ -5,13 +5,13 @@ using System;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class ContextConfigurationTest
     {
@@ -105,7 +105,7 @@ namespace Microsoft.EntityFrameworkCore.Tests
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder
-                    .UseTransientInMemoryDatabase()
+                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
                     .UseInternalServiceProvider(_serviceProvider);
         }
     }

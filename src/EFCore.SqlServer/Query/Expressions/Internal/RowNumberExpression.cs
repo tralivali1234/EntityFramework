@@ -47,7 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override Type Type => typeof(int);
+        public override Type Type => typeof(long);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -63,9 +63,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions.Internal
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlServerExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlServerExpressionVisitor specificVisitor
                 ? specificVisitor.VisitRowNumber(this)
                 : base.Accept(visitor);
         }
@@ -94,7 +92,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions.Internal
         /// </summary>
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

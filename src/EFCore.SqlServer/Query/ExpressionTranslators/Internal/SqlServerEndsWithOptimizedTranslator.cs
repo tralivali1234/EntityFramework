@@ -16,12 +16,15 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
         private static readonly MethodInfo _methodInfo
             = typeof(string).GetRuntimeMethod(nameof(string.EndsWith), new[] { typeof(string) });
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual Expression Translate(MethodCallExpression methodCallExpression)
         {
             if (Equals(methodCallExpression.Method, _methodInfo))
             {
                 var patternExpression = methodCallExpression.Arguments[0];
-                var patternConstantExpression = patternExpression as ConstantExpression;
 
                 var endsWithExpression = new NullCompensatedExpression(
                     Expression.Equal(
@@ -36,7 +39,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                             }),
                         patternExpression));
 
-                return patternConstantExpression != null
+                return patternExpression is ConstantExpression patternConstantExpression
                     ? (string)patternConstantExpression.Value == string.Empty
                         ? (Expression)Expression.Constant(true)
                         : endsWithExpression

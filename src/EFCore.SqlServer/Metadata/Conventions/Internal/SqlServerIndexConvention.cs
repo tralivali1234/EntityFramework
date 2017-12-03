@@ -10,29 +10,41 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class SqlServerIndexConvention :
-        IIndexConvention,
-        IIndexUniquenessConvention,
-        IIndexAnnotationSetConvention,
-        IPropertyNullableConvention,
-        IPropertyAnnotationSetConvention
+        IIndexAddedConvention,
+        IIndexUniquenessChangedConvention,
+        IIndexAnnotationChangedConvention,
+        IPropertyNullabilityChangedConvention,
+        IPropertyAnnotationChangedConvention
     {
         private readonly ISqlGenerationHelper _sqlGenerationHelper;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqlServerIndexConvention([NotNull] ISqlGenerationHelper sqlGenerationHelper)
         {
             _sqlGenerationHelper = sqlGenerationHelper;
         }
 
-        InternalIndexBuilder IIndexConvention.Apply(InternalIndexBuilder indexBuilder)
+        InternalIndexBuilder IIndexAddedConvention.Apply(InternalIndexBuilder indexBuilder)
             => SetIndexFilter(indexBuilder);
 
-        bool IIndexUniquenessConvention.Apply(InternalIndexBuilder indexBuilder)
+        bool IIndexUniquenessChangedConvention.Apply(InternalIndexBuilder indexBuilder)
         {
             SetIndexFilter(indexBuilder);
             return true;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual bool Apply(InternalPropertyBuilder propertyBuilder)
         {
             foreach (var index in propertyBuilder.Metadata.GetContainingIndexes())
@@ -42,9 +54,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             return true;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual Annotation Apply(InternalIndexBuilder indexBuilder, string name, Annotation annotation, Annotation oldAnnotation)
         {
-            if (name == SqlServerFullAnnotationNames.Instance.Clustered)
+            if (name == SqlServerAnnotationNames.Clustered)
             {
                 SetIndexFilter(indexBuilder);
             }
@@ -52,11 +68,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             return annotation;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual Annotation Apply(InternalPropertyBuilder propertyBuilder, string name, Annotation annotation, Annotation oldAnnotation)
         {
-            if (name == SqlServerFullAnnotationNames.Instance.ColumnName
-                || (name == RelationalFullAnnotationNames.Instance.ColumnName
-                    && propertyBuilder.Metadata.FindAnnotation(SqlServerFullAnnotationNames.Instance.ColumnName) == null))
+            if (name == RelationalAnnotationNames.ColumnName)
             {
                 foreach (var index in propertyBuilder.Metadata.GetContainingIndexes())
                 {

@@ -10,15 +10,14 @@ namespace Microsoft.EntityFrameworkCore.Tools
     internal interface IOperationExecutor : IDisposable
     {
         IDictionary AddMigration(string name, string outputDir, string contextType);
-        IEnumerable<string> RemoveMigration(string contextType, bool force);
+        IDictionary RemoveMigration(string contextType, bool force, bool revert);
         IEnumerable<IDictionary> GetMigrations(string contextType);
         void DropDatabase(string contextType);
         IDictionary GetContextInfo(string name);
-        string GetContextType(string name);
         void UpdateDatabase(string migration, string contextType);
         IEnumerable<IDictionary> GetContextTypes();
 
-        IEnumerable<string> ScaffoldContext(
+        IDictionary ScaffoldContext(
             string provider,
             string connectionString,
             string outputDir,
@@ -26,7 +25,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
             IEnumerable<string> schemaFilters,
             IEnumerable<string> tableFilters,
             bool useDataAnnotations,
-            bool overwriteFiles);
+            bool overwriteFiles,
+            bool useDatabaseNames);
 
         string ScriptMigration(string fromMigration, string toMigration, bool idempotent, string contextType);
     }

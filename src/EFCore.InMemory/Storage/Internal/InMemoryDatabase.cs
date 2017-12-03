@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query;
@@ -23,7 +24,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     public class InMemoryDatabase : Database, IInMemoryDatabase
     {
         private readonly IInMemoryStore _store;
-        private readonly IDiagnosticsLogger<LoggerCategory.Update> _updateLogger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Update> _updateLogger;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -31,16 +32,16 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         /// </summary>
         public InMemoryDatabase(
             [NotNull] DatabaseDependencies dependencies,
-            [NotNull] IInMemoryStoreSource storeSource,
+            [NotNull] IInMemoryStoreCache storeCache,
             [NotNull] IDbContextOptions options,
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Update> updateLogger)
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Update> updateLogger)
             : base(dependencies)
         {
-            Check.NotNull(storeSource, nameof(storeSource));
+            Check.NotNull(storeCache, nameof(storeCache));
             Check.NotNull(options, nameof(options));
             Check.NotNull(updateLogger, nameof(updateLogger));
 
-            _store = storeSource.GetStore(options);
+            _store = storeCache.GetStore(options);
             _updateLogger = updateLogger;
         }
 
@@ -63,7 +64,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         /// </summary>
         public override Task<int> SaveChangesAsync(
             IReadOnlyList<IUpdateEntry> entries,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => Task.FromResult(_store.ExecuteTransaction(Check.NotNull(entries, nameof(entries)), _updateLogger));
 
         /// <summary>

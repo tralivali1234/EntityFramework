@@ -4,7 +4,7 @@
 using System;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -16,13 +16,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
     /// </summary>
     public class EqualsTranslator : IMethodCallTranslator
     {
-        private readonly IDiagnosticsLogger<LoggerCategory.Query> _logger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public EqualsTranslator([NotNull] IDiagnosticsLogger<LoggerCategory.Query> logger)
+        public EqualsTranslator([NotNull] IDiagnosticsLogger<DbLoggerCategory.Query> logger)
         {
             Check.NotNull(logger, nameof(logger));
 
@@ -58,7 +58,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                             Expression.Convert(argument, unwrappedArgumentType));
                     }
 
-                    _logger.QueryPossibleUnintendedUseOfEqualsWarning(methodCallExpression, argument);
+                    _logger.QueryPossibleUnintendedUseOfEqualsWarning(methodCallExpression);
 
                     // Equals(object) always returns false if when comparing objects of different types
                     return Expression.Constant(false);

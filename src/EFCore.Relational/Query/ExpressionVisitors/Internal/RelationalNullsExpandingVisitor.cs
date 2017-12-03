@@ -22,8 +22,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             var newLeft = Visit(node.Left);
             var newRight = Visit(node.Right);
 
-            if ((node.NodeType == ExpressionType.Equal)
-                || (node.NodeType == ExpressionType.NotEqual))
+            if (node.NodeType == ExpressionType.Equal
+                || node.NodeType == ExpressionType.NotEqual)
             {
                 var leftIsNull = BuildIsNullExpression(newLeft);
                 var leftNullable = leftIsNull != null;
@@ -31,17 +31,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var rightIsNull = BuildIsNullExpression(newRight);
                 var rightNullable = rightIsNull != null;
 
-                Type conversionResultTypeLeft;
-                Type conversionResultTypeRight;
-
-                var unwrappedConvertLeft = UnwrapConvertExpression(newLeft, out conversionResultTypeLeft);
-                var unwrappedConvertRight = UnwrapConvertExpression(newRight, out conversionResultTypeRight);
+                var unwrappedConvertLeft = UnwrapConvertExpression(newLeft, out var conversionResultTypeLeft);
+                var unwrappedConvertRight = UnwrapConvertExpression(newRight, out var conversionResultTypeRight);
 
                 var leftUnary = unwrappedConvertLeft as UnaryExpression;
-                var leftNegated = (leftUnary != null) && (leftUnary.NodeType == ExpressionType.Not);
+                var leftNegated = leftUnary != null && leftUnary.NodeType == ExpressionType.Not;
 
                 var rightUnary = unwrappedConvertRight as UnaryExpression;
-                var rightNegated = (rightUnary != null) && (rightUnary.NodeType == ExpressionType.Not);
+                var rightNegated = rightUnary != null && rightUnary.NodeType == ExpressionType.Not;
 
                 var leftOperand
                     = leftNegated
@@ -120,10 +117,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
         private static Expression UnwrapConvertExpression(Expression expression, out Type conversionResultType)
         {
-            var unary = expression as UnaryExpression;
-
-            if ((unary != null)
-                && (unary.NodeType == ExpressionType.Convert))
+            if (expression is UnaryExpression unary && unary.NodeType == ExpressionType.Convert)
             {
                 conversionResultType = unary.Type;
 

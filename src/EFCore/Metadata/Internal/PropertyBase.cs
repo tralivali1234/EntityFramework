@@ -23,6 +23,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         private IClrPropertyGetter _getter;
         private IClrPropertySetter _setter;
         private PropertyAccessors _accessors;
+        private PropertyIndexes _indexes;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -44,25 +45,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string Name { get; }
+        public virtual string Name { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual IMutableTypeBase DeclaringType => ((IMutablePropertyBase)this).DeclaringType;
+        public virtual IMutableTypeBase DeclaringType
+        {
+            [DebuggerStepThrough] get => ((IMutablePropertyBase)this).DeclaringType;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual bool IsShadowProperty => MemberInfo == null;
+        public virtual bool IsShadowProperty
+        {
+            [DebuggerStepThrough] get => MemberInfo == null;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual PropertyInfo PropertyInfo { get; }
+        public virtual PropertyInfo PropertyInfo { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -70,8 +77,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual FieldInfo FieldInfo
         {
-            get { return _fieldInfo; }
-            [param: CanBeNull] set { SetFieldInfo(value, ConfigurationSource.Explicit); }
+            [DebuggerStepThrough] get => _fieldInfo;
+            [DebuggerStepThrough] [param: CanBeNull] set { SetFieldInfo(value, ConfigurationSource.Explicit); }
         }
 
         /// <summary>
@@ -122,8 +129,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void SetFieldInfo(
-            [CanBeNull] FieldInfo fieldInfo, ConfigurationSource configurationSource)
+        public virtual void SetFieldInfo([CanBeNull] FieldInfo fieldInfo, ConfigurationSource configurationSource)
         {
             if (Equals(FieldInfo, fieldInfo))
             {
@@ -193,6 +199,35 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual PropertyIndexes PropertyIndexes
+        {
+            get => NonCapturingLazyInitializer.EnsureInitialized(
+                ref _indexes, this,
+                property =>
+                    {
+                        var _ = (property.DeclaringType as EntityType)?.Counts;
+                    });
+
+            [param: CanBeNull]
+            set
+            {
+                if (value == null)
+                {
+                    // This path should only kick in when the model is still mutable and therefore access does not need
+                    // to be thread-safe.
+                    _indexes = null;
+                }
+                else
+                {
+                    NonCapturingLazyInitializer.EnsureInitialized(ref _indexes, value);
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         protected abstract void PropertyMetadataChanged();
 
         /// <summary>
@@ -246,8 +281,5 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             => NonCapturingLazyInitializer.EnsureInitialized(ref _accessors, this, p => new PropertyAccessorsFactory().Create(p));
 
         ITypeBase IPropertyBase.DeclaringType => DeclaringType;
-
-        [Obsolete("Use DeclaringType, IProperty.DeclaringEntityType, or INavigation.DeclaringEntityType.")]
-        IEntityType IPropertyBase.DeclaringEntityType => (IEntityType)DeclaringType;
     }
 }

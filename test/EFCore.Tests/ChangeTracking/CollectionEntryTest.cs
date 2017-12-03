@@ -5,7 +5,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.ChangeTracking
 {
     public class CollectionEntryTest
     {
@@ -427,7 +428,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
                 Assert.Equal(dependentState, context.Entry(chunky2).State);
             }
         }
-        
+
         [Theory]
         [InlineData(EntityState.Detached, EntityState.Modified)]
         [InlineData(EntityState.Added, EntityState.Modified)]

@@ -4,13 +4,15 @@
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Design.Internal;
 
-namespace Microsoft.EntityFrameworkCore.Design.TestUtilities
+namespace Microsoft.EntityFrameworkCore.TestUtilities
 {
     public class TestOperationReporter : IOperationReporter
     {
         private readonly List<string> _messages = new List<string>();
 
         public IReadOnlyList<string> Messages => _messages;
+
+        public void Clear() => _messages.Clear();
 
         public void WriteInformation(string message)
             => _messages.Add("info: " + message);

@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// <summary>
         ///     Creates a new instance of LeftOuterJoinExpression.
         /// </summary>
-        /// <param name="tableExpression"></param>
+        /// <param name="tableExpression"> The target table expression. </param>
         public LeftOuterJoinExpression([NotNull] TableExpressionBase tableExpression)
             : base(Check.NotNull(tableExpression, nameof(tableExpression)))
         {
@@ -29,9 +29,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlExpressionVisitor specificVisitor
                 ? specificVisitor.VisitLeftOuterJoin(this)
                 : base.Accept(visitor);
         }
@@ -45,7 +43,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </returns>
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

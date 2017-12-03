@@ -3,14 +3,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Internal;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.Update.Internal;
+using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
+namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 {
     public abstract class MigrationsModelDifferTestBase
     {
@@ -18,13 +21,21 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Action<ModelBuilder> buildSourceAction,
             Action<ModelBuilder> buildTargetAction,
             Action<IReadOnlyList<MigrationOperation>> assertAction)
-            => Execute(m => { }, buildSourceAction, buildTargetAction, assertAction);
+            => Execute(m => { }, buildSourceAction, buildTargetAction, assertAction, null);
 
         protected void Execute(
             Action<ModelBuilder> buildCommonAction,
             Action<ModelBuilder> buildSourceAction,
             Action<ModelBuilder> buildTargetAction,
             Action<IReadOnlyList<MigrationOperation>> assertAction)
+            => Execute(buildCommonAction, buildSourceAction, buildTargetAction, assertAction, null);
+
+        protected void Execute(
+            Action<ModelBuilder> buildCommonAction,
+            Action<ModelBuilder> buildSourceAction,
+            Action<ModelBuilder> buildTargetAction,
+            Action<IReadOnlyList<MigrationOperation>> assertActionUp,
+            Action<IReadOnlyList<MigrationOperation>> assertActionDown)
         {
             var sourceModelBuilder = CreateModelBuilder();
             buildCommonAction(sourceModelBuilder);
@@ -34,58 +45,94 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             buildCommonAction(targetModelBuilder);
             buildTargetAction(targetModelBuilder);
 
-            var modelDiffer = CreateModelDiffer();
+            var ctx = RelationalTestHelpers.Instance.CreateContext(targetModelBuilder.Model);
+            var modelDiffer = CreateModelDiffer(ctx);
 
-            var operations = modelDiffer.GetDifferences(sourceModelBuilder.Model, targetModelBuilder.Model);
+            var operationsUp = modelDiffer.GetDifferences(sourceModelBuilder.Model, targetModelBuilder.Model);
+            assertActionUp(operationsUp);
 
-            assertAction(operations);
+            if (assertActionDown != null)
+            {
+                ctx = RelationalTestHelpers.Instance.CreateContext(sourceModelBuilder.Model);
+                modelDiffer = CreateModelDiffer(ctx);
+
+                var operationsDown = modelDiffer.GetDifferences(targetModelBuilder.Model, sourceModelBuilder.Model);
+                assertActionDown(operationsDown);
+            }
+        }
+
+        protected void AssertMultidimensionalArray<T>(T[,] values, params Action<T>[] assertions)
+        {
+            Assert.Collection(ToOnedimensionalArray(values), assertions);
+        }
+
+        protected static T[] ToOnedimensionalArray<T>(T[,] values, bool firstDimension = false)
+        {
+            Debug.Assert(
+                values.GetLength(firstDimension ? 1 : 0) == 1,
+                $"Length of dimension {(firstDimension ? 1 : 0)} is not 1.");
+
+            var result = new T[values.Length];
+            for (var i = 0; i < values.Length; i++)
+            {
+                result[i] = firstDimension
+                    ? values[i, 0]
+                    : values[0, i];
+            }
+
+            return result;
         }
 
         protected abstract ModelBuilder CreateModelBuilder();
 
-        protected virtual MigrationsModelDiffer CreateModelDiffer()
+        protected virtual MigrationsModelDiffer CreateModelDiffer(DbContext ctx)
             => new MigrationsModelDiffer(
-                new ConcreteTypeMapper(new RelationalTypeMapperDependencies()),
-                new TestAnnotationProvider(),
-                new MigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies()));
+                new ConcreteTypeMapper(
+                    new CoreTypeMapperDependencies(),
+                    new RelationalTypeMapperDependencies()),
+                new MigrationsAnnotationProvider(
+                    new MigrationsAnnotationProviderDependencies()),
+                ctx.GetService<IChangeDetector>(),
+                ctx.GetService<StateManagerDependencies>(),
+                ctx.GetService<CommandBatchPreparerDependencies>());
 
         private class ConcreteTypeMapper : RelationalTypeMapper
         {
-            public ConcreteTypeMapper(RelationalTypeMapperDependencies dependencies)
-                : base(dependencies)
+            public ConcreteTypeMapper(
+                CoreTypeMapperDependencies coreDependencies,
+                RelationalTypeMapperDependencies dependencies)
+                : base(coreDependencies, dependencies)
             {
             }
 
-            protected override string GetColumnType(IProperty property) => property.TestProvider().ColumnType;
-
             public override RelationalTypeMapping FindMapping(Type clrType)
                 => clrType == typeof(string)
-                    ? new RelationalTypeMapping("varchar(4000)", typeof(string), dbType: null, unicode: false, size: 4000)
+                    ? new StringTypeMapping("varchar(4000)", dbType: null, unicode: false, size: 4000)
                     : base.FindMapping(clrType);
 
             protected override RelationalTypeMapping FindCustomMapping(IProperty property)
                 => property.ClrType == typeof(string) && (property.GetMaxLength().HasValue || property.IsUnicode().HasValue)
-                    ? new RelationalTypeMapping(((property.IsUnicode() ?? true) ? "n" : "") + "varchar(" + (property.GetMaxLength() ?? 767) + ")", typeof(string), dbType: null, unicode: false, size: property.GetMaxLength())
+                    ? new StringTypeMapping(((property.IsUnicode() ?? true) ? "n" : "") + "varchar(" + (property.GetMaxLength() ?? 767) + ")", dbType: null, unicode: false, size: property.GetMaxLength())
                     : base.FindCustomMapping(property);
 
             private readonly IReadOnlyDictionary<Type, RelationalTypeMapping> _simpleMappings
                 = new Dictionary<Type, RelationalTypeMapping>
                 {
-                    { typeof(int), new RelationalTypeMapping("int", typeof(int)) },
-                    { typeof(bool), new RelationalTypeMapping("boolean", typeof(bool)) }
+                    { typeof(int), new IntTypeMapping("int") },
+                    { typeof(bool), new BoolTypeMapping("boolean") }
                 };
 
-            private readonly IReadOnlyDictionary<string, RelationalTypeMapping> _simpleNameMappings
-                = new Dictionary<string, RelationalTypeMapping>
+            private readonly IReadOnlyDictionary<string, IList<RelationalTypeMapping>> _simpleNameMappings
+                = new Dictionary<string, IList<RelationalTypeMapping>>
                 {
-                    { "varchar", new RelationalTypeMapping("varchar", typeof(string), dbType: null, unicode: false, size: null, hasNonDefaultUnicode: true) },
-                    { "bigint", new RelationalTypeMapping("bigint", typeof(long)) }
+                    { "varchar", new List<RelationalTypeMapping> { new StringTypeMapping("varchar") } },
+                    { "bigint", new List<RelationalTypeMapping> { new LongTypeMapping("bigint") } }
                 };
 
             protected override IReadOnlyDictionary<Type, RelationalTypeMapping> GetClrTypeMappings()
                 => _simpleMappings;
 
-            protected override IReadOnlyDictionary<string, RelationalTypeMapping> GetStoreTypeMappings()
+            protected override IReadOnlyDictionary<string, IList<RelationalTypeMapping>> GetMultipleStoreTypeMappings()
                 => _simpleNameMappings;
         }
     }

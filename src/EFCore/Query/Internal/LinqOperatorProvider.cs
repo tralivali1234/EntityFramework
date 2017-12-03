@@ -9,7 +9,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
@@ -62,8 +62,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             public IOrderedEnumerable<TResult> CreateOrderedEnumerable<TKey>(
                 Func<TResult, TKey> keySelector, IComparer<TKey> comparer, bool descending) => !descending
-                    ? _results.OrderBy(keySelector, comparer)
-                    : _results.OrderByDescending(keySelector, comparer);
+                ? _results.OrderBy(keySelector, comparer)
+                : _results.OrderByDescending(keySelector, comparer);
 
             public IEnumerator<TResult> GetEnumerator() => _results.GetEnumerator();
 
@@ -83,18 +83,18 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         [UsedImplicitly]
         // ReSharper disable once InconsistentNaming
         private static IEnumerable<T> _InterceptExceptions<T>(
-            IEnumerable<T> source, Type contextType, IDiagnosticsLogger<LoggerCategory.Query> logger, QueryContext queryContext)
+            IEnumerable<T> source, Type contextType, IDiagnosticsLogger<DbLoggerCategory.Query> logger, QueryContext queryContext)
             => new ExceptionInterceptor<T>(source, contextType, logger, queryContext);
 
         private sealed class ExceptionInterceptor<T> : IEnumerable<T>
         {
             private readonly IEnumerable<T> _innerEnumerable;
             private readonly Type _contextType;
-            private readonly IDiagnosticsLogger<LoggerCategory.Query> _logger;
+            private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
             private readonly QueryContext _queryContext;
 
             public ExceptionInterceptor(
-                IEnumerable<T> innerEnumerable, Type contextType, IDiagnosticsLogger<LoggerCategory.Query> logger, QueryContext queryContext)
+                IEnumerable<T> innerEnumerable, Type contextType, IDiagnosticsLogger<DbLoggerCategory.Query> logger, QueryContext queryContext)
             {
                 _innerEnumerable = innerEnumerable;
                 _contextType = contextType;
@@ -110,12 +110,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             private sealed class EnumeratorExceptionInterceptor : IEnumerator<T>
             {
                 private readonly ExceptionInterceptor<T> _exceptionInterceptor;
-                private readonly IEnumerator<T> _innerEnumerator;
+                private IEnumerator<T> _innerEnumerator;
 
                 public EnumeratorExceptionInterceptor(ExceptionInterceptor<T> exceptionInterceptor)
                 {
                     _exceptionInterceptor = exceptionInterceptor;
-                    _innerEnumerator = _exceptionInterceptor._innerEnumerable.GetEnumerator();
+
                 }
 
                 public T Current => _innerEnumerator.Current;
@@ -128,6 +128,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     {
                         try
                         {
+                            if (_innerEnumerator == null)
+                            {
+                                _innerEnumerator = _exceptionInterceptor._innerEnumerable.GetEnumerator();
+                            }
                             return _innerEnumerator.MoveNext();
                         }
                         catch (Exception exception)
@@ -140,6 +144,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
 
                 public void Reset() => _innerEnumerator?.Reset();
+
                 public void Dispose()
                 {
                     _innerEnumerator?.Dispose();
@@ -219,12 +224,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             IList<Func<TElement, object>> entityAccessors)
         {
             return groupings
-                .Select(g =>
-                    new TrackingGrouping<TKey, TElement>(
-                        g,
-                        queryContext,
-                        entityTrackingInfos,
-                        entityAccessors));
+                .Select(
+                    g =>
+                        new TrackingGrouping<TKey, TElement>(
+                            g,
+                            queryContext,
+                            entityTrackingInfos,
+                            entityAccessors));
         }
 
         private sealed class TrackingGrouping<TKey, TElement> : IGrouping<TKey, TElement>
@@ -286,7 +292,67 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         [UsedImplicitly]
         // ReSharper disable once InconsistentNaming
-        private static IEnumerable<T> _ToSequence<T>(T element) => new[] { element };
+        private static IEnumerable<T> _ToSequence<T>(Func<T> getElement)
+            => new ResultEnumerable<T>(getElement);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        private sealed class ResultEnumerable<T> : IEnumerable<T>
+        {
+            private readonly Func<T> _getElement;
+
+            /// <summary>
+            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+            ///     directly from your code. This API may change or be removed in future releases.
+            /// </summary>
+            public ResultEnumerable(Func<T> getElement)
+            {
+                _getElement = getElement;
+            }
+
+            /// <summary>
+            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+            ///     directly from your code. This API may change or be removed in future releases.
+            /// </summary>
+            public IEnumerator<T> GetEnumerator() => new ResultEnumerator(_getElement());
+
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+            private sealed class ResultEnumerator : IEnumerator<T>
+            {
+                private readonly T _value;
+                private bool _moved;
+
+                public ResultEnumerator(T value) => _value = value;
+
+                public bool MoveNext()
+                {
+                    if (!_moved)
+                    {
+                        _moved = true;
+
+                        return _moved;
+                    }
+
+                    return false;
+                }
+
+                public void Reset()
+                {
+                    _moved = false;
+                }
+
+                object IEnumerator.Current => Current;
+
+                public T Current => !_moved ? default : _value;
+
+                void IDisposable.Dispose()
+                {
+                }
+            }
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -632,6 +698,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         // Set Operations
         private static readonly MethodInfo _concat = GetMethod("Concat", 1);
+
         private static readonly MethodInfo _except = GetMethod("Except", 1);
         private static readonly MethodInfo _intersect = GetMethod("Intersect", 1);
         private static readonly MethodInfo _union = GetMethod("Union", 1);
@@ -653,8 +720,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             return
                 aggregateMethods
-                    .FirstOrDefault(mi => mi.GetParameters()[0].ParameterType
-                                          == typeof(IEnumerable<>).MakeGenericType(elementType))
+                    .FirstOrDefault(
+                        mi => mi.GetParameters()[0].ParameterType
+                              == typeof(IEnumerable<>).MakeGenericType(elementType))
                 ?? aggregateMethods.Single(mi => mi.IsGenericMethod)
                     .MakeGenericMethod(elementType);
         }

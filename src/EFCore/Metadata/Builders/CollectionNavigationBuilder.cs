@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -134,15 +135,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 && foreingKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
                 && foreingKey.DependentToPrincipal.Name != referenceName)
             {
-                throw new InvalidOperationException(CoreStrings.ConflictingRelationshipNavigation(
-                    foreingKey.PrincipalEntityType.DisplayName(),
-                    foreingKey.PrincipalToDependent.Name,
-                    foreingKey.DeclaringEntityType.DisplayName(),
-                    referenceName,
-                    foreingKey.PrincipalEntityType.DisplayName(),
-                    foreingKey.PrincipalToDependent.Name,
-                    foreingKey.DeclaringEntityType.DisplayName(),
-                    foreingKey.DependentToPrincipal.Name));
+                throw new InvalidOperationException(
+                    CoreStrings.ConflictingRelationshipNavigation(
+                        foreingKey.PrincipalEntityType.DisplayName(),
+                        foreingKey.PrincipalToDependent.Name,
+                        foreingKey.DeclaringEntityType.DisplayName(),
+                        referenceName,
+                        foreingKey.PrincipalEntityType.DisplayName(),
+                        foreingKey.PrincipalToDependent.Name,
+                        foreingKey.DeclaringEntityType.DisplayName(),
+                        foreingKey.DependentToPrincipal.Name));
             }
 
             if (referenceName != null
@@ -157,5 +159,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 ? Builder.DependentToPrincipal(reference.Name, ConfigurationSource.Explicit)
                 : Builder.DependentToPrincipal(reference.Property, ConfigurationSource.Explicit);
         }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

@@ -4,13 +4,13 @@
 using System;
 using System.Collections.Generic;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
+namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
 {
     public class Order
     {
         public int OrderID { get; set; }
         public string CustomerID { get; set; }
-        public int? EmployeeID { get; set; }
+        public uint? EmployeeID { get; set; }
         public DateTime? OrderDate { get; set; }
         public DateTime? RequiredDate { get; set; }
         public DateTime? ShippedDate { get; set; }
@@ -31,7 +31,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

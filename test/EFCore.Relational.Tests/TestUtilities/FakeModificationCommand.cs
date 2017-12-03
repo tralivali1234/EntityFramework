@@ -3,10 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Update;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities
+namespace Microsoft.EntityFrameworkCore.TestUtilities
 {
     public class FakeModificationCommand : ModificationCommand
     {
@@ -14,10 +13,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities
             string name,
             string schema,
             Func<string> generateParameterName,
-            IRelationalAnnotationProvider annotationProvider,
             bool sensitiveLoggingEnabled,
             IReadOnlyList<ColumnModification> columnModifications)
-            : base(name, schema, generateParameterName, annotationProvider, sensitiveLoggingEnabled, null)
+            : base(name, schema, generateParameterName, sensitiveLoggingEnabled, null)
         {
             ColumnModifications = columnModifications;
         }

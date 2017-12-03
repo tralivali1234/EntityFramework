@@ -4,17 +4,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class StateManagerTest
     {
@@ -217,19 +216,21 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
 
             protected internal override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<SingleKey>(b =>
-                    {
-                        b.HasKey(e => e.Id);
-                        b.HasAlternateKey(e => e.AlternateId);
-                        b.Property(e => e.Id).ValueGeneratedNever();
-                        b.Property(e => e.AlternateId).ValueGeneratedNever();
-                    });
+                modelBuilder.Entity<SingleKey>(
+                    b =>
+                        {
+                            b.HasKey(e => e.Id);
+                            b.HasAlternateKey(e => e.AlternateId);
+                            b.Property(e => e.Id).ValueGeneratedNever();
+                            b.Property(e => e.AlternateId).ValueGeneratedNever();
+                        });
 
-                modelBuilder.Entity<CompositeKey>(b =>
-                    {
-                        b.HasKey(e => new { e.Id1, e.Id2 });
-                        b.HasAlternateKey(e => new { e.AlternateId1, e.AlternateId2 });
-                    });
+                modelBuilder.Entity<CompositeKey>(
+                    b =>
+                        {
+                            b.HasKey(e => new { e.Id1, e.Id2 });
+                            b.HasAlternateKey(e => new { e.AlternateId1, e.AlternateId2 });
+                        });
             }
         }
 
@@ -565,10 +566,21 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
             var productId1 = new Guid("984ade3c-2f7b-4651-a351-642e92ab7146");
             var productId2 = new Guid("0edc9136-7eed-463b-9b97-bdb9648ab877");
 
-            stateManager.StartTracking(stateManager.GetOrCreateEntry(new Category { Id = 77, PrincipalId = 777 }));
-            stateManager.StartTracking(stateManager.GetOrCreateEntry(new Category { Id = 78, PrincipalId = 778 }));
-            stateManager.StartTracking(stateManager.GetOrCreateEntry(new Product { Id = productId1 }));
-            stateManager.StartTracking(stateManager.GetOrCreateEntry(new Product { Id = productId2 }));
+            stateManager.StartTracking(
+                    stateManager.GetOrCreateEntry(new Category { Id = 77, PrincipalId = 777 }))
+                .SetEntityState(EntityState.Unchanged);
+
+            stateManager.StartTracking(
+                    stateManager.GetOrCreateEntry(new Category { Id = 78, PrincipalId = 778 }))
+                .SetEntityState(EntityState.Unchanged);
+
+            stateManager.StartTracking(
+                    stateManager.GetOrCreateEntry(new Product { Id = productId1 }))
+                .SetEntityState(EntityState.Unchanged);
+
+            stateManager.StartTracking(
+                    stateManager.GetOrCreateEntry(new Product { Id = productId2 }))
+                .SetEntityState(EntityState.Unchanged);
 
             Assert.Equal(4, stateManager.Entries.Count());
 
@@ -596,15 +608,15 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             var listeners = new[]
             {
-                new Mock<IEntityStateListener>(),
-                new Mock<IEntityStateListener>(),
-                new Mock<IEntityStateListener>()
+                new TestListener(),
+                new TestListener(),
+                new TestListener()
             };
 
             var services = new ServiceCollection()
-                .AddSingleton(listeners[0].Object)
-                .AddSingleton(listeners[1].Object)
-                .AddSingleton(listeners[2].Object);
+                .AddSingleton<IEntityStateListener>(listeners[0])
+                .AddSingleton<IEntityStateListener>(listeners[1])
+                .AddSingleton<IEntityStateListener>(listeners[2]);
 
             var contextServices = InMemoryTestHelpers.Instance.CreateContextServices(services, BuildModel());
 
@@ -615,22 +627,44 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
 
             foreach (var listener in listeners)
             {
-                listener.Verify(m => m.StateChanging(entry, It.IsAny<EntityState>()), Times.Once);
-                listener.Verify(m => m.StateChanged(entry, It.IsAny<EntityState>(), false), Times.Once);
+                Assert.Equal(1, listener.ChangingCount);
+                Assert.Equal(1, listener.ChangedCount);
 
-                listener.Verify(m => m.StateChanging(entry, EntityState.Added), Times.Once);
-                listener.Verify(m => m.StateChanged(entry, EntityState.Detached, false), Times.Once);
+                Assert.Equal(EntityState.Added, listener.ChangingState);
+                Assert.Equal(EntityState.Detached, listener.ChangedState);
             }
 
             entry.SetEntityState(EntityState.Modified);
 
             foreach (var listener in listeners)
             {
-                listener.Verify(m => m.StateChanging(entry, It.IsAny<EntityState>()), Times.Exactly(2));
-                listener.Verify(m => m.StateChanged(entry, It.IsAny<EntityState>(), false), Times.Exactly(2));
+                Assert.Equal(2, listener.ChangingCount);
+                Assert.Equal(2, listener.ChangedCount);
 
-                listener.Verify(m => m.StateChanging(entry, EntityState.Modified), Times.Once);
-                listener.Verify(m => m.StateChanged(entry, EntityState.Detached, false), Times.Once);
+                Assert.Equal(EntityState.Modified, listener.ChangingState);
+                Assert.Equal(EntityState.Added, listener.ChangedState);
+            }
+        }
+
+        private class TestListener : IEntityStateListener
+        {
+            public int ChangingCount;
+            public int ChangedCount;
+            public EntityState ChangingState;
+            public EntityState ChangedState;
+
+            public void StateChanging(InternalEntityEntry entry, EntityState newState)
+            {
+                ChangingCount++;
+                ChangingState = newState;
+            }
+
+            public void StateChanged(InternalEntityEntry entry, EntityState oldState, bool fromQuery)
+            {
+                ChangedCount++;
+                ChangedState = oldState;
+
+                Assert.False(fromQuery);
             }
         }
 
@@ -742,7 +776,8 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             var model = BuildModel();
             var stateManager = CreateStateManager(model);
-            Assert.Equal(CoreStrings.EntityTypeNotFound(typeof(SpecialProduct).Name),
+            Assert.Equal(
+                CoreStrings.EntityTypeNotFound(typeof(SpecialProduct).Name),
                 Assert.Throws<InvalidOperationException>(() => stateManager.GetOrCreateEntry(new SpecialProduct())).Message);
         }
 
@@ -785,7 +820,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
 
         private static IMutableModel BuildModel()
         {
-            var builder = new ModelBuilder(new CoreConventionSetBuilder().CreateConventionSet());
+            var builder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
             var model = builder.Model;
 
             builder.Entity<Product>().HasOne<Category>().WithOne()
@@ -801,12 +836,13 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
 
             builder.Entity<Dogegory>();
 
-            builder.Entity("Location", eb =>
-                {
-                    eb.Property<int>("Id");
-                    eb.Property<string>("Planet");
-                    eb.HasKey("Id");
-                });
+            builder.Entity(
+                "Location", eb =>
+                    {
+                        eb.Property<int>("Id");
+                        eb.Property<string>("Planet");
+                        eb.HasKey("Id");
+                    });
 
             return model;
         }

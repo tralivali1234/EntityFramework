@@ -17,9 +17,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public RelationalPropertyBuilderAnnotations(
             [NotNull] InternalPropertyBuilder internalBuilder,
-            ConfigurationSource configurationSource,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-            : base(new RelationalAnnotationsBuilder(internalBuilder, configurationSource), providerFullAnnotationNames)
+            ConfigurationSource configurationSource)
+            : base(new RelationalAnnotationsBuilder(internalBuilder, configurationSource))
         {
         }
 
@@ -46,6 +45,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual bool HasColumnName([CanBeNull] string value) => SetColumnName(value);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool CanSetColumnName([CanBeNull] string value)
+            => Annotations.CanSetAnnotation(RelationalAnnotationNames.ColumnName, value);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

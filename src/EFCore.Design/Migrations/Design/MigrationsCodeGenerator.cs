@@ -6,36 +6,97 @@ using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Migrations.Design
 {
-    public abstract class MigrationsCodeGenerator
+    /// <summary>
+    ///     Used to generate code for migrations.
+    /// </summary>
+    public abstract class MigrationsCodeGenerator : IMigrationsCodeGenerator
     {
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="MigrationsCodeGenerator" /> class.
+        /// </summary>
+        /// <param name="dependencies"> The dependencies. </param>
+        public MigrationsCodeGenerator([NotNull] MigrationsCodeGeneratorDependencies dependencies)
+        {
+            Check.NotNull(dependencies, nameof(dependencies));
+
+            Dependencies = dependencies;
+        }
+
+        /// <summary>
+        ///     Gets the file extension code files should use.
+        /// </summary>
+        /// <value> The file extension. </value>
         public abstract string FileExtension { get; }
 
+        /// <summary>
+        ///     Gets the programming language supported by this service.
+        /// </summary>
+        /// <value> The language. </value>
+        public virtual string Language => null;
+
+        /// <summary>
+        ///     Parameter object containing dependencies for this service.
+        /// </summary>
+        protected virtual MigrationsCodeGeneratorDependencies Dependencies { get; }
+
+        /// <summary>
+        ///     Generates the migration code.
+        /// </summary>
+        /// <param name="migrationNamespace"> The migration's namespace. </param>
+        /// <param name="migrationName"> The migration's name. </param>
+        /// <param name="upOperations"> The migration's up operations. </param>
+        /// <param name="downOperations"> The migration's down operations. </param>
+        /// <returns> The migration code. </returns>
         public abstract string GenerateMigration(
-            [NotNull] string migrationNamespace,
-            [NotNull] string migrationName,
-            [NotNull] IReadOnlyList<MigrationOperation> upOperations,
-            [NotNull] IReadOnlyList<MigrationOperation> downOperations);
+            string migrationNamespace,
+            string migrationName,
+            IReadOnlyList<MigrationOperation> upOperations,
+            IReadOnlyList<MigrationOperation> downOperations);
 
+        /// <summary>
+        ///     Generates the migration metadata code.
+        /// </summary>
+        /// <param name="migrationNamespace"> The migration's namespace. </param>
+        /// <param name="contextType"> The migration's <see cref="DbContext" /> type. </param>
+        /// <param name="migrationName"> The migration's name. </param>
+        /// <param name="migrationId"> The migration's ID. </param>
+        /// <param name="targetModel"> The migraiton's target model. </param>
+        /// <returns> The migration metadata code. </returns>
         public abstract string GenerateMetadata(
-            [NotNull] string migrationNamespace,
-            [NotNull] Type contextType,
-            [NotNull] string migrationName,
-            [NotNull] string migrationId,
-            [NotNull] IModel targetModel);
+            string migrationNamespace,
+            Type contextType,
+            string migrationName,
+            string migrationId,
+            IModel targetModel);
 
+        /// <summary>
+        ///     Generates the model snapshot code.
+        /// </summary>
+        /// <param name="modelSnapshotNamespace"> The model snapshot's namespace. </param>
+        /// <param name="contextType"> The model snapshot's <see cref="DbContext" /> type. </param>
+        /// <param name="modelSnapshotName"> The model snapshot's name. </param>
+        /// <param name="model"> The model. </param>
+        /// <returns> The model snapshot code. </returns>
         public abstract string GenerateSnapshot(
-            [NotNull] string modelSnapshotNamespace,
-            [NotNull] Type contextType,
-            [NotNull] string modelSnapshotName,
-            [NotNull] IModel model);
+            string modelSnapshotNamespace,
+            Type contextType,
+            string modelSnapshotName,
+            IModel model);
 
+        /// <summary>
+        ///     Gets the namespaces required for a list of <see cref="MigrationOperation" /> objects.
+        /// </summary>
+        /// <param name="operations"> The operations. </param>
+        /// <returns> The namespaces. </returns>
         protected virtual IEnumerable<string> GetNamespaces([NotNull] IEnumerable<MigrationOperation> operations)
             => operations.OfType<ColumnOperation>().SelectMany(GetColumnNamespaces)
                 .Concat(operations.OfType<CreateTableOperation>().SelectMany(o => o.Columns).SelectMany(GetColumnNamespaces))
@@ -43,23 +104,28 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
 
         private static IEnumerable<string> GetColumnNamespaces(ColumnOperation columnOperation)
         {
-            yield return columnOperation.ClrType.Namespace;
+            foreach (var ns in columnOperation.ClrType.GetNamespaces())
+            {
+                yield return ns;
+            }
 
             var alterColumnOperation = columnOperation as AlterColumnOperation;
             if (alterColumnOperation?.OldColumn != null)
             {
-                yield return alterColumnOperation.OldColumn.ClrType.Namespace;
+                foreach (var ns in alterColumnOperation.OldColumn.ClrType.GetNamespaces())
+                {
+                    yield return ns;
+                }
             }
         }
 
-        private IEnumerable<IAnnotatable> GetAnnotatables(IEnumerable<MigrationOperation> operations)
+        private static IEnumerable<IAnnotatable> GetAnnotatables(IEnumerable<MigrationOperation> operations)
         {
             foreach (var operation in operations)
             {
                 yield return operation;
 
-                var createTableOperation = operation as CreateTableOperation;
-                if (createTableOperation != null)
+                if (operation is CreateTableOperation createTableOperation)
                 {
                     foreach (var column in createTableOperation.Columns)
                     {
@@ -81,11 +147,16 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             }
         }
 
+        /// <summary>
+        ///     Gets the namespaces required for an <see cref="IModel" />.
+        /// </summary>
+        /// <param name="model"> The model. </param>
+        /// <returns> The namespaces. </returns>
         protected virtual IEnumerable<string> GetNamespaces([NotNull] IModel model)
-            => model.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties().Select(p => p.ClrType.Namespace))
+            => model.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties().SelectMany(p => p.ClrType.GetNamespaces()))
                 .Concat(GetAnnotationNamespaces(GetAnnotatables(model)));
 
-        private IEnumerable<IAnnotatable> GetAnnotatables(IModel model)
+        private static IEnumerable<IAnnotatable> GetAnnotatables(IModel model)
         {
             yield return model;
 
@@ -115,13 +186,19 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             }
         }
 
-        private IEnumerable<string> GetAnnotationNamespaces(IEnumerable<IAnnotatable> items)
-            => from i in items
-               from a in i.GetAnnotations()
-               where a.Value != null
-                     && a.Name != RelationshipDiscoveryConvention.NavigationCandidatesAnnotationName
-                     && a.Name != RelationshipDiscoveryConvention.AmbiguousNavigationsAnnotationName
-                     && a.Name != InversePropertyAttributeConvention.InverseNavigationsAnnotationName
-               select a.Value.GetType().Namespace;
+        private static IEnumerable<string> GetAnnotationNamespaces(IEnumerable<IAnnotatable> items)
+        {
+            var ignoredAnnotations = new List<string>
+            {
+                RelationshipDiscoveryConvention.NavigationCandidatesAnnotationName,
+                RelationshipDiscoveryConvention.AmbiguousNavigationsAnnotationName,
+                InversePropertyAttributeConvention.InverseNavigationsAnnotationName
+            };
+
+            return items.SelectMany(i => i.GetAnnotations())
+                .Where(
+                    a => a.Value != null
+                         && !ignoredAnnotations.Contains(a.Name)).SelectMany(a => a.Value.GetType().GetNamespaces());
+        }
     }
 }

@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
+namespace Microsoft.EntityFrameworkCore.Metadata
 {
     public class RelationalPropertyAttributeConventionTest
     {
@@ -42,8 +42,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
 
             var propertyBuilder = entityBuilder.Property("Name", typeof(string), ConfigurationSource.Explicit);
 
-            propertyBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.ColumnName, "ConventionalName", ConfigurationSource.Convention);
-            propertyBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.ColumnType, "BYTE", ConfigurationSource.Convention);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.ColumnName, "ConventionalName", ConfigurationSource.Convention);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.ColumnType, "BYTE", ConfigurationSource.Convention);
 
             new RelationalColumnAttributeConvention().Apply(propertyBuilder);
 
@@ -58,8 +58,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
 
             var propertyBuilder = entityBuilder.Property("Name", typeof(string), ConfigurationSource.Explicit);
 
-            propertyBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.ColumnName, "ExplicitName", ConfigurationSource.Explicit);
-            propertyBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.ColumnType, "BYTE", ConfigurationSource.Explicit);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.ColumnName, "ExplicitName", ConfigurationSource.Explicit);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.ColumnType, "BYTE", ConfigurationSource.Explicit);
 
             new RelationalColumnAttributeConvention().Apply(propertyBuilder);
 
@@ -70,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
         private InternalEntityTypeBuilder CreateInternalEntityTypeBuilder<T>()
         {
             var conventionSet = new ConventionSet();
-            conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention());
+            conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())));
 
             var modelBuilder = new InternalModelBuilder(new Model(conventionSet));
 

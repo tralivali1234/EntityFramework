@@ -4,7 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Caching.Memory;
@@ -31,11 +33,12 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         private ILoggerFactory _loggerFactory;
         private IMemoryCache _memoryCache;
         private bool _sensitiveDataLoggingEnabled;
-        private WarningsConfiguration _warningsConfiguration = new WarningsConfiguration();
         private QueryTrackingBehavior _queryTrackingBehavior = QueryTrackingBehavior.TrackAll;
         private IDictionary<Type, Type> _replacedServices;
         private int? _maxPoolSize;
         private long? _serviceProviderHash;
+        private string _logFragment;
+        private WarningsConfiguration _warningsConfiguration = new WarningsConfiguration();
 
         /// <summary>
         ///     Creates a new set of options with everything set to default values.
@@ -55,7 +58,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             _model = copyFrom.Model;
             _loggerFactory = copyFrom.LoggerFactory;
             _memoryCache = copyFrom.MemoryCache;
-            _sensitiveDataLoggingEnabled = copyFrom.SensitiveDataLoggingEnabled;
+            _sensitiveDataLoggingEnabled = copyFrom.IsSensitiveDataLoggingEnabled;
             _warningsConfiguration = copyFrom.WarningsConfiguration;
             _queryTrackingBehavior = copyFrom.QueryTrackingBehavior;
             _maxPoolSize = copyFrom.MaxPoolSize;
@@ -98,7 +101,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var clone = Clone();
 
             clone._applicationServiceProvider = applicationServiceProvider;
-            _serviceProviderHash = null;
 
             return clone;
         }
@@ -129,7 +131,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var clone = Clone();
 
             clone._memoryCache = memoryCache;
-            _serviceProviderHash = null;
 
             return clone;
         }
@@ -145,7 +146,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var clone = Clone();
 
             clone._loggerFactory = loggerFactory;
-            _serviceProviderHash = null;
 
             return clone;
         }
@@ -161,7 +161,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var clone = Clone();
 
             clone._sensitiveDataLoggingEnabled = sensitiveDataLoggingEnabled;
-            _serviceProviderHash = null;
 
             return clone;
         }
@@ -228,7 +227,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var clone = Clone();
 
             clone._warningsConfiguration = warningsConfiguration;
-            _serviceProviderHash = null;
 
             return clone;
         }
@@ -236,7 +234,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// <summary>
         ///     The option set from the <see cref="DbContextOptionsBuilder.EnableSensitiveDataLogging" /> method.
         /// </summary>
-        public virtual bool SensitiveDataLoggingEnabled => _sensitiveDataLoggingEnabled;
+        public virtual bool IsSensitiveDataLoggingEnabled => _sensitiveDataLoggingEnabled;
 
         /// <summary>
         ///     The option set from the <see cref="DbContextOptionsBuilder.UseModel" /> method.
@@ -281,7 +279,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// <summary>
         ///     The option set from the
         ///     <see
-        ///         cref="EntityFrameworkServiceCollectionExtensions.AddDbContextPool{TContext}(IServiceCollection,Action{DbContextOptionsBuilder},int)" />
+        ///         cref="Microsoft.Extensions.DependencyInjection.EntityFrameworkServiceCollectionExtensions.AddDbContextPool{TContext}(IServiceCollection,Action{DbContextOptionsBuilder},int)" />
         ///     method.
         /// </summary>
         public virtual int? MaxPoolSize => _maxPoolSize;
@@ -376,6 +374,40 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                             nameof(DbContextOptionsBuilder.UseInternalServiceProvider),
                             nameof(IMemoryCache)));
                 }
+            }
+        }
+
+        /// <summary>
+        ///     Creates a message fragment for logging typically containing information about
+        ///     any useful non-default options that have been configured.
+        /// </summary>
+        public virtual string LogFragment
+        {
+            get
+            {
+                if (_logFragment == null)
+                {
+                    var builder = new StringBuilder();
+
+                    if (_queryTrackingBehavior != QueryTrackingBehavior.TrackAll)
+                    {
+                        builder.Append(_queryTrackingBehavior).Append(' ');
+                    }
+
+                    if (_sensitiveDataLoggingEnabled)
+                    {
+                        builder.Append("SensitiveDataLoggingEnabled ");
+                    }
+
+                    if (_maxPoolSize != null)
+                    {
+                        builder.Append("MaxPoolSize=").Append(_maxPoolSize).Append(' ');
+                    }
+
+                    _logFragment = builder.ToString();
+                }
+
+                return _logFragment;
             }
         }
     }

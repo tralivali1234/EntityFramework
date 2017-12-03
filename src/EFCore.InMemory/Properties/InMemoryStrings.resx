@@ -119,11 +119,19 @@
   </resheader>
   <data name="LogSavedChanges" xml:space="preserve">
     <value>Saved {count} entities to in-memory store.</value>
+    <comment>Information InMemoryEventId.ChangesSaved int</comment>
   </data>
-  <data name="TransactionsNotSupported" xml:space="preserve">
+  <data name="LogTransactionsNotSupported" xml:space="preserve">
     <value>Transactions are not supported by the in-memory store. See http://go.microsoft.com/fwlink/?LinkId=800142</value>
+    <comment>Warning InMemoryEventId.TransactionIgnoredWarning</comment>
   </data>
   <data name="UpdateConcurrencyException" xml:space="preserve">
     <value>Attempted to update or delete an entity that does not exist in the store.</value>
+  </data>
+  <data name="UpdateConcurrencyTokenException" xml:space="preserve">
+    <value>Conflicts were detected for instance of entity type '{entityType}' on the concurrency token properties {properties}. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the conflicting values.</value>
+  </data>
+  <data name="UpdateConcurrencyTokenExceptionSensitive" xml:space="preserve">
+    <value>Conflicts were detected for instance of entity type '{entityType}' with the key value '{keyValue}' on the concurrency token property values {conflictingValues}, with corresponding database values {databaseValues}.</value>
   </data>
 </root>

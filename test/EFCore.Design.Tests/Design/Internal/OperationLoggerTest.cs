@@ -1,13 +1,12 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using Microsoft.EntityFrameworkCore.Design.Internal;
-using Microsoft.EntityFrameworkCore.Design.TestUtilities;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Design.Design.Internal
+namespace Microsoft.EntityFrameworkCore.Design.Internal
 {
     public class OperationLoggerTests
     {
@@ -16,9 +15,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Design.Internal
         {
             var reporter = new TestOperationReporter();
             var loggerFactory = new LoggerFactory();
-            loggerFactory.AddProvider(new LoggerProvider(categoryName => new OperationLogger(categoryName, reporter)));
+            loggerFactory.AddProvider(new OperationLoggerProvider(reporter));
 
-            var logger = loggerFactory.CreateLogger(LoggerCategory.Database.Sql.Name);
+            var logger = loggerFactory.CreateLogger(DbLoggerCategory.Database.Command.Name);
             logger.Log<object>(
                 LogLevel.Information,
                 RelationalEventId.CommandExecuted,

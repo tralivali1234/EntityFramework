@@ -4,7 +4,8 @@
 using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Utilities
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Utilities
 {
     public class EnumerableExtensionsTest
     {

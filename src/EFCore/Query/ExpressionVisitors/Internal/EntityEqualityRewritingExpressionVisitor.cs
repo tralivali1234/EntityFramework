@@ -64,7 +64,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
                 var rightProperties = MemberAccessBindingExpressionVisitor.GetPropertyPath(
                     newBinaryExpression.Right, _queryCompilationContext, out var rightNavigationQsre);
-                
+
                 if (isNullComparison)
                 {
                     var nonNullNavigationQsre = isLeftNullConstant ? rightNavigationQsre : leftNavigationQsre;
@@ -74,8 +74,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     {
                         // collection navigation is only null if its parent entity is null (null propagation thru navigation)
                         // it is probable that user wanted to see if the collection is (not) empty, log warning suggesting to use Any() instead.
-                        _queryCompilationContext.Logger.PossibleUnintendedCollectionNavigationNullComparisonWarning(
-                            string.Join(".", nonNullproperties.Select(p => p.Name)));
+                        _queryCompilationContext.Logger
+                            .PossibleUnintendedCollectionNavigationNullComparisonWarning(nonNullproperties);
 
                         var callerExpression = CreateCollectionCallerExpression(nonNullNavigationQsre, nonNullproperties);
 
@@ -84,12 +84,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 }
 
                 var collectionNavigationComparison = TryRewriteCollectionNavigationComparison(
-                    newBinaryExpression.Left, 
-                    newBinaryExpression.Right, 
-                    newBinaryExpression.NodeType, 
-                    leftNavigationQsre, 
-                    rightNavigationQsre, 
-                    leftProperties, 
+                    newBinaryExpression.Left,
+                    newBinaryExpression.Right,
+                    newBinaryExpression.NodeType,
+                    leftNavigationQsre,
+                    rightNavigationQsre,
+                    leftProperties,
                     rightProperties);
 
                 if (collectionNavigationComparison != null)
@@ -198,8 +198,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         }
 
         private Expression TryRewriteCollectionNavigationComparison(
-            Expression leftExpressionn,
-            Expression rightExpressionn,
+            Expression leftExpression,
+            Expression rightExpression,
             ExpressionType expressionType,
             QuerySourceReferenceExpression leftNavigationQsre,
             QuerySourceReferenceExpression rightNavigationQsre,
@@ -211,7 +211,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (IsCollectionNavigation(leftNavigationQsre, leftProperties)
                 && IsCollectionNavigation(rightNavigationQsre, rightProperties))
             {
-                _queryCompilationContext.Logger.PossibleUnintendedReferenceComparisonWarning(leftExpressionn, rightExpressionn);
+                _queryCompilationContext.Logger.PossibleUnintendedReferenceComparisonWarning(leftExpression, rightExpression);
 
                 if (leftProperties[leftProperties.Count - 1].Equals(rightProperties[rightProperties.Count - 1]))
                 {
@@ -234,8 +234,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return null;
         }
 
-        private Expression CreateCollectionCallerExpression(
-            QuerySourceReferenceExpression qsre, 
+        private static Expression CreateCollectionCallerExpression(
+            QuerySourceReferenceExpression qsre,
             IList<IPropertyBase> properties)
         {
             Expression result = qsre;
@@ -249,17 +249,17 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
         private static bool IsCollectionNavigation(QuerySourceReferenceExpression qsre, IList<IPropertyBase> properties)
             => qsre != null
-                && properties.Count > 0
-                && properties[properties.Count - 1] is INavigation navigation
-                && navigation.IsCollection();
+               && properties.Count > 0
+               && properties[properties.Count - 1] is INavigation navigation
+               && navigation.IsCollection();
 
-        private Expression CreateKeyComparison(
-            IEntityType entityType, 
-            Expression left, 
-            Expression right, 
-            ExpressionType nodeType, 
-            bool isLeftNullConstant, 
-            bool isRightNullConstant, 
+        private static Expression CreateKeyComparison(
+            IEntityType entityType,
+            Expression left,
+            Expression right,
+            ExpressionType nodeType,
+            bool isLeftNullConstant,
+            bool isRightNullConstant,
             bool isNullComparison)
         {
             var primaryKeyProperties = entityType.FindPrimaryKey().Properties;
@@ -274,7 +274,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             return Expression.MakeBinary(nodeType, newLeftExpression, newRightExpression);
         }
-
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -343,7 +342,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                         properties
                             .Select(
                                 p => Expression.Convert(
-                                    target.CreateEFPropertyExpression(p), 
+                                    target.CreateEFPropertyExpression(p),
                                     typeof(object)))
                             .Cast<Expression>()
                             .ToArray()));

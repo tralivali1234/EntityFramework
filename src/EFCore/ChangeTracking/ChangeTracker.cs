@@ -3,11 +3,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.ChangeTracking
@@ -20,18 +21,27 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
     /// </summary>
     public class ChangeTracker : IInfrastructure<IStateManager>
     {
-        private IEntityEntryGraphIterator _graphIterator;
+        private readonly IModel _model;
         private QueryTrackingBehavior _queryTrackingBehavior;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public ChangeTracker([NotNull] DbContext context)
+        public ChangeTracker(
+            [NotNull] DbContext context,
+            [NotNull] IStateManager stateManager,
+            [NotNull] IChangeDetector changeDetector,
+            [NotNull] IModel model,
+            [NotNull] IEntityEntryGraphIterator graphIterator)
         {
             Check.NotNull(context, nameof(context));
+            Check.NotNull(stateManager, nameof(stateManager));
+            Check.NotNull(changeDetector, nameof(changeDetector));
 
+#pragma warning disable 612
             Context = context;
+#pragma warning restore 612
             _queryTrackingBehavior = context
                                          .GetService<IDbContextOptions>()
                                          .Extensions
@@ -39,6 +49,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                                          .FirstOrDefault()
                                          ?.QueryTrackingBehavior
                                      ?? QueryTrackingBehavior.TrackAll;
+            StateManager = stateManager;
+            ChangeDetector = changeDetector;
+            _model = model;
+            GraphIterator = graphIterator;
         }
 
         /// <summary>
@@ -76,8 +90,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         public virtual QueryTrackingBehavior QueryTrackingBehavior
         {
-            get { return _queryTrackingBehavior; }
-            set { _queryTrackingBehavior = value; }
+            get => _queryTrackingBehavior;
+            set => _queryTrackingBehavior = value;
         }
 
         /// <summary>
@@ -98,7 +112,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         /// <typeparam name="TEntity"> The type of entities to get entries for. </typeparam>
         /// <returns> An entry for each entity of the given type that is being tracked. </returns>
-        public virtual IEnumerable<EntityEntry<TEntity>> Entries<TEntity>() where TEntity : class
+        public virtual IEnumerable<EntityEntry<TEntity>> Entries<TEntity>()
+            where TEntity : class
         {
             TryDetectChanges();
 
@@ -146,6 +161,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///         application code.
         ///     </para>
         /// </summary>
+        [Obsolete]
         IStateManager IInfrastructure<IStateManager>.Instance => StateManager;
 
         /// <summary>
@@ -159,7 +175,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     <see cref="DbContext.SaveChanges()" /> and when returning change tracking information). You typically only need to
         ///     call this method if you have disabled <see cref="AutoDetectChangesEnabled" />.
         /// </summary>
-        public virtual void DetectChanges() => ChangeDetector.DetectChanges(StateManager);
+        public virtual void DetectChanges()
+        {
+            if (_model[Internal.ChangeDetector.SkipDetectChangesAnnotation] == null)
+            {
+                ChangeDetector.DetectChanges(StateManager);
+            }
+        }
 
         /// <summary>
         ///     Accepts all changes made to entities in the context. It will be assumed that the tracked entities
@@ -203,7 +225,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             var rootEntry = StateManager.GetOrCreateEntry(rootEntity);
 
             GraphIterator.TraverseGraph(
-                new EntityEntryGraphNode(rootEntry, null),
+                new EntityEntryGraphNode(rootEntry, null, null),
                 n =>
                     {
                         if (n.Entry.State != EntityState.Detached)
@@ -217,13 +239,36 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     });
         }
 
-        private IStateManager StateManager
-            => Context.GetInfrastructure<DbContextDependencies>().StateManager;
+        private IStateManager StateManager { get; }
 
-        private IChangeDetector ChangeDetector
-            => Context.GetInfrastructure<DbContextDependencies>().ChangeDetector;
+        private IChangeDetector ChangeDetector { get; }
 
-        private IEntityEntryGraphIterator GraphIterator
-            => _graphIterator ?? (_graphIterator = Context.GetService<IEntityEntryGraphIterator>());
+        private IEntityEntryGraphIterator GraphIterator { get; }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

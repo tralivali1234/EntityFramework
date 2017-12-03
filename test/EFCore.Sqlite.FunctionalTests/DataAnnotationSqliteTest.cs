@@ -3,14 +3,16 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
-    public class DataAnnotationSqliteTest : DataAnnotationTestBase<SqliteTestStore, DataAnnotationSqliteFixture>
+    public class DataAnnotationSqliteTest : DataAnnotationTestBase<DataAnnotationSqliteTest.DataAnnotationSqliteFixture>
     {
         public DataAnnotationSqliteTest(DataAnnotationSqliteFixture fixture)
             : base(fixture)
@@ -59,7 +61,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
             var modelBuilder = base.Key_and_MaxLength_64_produce_nvarchar_64();
 
             var property = GetProperty<ColumnKeyAnnotationClass2>(modelBuilder, "PersonFirstName");
-            Assert.Equal("TEXT", new SqliteTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("TEXT", new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -69,7 +71,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
             var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength();
 
             var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "MaxTimestamp");
-            Assert.Equal("BLOB", new SqliteTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("BLOB", new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -79,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
             var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength_with_value();
 
             var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "NonMaxTimestamp");
-            Assert.Equal("BLOB", new SqliteTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("BLOB", new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -98,34 +100,36 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
         {
             base.ConcurrencyCheckAttribute_throws_if_value_in_database_changed();
 
-            Assert.Contains(@"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
-FROM ""Sample"" AS ""r""
-WHERE ""r"".""UniqueNo"" = 1
-LIMIT 1",
+            Assert.Contains(
+                @"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""" + EOL +
+                @"FROM ""Sample"" AS ""r""" + EOL +
+                @"WHERE ""r"".""UniqueNo"" = 1" + EOL +
+                @"LIMIT 1",
                 Sql);
 
-            Assert.Contains(@"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
-FROM ""Sample"" AS ""r""
-WHERE ""r"".""UniqueNo"" = 1
-LIMIT 1
-
-@p2: 1 (DbType = String)
-@p0: ModifiedData (Nullable = false)
-@p1: 00000000-0000-0000-0003-000000000001 (DbType = String)
-@p3: 00000001-0000-0000-0000-000000000001 (DbType = String)
-
-UPDATE ""Sample"" SET ""Name"" = @p0, ""RowVersion"" = @p1
-WHERE ""UniqueNo"" = @p2 AND ""RowVersion"" = @p3;
-SELECT changes();
-
-@p2: 1 (DbType = String)
-@p0: ChangedData (Nullable = false)
-@p1: 00000000-0000-0000-0002-000000000001 (DbType = String)
-@p3: 00000001-0000-0000-0000-000000000001 (DbType = String)
-
-UPDATE ""Sample"" SET ""Name"" = @p0, ""RowVersion"" = @p1
-WHERE ""UniqueNo"" = @p2 AND ""RowVersion"" = @p3;
-SELECT changes();",
+            Assert.Contains(
+                @"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""" + EOL +
+                @"FROM ""Sample"" AS ""r""" + EOL +
+                @"WHERE ""r"".""UniqueNo"" = 1" + EOL +
+                @"LIMIT 1" + EOL +
+                EOL +
+                @"@p2='1' (DbType = String)" + EOL +
+                @"@p0='ModifiedData' (Nullable = false) (Size = 12)" + EOL +
+                @"@p1='00000000-0000-0000-0003-000000000001' (DbType = String)" + EOL +
+                @"@p3='00000001-0000-0000-0000-000000000001' (DbType = String)" + EOL +
+                EOL +
+                @"UPDATE ""Sample"" SET ""Name"" = @p0, ""RowVersion"" = @p1" + EOL +
+                @"WHERE ""UniqueNo"" = @p2 AND ""RowVersion"" = @p3;" + EOL +
+                @"SELECT changes();" + EOL +
+                EOL +
+                @"@p2='1' (DbType = String)" + EOL +
+                @"@p0='ChangedData' (Nullable = false) (Size = 11)" + EOL +
+                @"@p1='00000000-0000-0000-0002-000000000001' (DbType = String)" + EOL +
+                @"@p3='00000001-0000-0000-0000-000000000001' (DbType = String)" + EOL +
+                EOL +
+                @"UPDATE ""Sample"" SET ""Name"" = @p0, ""RowVersion"" = @p1" + EOL +
+                @"WHERE ""UniqueNo"" = @p2 AND ""RowVersion"" = @p3;" + EOL +
+                @"SELECT changes();",
                 Sql);
         }
 
@@ -133,15 +137,16 @@ SELECT changes();",
         {
             base.DatabaseGeneratedAttribute_autogenerates_values_when_set_to_identity();
 
-            Assert.Contains(@"@p0:  (DbType = String)
-@p1: Third (Nullable = false)
-@p2: 00000000-0000-0000-0000-000000000003 (DbType = String)
-
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (@p0, @p1, @p2);
-SELECT ""UniqueNo""
-FROM ""Sample""
-WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
+            Assert.Contains(
+                @"@p0='' (DbType = String)" + EOL +
+                @"@p1='Third' (Nullable = false) (Size = 5)" + EOL +
+                @"@p2='00000000-0000-0000-0000-000000000003' (DbType = String)" + EOL +
+                EOL +
+                @"INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")" + EOL +
+                @"VALUES (@p0, @p1, @p2);" + EOL +
+                @"SELECT ""UniqueNo""" + EOL +
+                @"FROM ""Sample""" + EOL +
+                @"WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
                 Sql);
         }
 
@@ -158,12 +163,12 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
         {
             base.RequiredAttribute_for_navigation_throws_while_inserting_null_value();
 
-            Assert.Contains(@"@p1: Book1 (Nullable = false)
-",
+            Assert.Contains(
+                @"@p1='1' (DbType = String)" + EOL,
                 Sql);
 
-            Assert.Contains(@"@p1:  (Nullable = false) (DbType = String)
-",
+            Assert.Contains(
+                @"@p1='' (Nullable = false) (DbType = String)" + EOL,
                 Sql);
         }
 
@@ -171,26 +176,28 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
         {
             base.RequiredAttribute_for_property_throws_while_inserting_null_value();
 
-            Assert.Contains(@"@p0:  (DbType = String)
-@p1: ValidString (Nullable = false)
-@p2: 00000000-0000-0000-0000-000000000001 (DbType = String)
-
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (@p0, @p1, @p2);
-SELECT ""UniqueNo""
-FROM ""Sample""
-WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
+            Assert.Contains(
+                @"@p0='' (DbType = String)" + EOL +
+                @"@p1='ValidString' (Nullable = false) (Size = 11)" + EOL +
+                @"@p2='00000000-0000-0000-0000-000000000001' (DbType = String)" + EOL +
+                EOL +
+                @"INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")" + EOL +
+                @"VALUES (@p0, @p1, @p2);" + EOL +
+                @"SELECT ""UniqueNo""" + EOL +
+                @"FROM ""Sample""" + EOL +
+                @"WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
                 Sql);
 
-            Assert.Contains(@"@p0:  (DbType = String)
-@p1:  (Nullable = false) (DbType = String)
-@p2: 00000000-0000-0000-0000-000000000002 (DbType = String)
-
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (@p0, @p1, @p2);
-SELECT ""UniqueNo""
-FROM ""Sample""
-WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
+            Assert.Contains(
+                @"@p0='' (DbType = String)" + EOL +
+                @"@p1='' (Nullable = false) (DbType = String)" + EOL +
+                @"@p2='00000000-0000-0000-0000-000000000002' (DbType = String)" + EOL +
+                EOL +
+                @"INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")" + EOL +
+                @"VALUES (@p0, @p1, @p2);" + EOL +
+                @"SELECT ""UniqueNo""" + EOL +
+                @"FROM ""Sample""" + EOL +
+                @"WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
                 Sql);
         }
 
@@ -212,9 +219,14 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
             }
         }
 
-        private const string FileLineEnding = @"
-";
+        private static readonly string EOL = Environment.NewLine;
 
-        private string Sql => Fixture.TestSqlLoggerFactory.Sql.Replace(Environment.NewLine, FileLineEnding);
+        private string Sql => Fixture.TestSqlLoggerFactory.Sql;
+
+        public class DataAnnotationSqliteFixture : DataAnnotationFixtureBase
+        {
+            protected override ITestStoreFactory TestStoreFactory => SqliteTestStoreFactory.Instance;
+            public TestSqlLoggerFactory TestSqlLoggerFactory => (TestSqlLoggerFactory)ServiceProvider.GetRequiredService<ILoggerFactory>();
+        }
     }
 }

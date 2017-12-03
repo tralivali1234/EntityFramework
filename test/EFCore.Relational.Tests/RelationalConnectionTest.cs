@@ -7,12 +7,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class RelationalConnectionTest
     {
@@ -473,7 +473,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
             {
                 Assert.Equal(0, connection.DbConnections.Count);
 
-                await connection.OpenAsync();
+                await connection.OpenAsync(default);
 
                 Assert.Equal(0, connection.DbConnections.Count);
 
@@ -486,7 +486,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
 
                 dbConnection.SetState(ConnectionState.Open);
 
-                await connection.OpenAsync();
+                await connection.OpenAsync(default);
 
                 Assert.Equal(1, dbConnection.OpenCount);
                 Assert.Equal(1, dbConnection.CloseCount);
@@ -498,7 +498,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
 
                 dbConnection.SetState(ConnectionState.Closed);
 
-                await connection.OpenAsync();
+                await connection.OpenAsync(default);
 
                 Assert.Equal(2, dbConnection.OpenCount);
                 Assert.Equal(1, dbConnection.CloseCount);
@@ -510,7 +510,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
 
                 dbConnection.SetState(ConnectionState.Open);
 
-                await connection.OpenAsync();
+                await connection.OpenAsync(default);
 
                 Assert.Equal(2, dbConnection.OpenCount);
                 Assert.Equal(2, dbConnection.CloseCount);
@@ -522,14 +522,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
                 Assert.Equal(2, dbConnection.OpenCount);
                 Assert.Equal(2, dbConnection.CloseCount);
 
-                await connection.OpenAsync();
-                await connection.OpenAsync();
+                await connection.OpenAsync(default);
+                await connection.OpenAsync(default);
 
                 Assert.Equal(3, dbConnection.OpenCount);
 
                 dbConnection.SetState(ConnectionState.Closed);
 
-                await connection.OpenAsync();
+                await connection.OpenAsync(default);
 
                 Assert.Equal(4, dbConnection.OpenCount);
                 Assert.Equal(2, dbConnection.CloseCount);
@@ -803,9 +803,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
         public void Can_create_new_connection_with_CommandTimeout()
         {
             using (var connection = new FakeRelationalConnection(
-                CreateOptions(new FakeRelationalOptionsExtension()
-                    .WithConnectionString("Database=FrodoLives")
-                    .WithCommandTimeout(99))))
+                CreateOptions(
+                    new FakeRelationalOptionsExtension()
+                        .WithConnectionString("Database=FrodoLives")
+                        .WithCommandTimeout(99))))
             {
                 Assert.Equal(99, connection.CommandTimeout);
             }
@@ -871,10 +872,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
         {
             Assert.Equal(
                 RelationalStrings.ConnectionAndConnectionString,
-                Assert.Throws<InvalidOperationException>(() => new FakeRelationalConnection(
-                    CreateOptions(new FakeRelationalOptionsExtension()
-                        .WithConnection(new FakeDbConnection("Database=FrodoLives"))
-                        .WithConnectionString("Database=FrodoLives")))).Message);
+                Assert.Throws<InvalidOperationException>(
+                    () => new FakeRelationalConnection(
+                        CreateOptions(
+                            new FakeRelationalOptionsExtension()
+                                .WithConnection(new FakeDbConnection("Database=FrodoLives"))
+                                .WithConnectionString("Database=FrodoLives")))).Message);
         }
 
         [Fact]

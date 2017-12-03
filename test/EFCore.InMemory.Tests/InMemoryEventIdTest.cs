@@ -3,13 +3,13 @@
 
 using System;
 using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class InMemoryEventIdTest
     {
@@ -22,8 +22,8 @@ namespace Microsoft.EntityFrameworkCore.InMemory.Tests
             };
 
             InMemoryTestHelpers.Instance.TestEventLogging(
-                typeof(InMemoryEventId), 
-                typeof(InMemoryLoggerExtensions), 
+                typeof(InMemoryEventId),
+                typeof(InMemoryLoggerExtensions),
                 fakeFactories);
         }
     }

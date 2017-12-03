@@ -1,14 +1,18 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 
 namespace Microsoft.EntityFrameworkCore.ChangeTracking
 {
@@ -37,19 +41,23 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
     ///         notifications are generated when an entity starts being tracked by the context or is
     ///         marked as <see cref="EntityState.Deleted" /> or <see cref="EntityState.Detached" />.
     ///     </para>
+    ///     <para>
+    ///         Do not use this type directly for data binding. Instead call <see cref="ToObservableCollection" />
+    ///         for WPF binding, or <see cref="ToBindingList" /> for WinForms.
+    ///     </para>
     /// </summary>
     /// <typeparam name="TEntity">The type of the entity in the local view.</typeparam>
-    public class LocalView<TEntity> : ICollection<TEntity>, INotifyCollectionChanged, INotifyPropertyChanged, INotifyPropertyChanging
+    public class LocalView<TEntity> : ICollection<TEntity>, INotifyCollectionChanged, INotifyPropertyChanged, INotifyPropertyChanging, IListSource
         where TEntity : class
     {
-#if NET46
         private ObservableBackedBindingList<TEntity> _bindingList;
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif
+        private ObservableCollection<TEntity> _observable;
+        private readonly DbContext _context;
         private readonly IStateManager _stateManager;
         private int _count;
+        private bool _triggeringStateManagerChange;
+        private bool _triggeringObservableChange;
+        private bool _triggeringLocalViewChange;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -57,11 +65,104 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         public LocalView([NotNull] DbSet<TEntity> set)
         {
-            _stateManager = set.GetService<IStateManager>();
+            _context = set.GetService<ICurrentDbContext>().Context;
+            _context.CheckDisposed();
+
+            _stateManager = _context.GetDependencies().StateManager;
+
             set.GetService<ILocalViewListener>().RegisterView(StateManagerChangedHandler);
 
             _count = _stateManager.Entries
                 .Count(e => e.Entity is TEntity && e.EntityState != EntityState.Deleted);
+        }
+
+        /// <summary>
+        ///     Returns an <see cref="ObservableCollection{T}" /> implementation that stays in sync with this collection.
+        ///     Use this for WPF data binding.
+        /// </summary>
+        /// <returns> The collection. </returns>
+        public virtual ObservableCollection<TEntity> ToObservableCollection()
+        {
+            if (_observable == null)
+            {
+                _observable = new ObservableCollection<TEntity>(this);
+                _observable.CollectionChanged += ObservableCollectionChanged;
+                CollectionChanged += LocalViewCollectionChanged;
+            }
+
+            return _observable;
+        }
+
+        private void LocalViewCollectionChanged(object _, NotifyCollectionChangedEventArgs args)
+        {
+            Debug.Assert(args.Action == NotifyCollectionChangedAction.Add || args.Action == NotifyCollectionChangedAction.Remove);
+
+            if (_triggeringLocalViewChange)
+            {
+                return;
+            }
+
+            try
+            {
+                _triggeringObservableChange = true;
+
+                if (args.Action == NotifyCollectionChangedAction.Remove)
+                {
+                    Debug.Assert(args.OldItems.Count == 1);
+                    _observable.Remove((TEntity)args.OldItems[0]);
+                }
+                else
+                {
+                    Debug.Assert(args.NewItems.Count == 1);
+                    _observable.Add((TEntity)args.NewItems[0]);
+                }
+            }
+            finally
+            {
+                _triggeringObservableChange = false;
+            }
+        }
+
+        private void ObservableCollectionChanged(object _, NotifyCollectionChangedEventArgs args)
+        {
+            if (_triggeringObservableChange)
+            {
+                return;
+            }
+
+            try
+            {
+                _triggeringLocalViewChange = true;
+
+                if (args.Action == NotifyCollectionChangedAction.Reset)
+                {
+                    Clear();
+                }
+                else
+                {
+                    if (args.Action == NotifyCollectionChangedAction.Remove
+                        || args.Action == NotifyCollectionChangedAction.Replace)
+                    {
+                        foreach (TEntity entity in args.OldItems)
+                        {
+                            Remove(entity);
+                        }
+                    }
+
+                    if (args.Action == NotifyCollectionChangedAction.Add
+                        || args.Action == NotifyCollectionChangedAction.Replace)
+                    {
+                        foreach (TEntity entity in args.NewItems)
+                        {
+                            Add(entity);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                _triggeringLocalViewChange = false;
+            }
         }
 
         /// <summary>
@@ -70,10 +171,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         /// <returns> An enumerator for the collection. </returns>
         public virtual IEnumerator<TEntity> GetEnumerator()
-            => _stateManager.Entries.Where(e => e.EntityState != EntityState.Deleted)
+        {
+            _context.CheckDisposed();
+
+            return _stateManager.Entries.Where(e => e.EntityState != EntityState.Deleted)
                 .Select(e => e.Entity)
                 .OfType<TEntity>()
                 .GetEnumerator();
+        }
 
         /// <summary>
         ///     Returns an <see cref="IEnumerator{T}" /> for all tracked entities of type TEntity
@@ -98,19 +203,31 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             // For something that is already in the state manager as Unchanged or Modified we don't try
             // to Add it again since doing so would change its state to Added, which is probably not what
             // was wanted in this case.
+
+            _context.CheckDisposed();
+
             var entry = _stateManager.GetOrCreateEntry(item);
             if (entry.EntityState == EntityState.Deleted
                 || entry.EntityState == EntityState.Detached)
             {
-                OnCountPropertyChanging();
+                try
+                {
+                    _triggeringStateManagerChange = true;
 
-                entry.SetEntityState(EntityState.Added);
+                    OnCountPropertyChanging();
 
-                _count++;
+                    entry.SetEntityState(EntityState.Added);
 
-                OnCollectionChanged(NotifyCollectionChangedAction.Add, item);
+                    _count++;
 
-                OnCountPropertyChanged();
+                    OnCollectionChanged(NotifyCollectionChangedAction.Add, item);
+
+                    OnCountPropertyChanged();
+                }
+                finally
+                {
+                    _triggeringStateManagerChange = false;
+                }
             }
         }
 
@@ -128,6 +245,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         public virtual void Clear()
         {
+            _context.CheckDisposed();
+
             foreach (var entry in _stateManager.Entries
                 .Where(e => e.Entity is TEntity && e.EntityState != EntityState.Deleted)
                 .ToList())
@@ -141,9 +260,11 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     marked as Deleted.
         /// </summary>
         /// <param name="item"> The entity to check. </param>
-        /// <returns></returns>
+        /// <returns> True if the entity is being tracked by the context and has not been marked as Deleted. </returns>
         public virtual bool Contains(TEntity item)
         {
+            _context.CheckDisposed();
+
             var entry = _stateManager.TryGetEntry(item);
 
             return entry != null && entry.EntityState != EntityState.Deleted;
@@ -157,12 +278,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <param name="arrayIndex"> The index into the array to start copying. </param>
         public virtual void CopyTo(TEntity[] array, int arrayIndex)
         {
+            _context.CheckDisposed();
+
             foreach (var entry in _stateManager.Entries)
             {
                 if (entry.EntityState != EntityState.Deleted)
                 {
-                    var entity = entry.Entity as TEntity;
-                    if (entity != null)
+                    if (entry.Entity is TEntity entity)
                     {
                         array[arrayIndex++] = entity;
                     }
@@ -185,21 +307,33 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <returns>True if the entity was being tracked and was not already Deleted. </returns>
         public virtual bool Remove(TEntity item)
         {
+            _context.CheckDisposed();
+
             var entry = _stateManager.TryGetEntry(item);
             if (entry != null
                 && entry.EntityState != EntityState.Deleted)
             {
-                OnCountPropertyChanging();
+                try
+                {
+                    _triggeringStateManagerChange = true;
 
-                entry.SetEntityState(entry.EntityState == EntityState.Added
-                    ? EntityState.Detached
-                    : EntityState.Deleted);
+                    OnCountPropertyChanging();
 
-                _count--;
+                    entry.SetEntityState(
+                        entry.EntityState == EntityState.Added
+                            ? EntityState.Detached
+                            : EntityState.Deleted);
 
-                OnCollectionChanged(NotifyCollectionChangedAction.Remove, item);
+                    _count--;
 
-                OnCountPropertyChanged();
+                    OnCollectionChanged(NotifyCollectionChangedAction.Remove, item);
+
+                    OnCountPropertyChanged();
+                }
+                finally
+                {
+                    _triggeringStateManagerChange = false;
+                }
 
                 return true;
             }
@@ -209,8 +343,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
         private void StateManagerChangedHandler(InternalEntityEntry entry, EntityState previousState)
         {
-            var entity = entry.Entity as TEntity;
-            if (entity != null)
+            if (_triggeringStateManagerChange)
+            {
+                return;
+            }
+
+            if (entry.Entity is TEntity entity)
             {
                 var wasIn = previousState != EntityState.Detached
                             && previousState != EntityState.Deleted;
@@ -296,16 +434,33 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         private void OnCollectionChanged(NotifyCollectionChangedAction action, object item)
             => OnCollectionChanged(new NotifyCollectionChangedEventArgs(action, item));
 
-#if NET46
         /// <summary>
         ///     Returns an <see cref="BindingList{T}" /> implementation that stays in sync with this collection.
+        ///     Use this for WinForms data binding.
         /// </summary>
         /// <returns> The binding list. </returns>
         public virtual BindingList<TEntity> ToBindingList()
-            => _bindingList ?? (_bindingList = new ObservableBackedBindingList<TEntity>(this));
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif
+            => _bindingList ?? (_bindingList = new ObservableBackedBindingList<TEntity>(ToObservableCollection()));
+
+        /// <summary>
+        ///     <para>
+        ///         This method is called by data binding frameworks when attempting to data bind
+        ///         directly to a <see cref="LocalView{TEntity}" />.
+        ///     </para>
+        ///     <para>
+        ///         This implementation always throws an exception as <see cref="LocalView{TEntity}" />
+        ///         does not maintain an ordered list with indexes. Instead call <see cref="ToObservableCollection" />
+        ///         for WPF binding, or <see cref="ToBindingList" /> for WinForms.
+        ///     </para>
+        /// </summary>
+        /// <exception cref="NotSupportedException"> Always thrown. </exception>
+        /// <returns> Never returns, always throws an exception. </returns>
+        IList IListSource.GetList() => throw new NotSupportedException(CoreStrings.DataBindingWithIListSource);
+
+        /// <summary>
+        ///     Gets a value indicating whether the collection is a collection of System.Collections.IList objects.
+        ///     Always returns false.
+        /// </summary>
+        bool IListSource.ContainsListCollection => false;
     }
 }

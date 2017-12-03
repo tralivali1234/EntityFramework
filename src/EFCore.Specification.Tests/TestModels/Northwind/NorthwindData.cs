@@ -11,15 +11,21 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
 using Microsoft.EntityFrameworkCore.Query.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
+namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
 {
-    public static partial class NorthwindData
+    public partial class NorthwindData : IExpectedData
     {
-        static NorthwindData()
+        private readonly Customer[] _customers;
+        private readonly Employee[] _employees;
+        private readonly Product[] _products;
+        private readonly Order[] _orders;
+        private readonly OrderDetail[] _orderDetails;
+
+        public NorthwindData()
         {
             _customers = CreateCustomers();
             _employees = CreateEmployees();
@@ -64,34 +70,35 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
             }
         }
 
-        public static IQueryable<T> Set<T>()
+        public IQueryable<TEntity> Set<TEntity>()
+            where TEntity : class
         {
-            if (typeof(T) == typeof(Customer))
+            if (typeof(TEntity) == typeof(Customer))
             {
-                return new AsyncEnumerable<T>(_customers.Cast<T>());
+                return new AsyncEnumerable<TEntity>(_customers.Cast<TEntity>());
             }
 
-            if (typeof(T) == typeof(Employee))
+            if (typeof(TEntity) == typeof(Employee))
             {
-                return new AsyncEnumerable<T>(_employees.Cast<T>());
+                return new AsyncEnumerable<TEntity>(_employees.Cast<TEntity>());
             }
 
-            if (typeof(T) == typeof(Order))
+            if (typeof(TEntity) == typeof(Order))
             {
-                return new AsyncEnumerable<T>(_orders.Cast<T>());
+                return new AsyncEnumerable<TEntity>(_orders.Cast<TEntity>());
             }
 
-            if (typeof(T) == typeof(OrderDetail))
+            if (typeof(TEntity) == typeof(OrderDetail))
             {
-                return new AsyncEnumerable<T>(_orderDetails.Cast<T>());
+                return new AsyncEnumerable<TEntity>(_orderDetails.Cast<TEntity>());
             }
 
-            if (typeof(T) == typeof(Product))
+            if (typeof(TEntity) == typeof(Product))
             {
-                return new AsyncEnumerable<T>(_products.Cast<T>());
+                return new AsyncEnumerable<TEntity>(_products.Cast<TEntity>());
             }
 
-            throw new NotImplementedException();
+            throw new InvalidOperationException("Invalid entity type: " + typeof(TEntity));
         }
 
         public static void Seed(NorthwindContext context)
@@ -110,29 +117,6 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
             context.Set<OrderDetail>().AddRange(CreateOrderDetails());
 
             context.SaveChanges();
-        }
-
-        public static void Cleanup(NorthwindContext context)
-        {
-            RemoveAllEntities(context);
-
-            context.SaveChanges();
-        }
-
-        public static Task CleanupAsync(NorthwindContext context)
-        {
-            RemoveAllEntities(context);
-
-            return context.SaveChangesAsync();
-        }
-
-        private static void RemoveAllEntities(NorthwindContext context)
-        {
-            context.Set<OrderDetail>().RemoveRange(context.Set<OrderDetail>());
-            context.Set<Product>().RemoveRange(context.Set<Product>());
-            context.Set<Order>().RemoveRange(context.Set<Order>());
-            context.Set<Employee>().RemoveRange(context.Set<Employee>());
-            context.Set<Customer>().RemoveRange(context.Set<Customer>());
         }
 
         private class AsyncEnumerable<T> : IAsyncQueryProvider, IOrderedQueryable<T>

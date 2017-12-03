@@ -4,15 +4,154 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
+namespace Microsoft.EntityFrameworkCore.ChangeTracking
 {
     public class EntityEntryTest
     {
+        [Fact]
+        public void Non_store_generated_key_is_always_set()
+        {
+            using (var context = new KeySetContext())
+            {
+                Assert.True(context.Entry(new NotStoreGenerated()).IsKeySet);
+                Assert.True(context.Entry(new NotStoreGenerated { Id = 1 }).IsKeySet);
+            }
+        }
+
+        [Fact]
+        public void Non_store_generated_composite_key_is_always_set()
+        {
+            using (var context = new KeySetContext())
+            {
+                Assert.True(context.Entry(new CompositeNotStoreGenerated()).IsKeySet);
+                Assert.True(context.Entry(new CompositeNotStoreGenerated { Id1 = 1 }).IsKeySet);
+                Assert.True(context.Entry(new CompositeNotStoreGenerated { Id2 = true }).IsKeySet);
+                Assert.True(context.Entry(new CompositeNotStoreGenerated { Id1 = 1, Id2 = true }).IsKeySet);
+            }
+        }
+
+        [Fact]
+        public void Store_generated_key_is_set_only_if_non_default_value()
+        {
+            using (var context = new KeySetContext())
+            {
+                Assert.False(context.Entry(new StoreGenerated()).IsKeySet);
+                Assert.True(context.Entry(new StoreGenerated { Id = 1 }).IsKeySet);
+            }
+        }
+
+        [Fact]
+        public void Composite_store_generated_key_is_set_only_if_non_default_value_in_store_generated_part()
+        {
+            using (var context = new KeySetContext())
+            {
+                Assert.False(context.Entry(new CompositeStoreGenerated()).IsKeySet);
+                Assert.False(context.Entry(new CompositeStoreGenerated { Id1 = 1 }).IsKeySet);
+                Assert.True(context.Entry(new CompositeStoreGenerated { Id2 = true }).IsKeySet);
+                Assert.True(context.Entry(new CompositeStoreGenerated { Id1 = 1, Id2 = true }).IsKeySet);
+            }
+        }
+
+        [Fact]
+        public void Primary_key_that_is_also_foreign_key_is_set_only_if_non_default_value()
+        {
+            using (var context = new KeySetContext())
+            {
+                Assert.False(context.Entry(new Dependent()).IsKeySet);
+                Assert.True(context.Entry(new Dependent { Id = 1 }).IsKeySet);
+            }
+        }
+
+        private class StoreGenerated
+        {
+            public int Id { get; set; }
+
+            public Dependent Dependent { get; set; }
+        }
+
+        private class NotStoreGenerated
+        {
+            public int Id { get; set; }
+        }
+
+        private class CompositeStoreGenerated
+        {
+            public int Id1 { get; set; }
+            public bool Id2 { get; set; }
+        }
+
+        private class CompositeNotStoreGenerated
+        {
+            public int Id1 { get; set; }
+            public bool Id2 { get; set; }
+        }
+
+        private class Dependent
+        {
+            public int Id { get; set; }
+
+            public StoreGenerated Principal { get; set; }
+        }
+
+        private class KeySetContext : DbContext
+        {
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                => optionsBuilder.UseInMemoryDatabase(nameof(KeySetContext));
+
+            public DbSet<StoreGenerated> StoreGenerated { get; set; }
+            public DbSet<NotStoreGenerated> NotStoreGenerated { get; set; }
+            public DbSet<CompositeStoreGenerated> CompositeStoreGenerated { get; set; }
+            public DbSet<CompositeNotStoreGenerated> CompositeNotStoreGenerated { get; set; }
+            public DbSet<Dependent> Dependent { get; set; }
+
+            protected internal override void OnModelCreating(ModelBuilder modelBuilder)
+            {
+                modelBuilder.Entity<StoreGenerated>()
+                    .HasOne(e => e.Dependent)
+                    .WithOne(e => e.Principal)
+                    .HasForeignKey<Dependent>(e => e.Id);
+
+                modelBuilder.Entity<NotStoreGenerated>().Property(e => e.Id).ValueGeneratedNever();
+
+                modelBuilder.Entity<CompositeNotStoreGenerated>().HasKey(e => new { e.Id1, e.Id2 });
+
+                modelBuilder.Entity<CompositeStoreGenerated>(
+                    b =>
+                        {
+                            b.HasKey(e => new { e.Id1, e.Id2 });
+                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        });
+            }
+        }
+
+        [Fact]
+        public void Detached_entities_are_not_returned_from_the_change_tracker()
+        {
+            using (var context = new FreezerContext())
+            {
+                var entity = new Chunky { Id = 808 };
+                context.Attach(entity);
+
+                Assert.Equal(1, context.ChangeTracker.Entries().Count());
+
+                context.Entry(entity).State = EntityState.Detached;
+
+                Assert.Equal(0, context.ChangeTracker.Entries().Count());
+
+                context.ChangeTracker.DetectChanges();
+
+                Assert.Equal(0, context.ChangeTracker.Entries().Count());
+
+                context.Entry(entity);
+
+                Assert.Equal(0, context.ChangeTracker.Entries().Count());
+            }
+        }
+
         [Fact]
         public void Can_obtain_entity_instance()
         {
@@ -175,7 +314,8 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.WrongGenericPropertyType("Monkey", entity.GetType().ShortDisplayName(), "int", "string"),
+                Assert.Equal(
+                    CoreStrings.WrongGenericPropertyType("Monkey", entity.GetType().ShortDisplayName(), "int", "string"),
                     Assert.Throws<ArgumentException>(() => context.Entry(entity).Property<string>("Monkey")).Message);
             }
         }
@@ -198,11 +338,14 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Property("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property<int>("Chimp").Metadata.Name).Message);
             }
         }
@@ -214,16 +357,24 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.PropertyIsNavigation("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.PropertyIsNavigation(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Property), nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyIsNavigation("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.PropertyIsNavigation(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Property), nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Property("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyIsNavigation("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.PropertyIsNavigation(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Property), nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property<Cherry>("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyIsNavigation("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.PropertyIsNavigation(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Property), nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property(e => e.Garcia).Metadata.Name).Message);
             }
@@ -270,11 +421,14 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Reference("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference<Cherry>("Chimp").Metadata.Name).Message);
             }
         }
@@ -286,16 +440,24 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.NavigationIsProperty("Monkey", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Monkey", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference("Monkey").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.NavigationIsProperty("Monkey", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Monkey", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Reference("Monkey").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.NavigationIsProperty("Monkey", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Monkey", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference<Random>("Monkey").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.NavigationIsProperty("Nonkey", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Nonkey", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference(e => e.Nonkey).Metadata.Name).Message);
             }
@@ -308,16 +470,24 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Cherry()).Entity;
 
-                Assert.Equal(CoreStrings.ReferenceIsCollection("Monkeys", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.ReferenceIsCollection(
+                        "Monkeys", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference("Monkeys").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.ReferenceIsCollection("Monkeys", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.ReferenceIsCollection(
+                        "Monkeys", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Reference("Monkeys").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.ReferenceIsCollection("Monkeys", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.ReferenceIsCollection(
+                        "Monkeys", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference<Random>("Monkeys").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.ReferenceIsCollection("Monkeys", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.ReferenceIsCollection(
+                        "Monkeys", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Reference(e => e.Monkeys).Metadata.Name).Message);
             }
@@ -364,11 +534,14 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Cherry()).Entity;
 
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Collection("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Collection("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Collection<Cherry>("Chimp").Metadata.Name).Message);
             }
         }
@@ -380,13 +553,19 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Cherry()).Entity;
 
-                Assert.Equal(CoreStrings.NavigationIsProperty("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Collection("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.NavigationIsProperty("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Collection("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.NavigationIsProperty("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Collection<Random>("Garcia").Metadata.Name).Message);
             }
@@ -399,13 +578,19 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.CollectionIsReference("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.CollectionIsReference(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Collection), nameof(EntityEntry.Reference)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Collection("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.CollectionIsReference("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.CollectionIsReference(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Collection), nameof(EntityEntry.Reference)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Collection("Garcia").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.CollectionIsReference("Garcia", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.CollectionIsReference(
+                        "Garcia", entity.GetType().Name,
                         nameof(EntityEntry.Collection), nameof(EntityEntry.Reference)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Collection<Cherry>("Garcia").Metadata.Name).Message);
             }
@@ -435,9 +620,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Member("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Member("Chimp").Metadata.Name).Message);
             }
         }
@@ -483,9 +670,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Navigation("Chimp").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                Assert.Equal(
+                    CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Navigation("Chimp").Metadata.Name).Message);
             }
         }
@@ -531,10 +720,14 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(CoreStrings.NavigationIsProperty("Monkey", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Monkey", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Navigation("Monkey").Metadata.Name).Message);
-                Assert.Equal(CoreStrings.NavigationIsProperty("Monkey", entity.GetType().Name,
+                Assert.Equal(
+                    CoreStrings.NavigationIsProperty(
+                        "Monkey", entity.GetType().Name,
                         nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)),
                     Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Navigation("Monkey").Metadata.Name).Message);
             }

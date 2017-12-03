@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore.Tools.Properties;
 
 namespace Microsoft.EntityFrameworkCore.Tools.Commands
 {
+    // ReSharper disable once ArrangeTypeModifiers
     partial class MigrationsAddCommand
     {
         protected override void Validate()
@@ -37,9 +38,9 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
         private static void ReportJson(IDictionary files)
         {
             Reporter.WriteData("{");
-            Reporter.WriteData("  \"migrationFile\": \"" + Json.Escape(files["MigrationFile"] as string) + "\",");
-            Reporter.WriteData("  \"metadataFile\": \"" + Json.Escape(files["MetadataFile"] as string) + "\",");
-            Reporter.WriteData("  \"snapshotFile\": \"" + Json.Escape(files["SnapshotFile"] as string) + "\"");
+            Reporter.WriteData("  \"migrationFile\": " + Json.Literal(files["MigrationFile"] as string) + ",");
+            Reporter.WriteData("  \"metadataFile\": " + Json.Literal(files["MetadataFile"] as string) + ",");
+            Reporter.WriteData("  \"snapshotFile\": " + Json.Literal(files["SnapshotFile"] as string));
             Reporter.WriteData("}");
         }
     }

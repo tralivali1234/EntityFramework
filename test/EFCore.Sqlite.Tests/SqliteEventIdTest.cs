@@ -3,15 +3,15 @@
 
 using System;
 using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests;
-using Xunit;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqliteEventIdTest
     {

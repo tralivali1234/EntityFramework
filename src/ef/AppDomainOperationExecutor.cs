@@ -1,7 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
+#if NET461
 
 using System;
 using System.Collections;
@@ -23,8 +23,9 @@ namespace Microsoft.EntityFrameworkCore.Tools
             string startupAssembly,
             string projectDir,
             string dataDirectory,
-            string rootNamespace)
-            : base(assembly, startupAssembly, projectDir, dataDirectory, rootNamespace)
+            string rootNamespace,
+            string language)
+            : base(assembly, startupAssembly, projectDir, dataDirectory, rootNamespace, language)
         {
             var info = new AppDomainSetup { ApplicationBase = AppBasePath };
 
@@ -63,7 +64,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
                         { "targetName", AssemblyFileName },
                         { "startupTargetName", StartupAssemblyFileName },
                         { "projectDir", ProjectDirectory },
-                        { "rootNamespace", RootNamespace }
+                        { "rootNamespace", RootNamespace },
+                        { "language", Language }
                     }
                 },
                 null,
@@ -94,7 +96,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
         }
     }
 }
-#elif NETCOREAPP1_0
+#elif NETCOREAPP2_0
 #else
 #error target frameworks need to be updated.
 #endif

@@ -5,16 +5,12 @@ using System;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class InternalPropertyBuilderTest
     {
@@ -148,7 +144,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
         [Fact]
         public void Can_only_override_existing_CustomValueGenerator_factory_explicitly()
         {
-            Func<IProperty, IEntityType, ValueGenerator> factory = (p, e) => new CustomValueGenerator1();
+            ValueGenerator factory(IProperty p, IEntityType e) => new CustomValueGenerator1();
 
             var metadata = CreateProperty();
             metadata.SetValueGeneratorFactory(factory);
@@ -325,74 +321,75 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             Assert.False(builder.IsRequired(false, ConfigurationSource.DataAnnotation));
 
-            Assert.Equal(CoreStrings.CannotBeNullable(nameof(Customer.Id), typeof(Customer).Name, "int"),
+            Assert.Equal(
+                CoreStrings.CannotBeNullable(nameof(Customer.Id), typeof(Customer).Name, "int"),
                 Assert.Throws<InvalidOperationException>(() => builder.IsRequired(false, ConfigurationSource.Explicit)).Message);
         }
 
         [Fact]
-        public void Can_only_override_lower_or_equal_source_ReadOnlyAfterSave()
+        public void Can_only_override_lower_or_equal_source_BeforeSaveBehavior()
         {
             var builder = CreateInternalPropertyBuilder();
             var metadata = builder.Metadata;
 
-            Assert.True(builder.ReadOnlyAfterSave(true, ConfigurationSource.DataAnnotation));
-            Assert.True(builder.ReadOnlyAfterSave(false, ConfigurationSource.DataAnnotation));
+            Assert.True(builder.BeforeSave(PropertySaveBehavior.Throw, ConfigurationSource.DataAnnotation));
+            Assert.True(builder.BeforeSave(PropertySaveBehavior.Ignore, ConfigurationSource.DataAnnotation));
 
-            Assert.False(metadata.IsReadOnlyAfterSave);
+            Assert.Equal(PropertySaveBehavior.Ignore, metadata.BeforeSaveBehavior);
 
-            Assert.False(builder.ReadOnlyAfterSave(true, ConfigurationSource.Convention));
-            Assert.False(metadata.IsReadOnlyAfterSave);
+            Assert.False(builder.BeforeSave(PropertySaveBehavior.Save, ConfigurationSource.Convention));
+            Assert.Equal(PropertySaveBehavior.Ignore, metadata.BeforeSaveBehavior);
         }
 
         [Fact]
-        public void Can_only_override_existing_ReadOnlyAfterSave_value_explicitly()
+        public void Can_only_override_existing_BeforeSaveBehavior_value_explicitly()
         {
             var metadata = CreateProperty();
-            Assert.Null(metadata.GetIsReadOnlyAfterSaveConfigurationSource());
-            metadata.IsReadOnlyAfterSave = false;
+            Assert.Null(metadata.GetBeforeSaveBehaviorConfigurationSource());
+            metadata.BeforeSaveBehavior = PropertySaveBehavior.Throw;
             var builder = metadata.Builder;
 
-            Assert.Equal(ConfigurationSource.Explicit, metadata.GetIsReadOnlyAfterSaveConfigurationSource());
-            Assert.True(builder.ReadOnlyAfterSave(false, ConfigurationSource.DataAnnotation));
-            Assert.False(builder.ReadOnlyAfterSave(true, ConfigurationSource.DataAnnotation));
+            Assert.Equal(ConfigurationSource.Explicit, metadata.GetBeforeSaveBehaviorConfigurationSource());
+            Assert.True(builder.BeforeSave(PropertySaveBehavior.Throw, ConfigurationSource.DataAnnotation));
+            Assert.False(builder.BeforeSave(PropertySaveBehavior.Ignore, ConfigurationSource.DataAnnotation));
 
-            Assert.False(metadata.IsReadOnlyAfterSave);
+            Assert.Equal(PropertySaveBehavior.Throw, metadata.BeforeSaveBehavior);
 
-            Assert.True(builder.ReadOnlyAfterSave(true, ConfigurationSource.Explicit));
-            Assert.True(metadata.IsReadOnlyAfterSave);
+            Assert.True(builder.BeforeSave(PropertySaveBehavior.Ignore, ConfigurationSource.Explicit));
+            Assert.Equal(PropertySaveBehavior.Ignore, metadata.BeforeSaveBehavior);
         }
 
         [Fact]
-        public void Can_only_override_lower_or_equal_source_ReadOnlyBeforeSave()
+        public void Can_only_override_lower_or_equal_source_AfterSaveBehavior()
         {
             var builder = CreateInternalPropertyBuilder();
             var metadata = builder.Metadata;
 
-            Assert.True(builder.ReadOnlyBeforeSave(true, ConfigurationSource.DataAnnotation));
-            Assert.True(builder.ReadOnlyBeforeSave(false, ConfigurationSource.DataAnnotation));
+            Assert.True(builder.AfterSave(PropertySaveBehavior.Throw, ConfigurationSource.DataAnnotation));
+            Assert.True(builder.AfterSave(PropertySaveBehavior.Ignore, ConfigurationSource.DataAnnotation));
 
-            Assert.False(metadata.IsReadOnlyBeforeSave);
+            Assert.Equal(PropertySaveBehavior.Ignore, metadata.AfterSaveBehavior);
 
-            Assert.False(builder.ReadOnlyBeforeSave(true, ConfigurationSource.Convention));
-            Assert.False(metadata.IsReadOnlyBeforeSave);
+            Assert.False(builder.AfterSave(PropertySaveBehavior.Save, ConfigurationSource.Convention));
+            Assert.Equal(PropertySaveBehavior.Ignore, metadata.AfterSaveBehavior);
         }
 
         [Fact]
-        public void Can_only_override_existing_ReadOnlyBeforeSave_value_explicitly()
+        public void Can_only_override_existing_AfterSaveBehavior_value_explicitly()
         {
             var metadata = CreateProperty();
-            Assert.Null(metadata.GetIsReadOnlyBeforeSaveConfigurationSource());
-            metadata.IsReadOnlyBeforeSave = true;
+            Assert.Null(metadata.GetAfterSaveBehaviorConfigurationSource());
+            metadata.AfterSaveBehavior = PropertySaveBehavior.Throw;
             var builder = metadata.Builder;
 
-            Assert.Equal(ConfigurationSource.Explicit, metadata.GetIsReadOnlyBeforeSaveConfigurationSource());
-            Assert.True(builder.ReadOnlyBeforeSave(true, ConfigurationSource.DataAnnotation));
-            Assert.False(builder.ReadOnlyBeforeSave(false, ConfigurationSource.DataAnnotation));
+            Assert.Equal(ConfigurationSource.Explicit, metadata.GetAfterSaveBehaviorConfigurationSource());
+            Assert.True(builder.AfterSave(PropertySaveBehavior.Throw, ConfigurationSource.DataAnnotation));
+            Assert.False(builder.AfterSave(PropertySaveBehavior.Ignore, ConfigurationSource.DataAnnotation));
 
-            Assert.True(metadata.IsReadOnlyBeforeSave);
+            Assert.Equal(PropertySaveBehavior.Throw, metadata.AfterSaveBehavior);
 
-            Assert.True(builder.ReadOnlyBeforeSave(false, ConfigurationSource.Explicit));
-            Assert.False(metadata.IsReadOnlyBeforeSave);
+            Assert.True(builder.AfterSave(PropertySaveBehavior.Ignore, ConfigurationSource.Explicit));
+            Assert.Equal(PropertySaveBehavior.Ignore, metadata.AfterSaveBehavior);
         }
 
         private InternalPropertyBuilder CreateInternalPropertyBuilder()

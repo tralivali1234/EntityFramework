@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
@@ -11,7 +10,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider
+namespace Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider
 {
     public class FakeRelationalOptionsExtension : RelationalOptionsExtension
     {
@@ -40,11 +39,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvi
                 .TryAdd<IDatabaseProvider, DatabaseProvider<FakeRelationalOptionsExtension>>()
                 .TryAdd<ISqlGenerationHelper, RelationalSqlGenerationHelper>()
                 .TryAdd<IRelationalTypeMapper, TestRelationalTypeMapper>()
-                .TryAdd<IRelationalAnnotationProvider, TestAnnotationProvider>()
                 .TryAdd<IMigrationsSqlGenerator, TestRelationalMigrationSqlGenerator>()
                 .TryAdd<IConventionSetBuilder, TestRelationalConventionSetBuilder>()
                 .TryAdd<IMemberTranslator, TestRelationalCompositeMemberTranslator>()
-                .TryAdd<IMethodCallTranslator, TestRelationalCompositeMethodCallTranslator>()
+                .TryAdd<ICompositeMethodCallTranslator, TestRelationalCompositeMethodCallTranslator>()
                 .TryAdd<IQuerySqlGeneratorFactory, TestQuerySqlGeneratorFactory>()
                 .TryAdd<IRelationalConnection, FakeRelationalConnection>()
                 .TryAdd<IHistoryRepository>(_ => null)

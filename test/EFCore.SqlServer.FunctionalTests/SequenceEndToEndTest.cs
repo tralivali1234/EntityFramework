@@ -4,18 +4,18 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     [SqlServerCondition(SqlServerCondition.SupportsSequences)]
     public class SequenceEndToEndTest : IDisposable
     {
-        [ConditionalFact] // TODO: See issue#7160
-        [PlatformSkipCondition(TestPlatform.Linux, SkipReason = "Connection timeout error on Linux.")]
+        [ConditionalFact]
         public void Can_use_sequence_end_to_end()
         {
             var serviceProvider = new ServiceCollection()
@@ -113,8 +113,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             }
         }
 
-        [ConditionalFact] // TODO: See issue#7160
-        [PlatformSkipCondition(TestPlatform.Linux, SkipReason = "Connection timeout error on Linux.")]
+        [ConditionalFact]
         public async Task Can_use_sequence_end_to_end_from_multiple_contexts_concurrently_async()
         {
             var serviceProvider = new ServiceCollection()
@@ -228,11 +227,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Pegasus>(b =>
-                    {
-                        b.HasKey(e => e.Identifier);
-                        b.Property(e => e.Identifier).ForSqlServerUseSequenceHiLo();
-                    });
+                modelBuilder.Entity<Pegasus>(
+                    b =>
+                        {
+                            b.HasKey(e => e.Identifier);
+                            b.Property(e => e.Identifier).ForSqlServerUseSequenceHiLo();
+                        });
             }
         }
 
@@ -334,18 +334,19 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Unicon>(b =>
-                    {
-                        b.HasKey(e => e.Identifier);
-                        if (_useSequence)
+                modelBuilder.Entity<Unicon>(
+                    b =>
                         {
-                            b.Property(e => e.Identifier).ForSqlServerUseSequenceHiLo();
-                        }
-                        else
-                        {
-                            b.Property(e => e.Identifier).UseSqlServerIdentityColumn();
-                        }
-                    });
+                            b.HasKey(e => e.Identifier);
+                            if (_useSequence)
+                            {
+                                b.Property(e => e.Identifier).ForSqlServerUseSequenceHiLo();
+                            }
+                            else
+                            {
+                                b.Property(e => e.Identifier).UseSqlServerIdentityColumn();
+                            }
+                        });
             }
         }
 
@@ -357,7 +358,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         public SequenceEndToEndTest()
         {
-            TestStore = SqlServerTestStore.Create("SequenceEndToEndTest");
+            TestStore = SqlServerTestStore.CreateInitialized("SequenceEndToEndTest");
         }
 
         protected SqlServerTestStore TestStore { get; }

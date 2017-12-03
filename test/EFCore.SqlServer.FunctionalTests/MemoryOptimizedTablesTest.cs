@@ -3,40 +3,61 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable CollectionNeverUpdated.Local
+// ReSharper disable UnusedMember.Local
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     [SqlServerCondition(SqlServerCondition.SupportsMemoryOptimized)]
-    public class MemoryOptimizedTablesTest
+    public class MemoryOptimizedTablesTest : IClassFixture<MemoryOptimizedTablesTest.MemoryOptimizedTablesFixture>
     {
+        protected MemoryOptimizedTablesFixture Fixture { get; }
+
+        public MemoryOptimizedTablesTest(MemoryOptimizedTablesFixture fixture) => Fixture = fixture;
+
         [ConditionalFact]
         public void Can_create_memoryOptimized_table()
         {
-            using (var testStore = SqlServerTestStore.Create("MemoryOptimizedTablesTest", deleteDatabase: true))
+            using (CreateTestStore())
             {
-                var options = new DbContextOptionsBuilder()
-                    .UseSqlServer(testStore.Connection, b => b.ApplyConfiguration())
-                    .Options;
                 var bigUn = new BigUn();
                 var fastUns = new[] { new FastUn { Name = "First 'un", BigUn = bigUn }, new FastUn { Name = "Second 'un", BigUn = bigUn } };
-                using (var context = new MemoryOptimizedContext(options))
+                using (var context = CreateContext())
                 {
                     context.Database.EnsureCreated();
 
+                    // ReSharper disable once CoVariantArrayConversion
                     context.AddRange(fastUns);
 
                     context.SaveChanges();
                 }
 
-                using (var context = new MemoryOptimizedContext(options))
+                using (var context = CreateContext())
                 {
                     Assert.Equal(fastUns.Select(f => f.Name), context.FastUns.OrderBy(f => f.Name).Select(f => f.Name).ToList());
                 }
             }
+        }
+
+        protected TestStore TestStore { get; set; }
+
+        protected TestStore CreateTestStore()
+        {
+            TestStore = SqlServerTestStore.GetOrCreate(nameof(MemoryOptimizedTablesTest));
+            TestStore.Initialize(null, CreateContext, c => { });
+            return TestStore;
+        }
+
+        private MemoryOptimizedContext CreateContext() => new MemoryOptimizedContext(Fixture.CreateOptions(TestStore));
+
+        public class MemoryOptimizedTablesFixture : ServiceProviderFixtureBase
+        {
+            protected override ITestStoreFactory TestStoreFactory => SqlServerTestStoreFactory.Instance;
         }
 
         private class MemoryOptimizedContext : DbContext
@@ -51,12 +72,13 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
                 modelBuilder
-                    .Entity<FastUn>(eb =>
-                        {
-                            eb.ForSqlServerIsMemoryOptimized();
-                            eb.HasIndex(e => e.Name).IsUnique();
-                            eb.HasOne(e => e.BigUn).WithMany(e => e.FastUns).IsRequired(true).OnDelete(DeleteBehavior.Restrict);
-                        });
+                    .Entity<FastUn>(
+                        eb =>
+                            {
+                                eb.ForSqlServerIsMemoryOptimized();
+                                eb.HasIndex(e => e.Name).IsUnique();
+                                eb.HasOne(e => e.BigUn).WithMany(e => e.FastUns).IsRequired().OnDelete(DeleteBehavior.Restrict);
+                            });
 
                 modelBuilder.Entity<BigUn>().ForSqlServerIsMemoryOptimized();
             }

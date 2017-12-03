@@ -3,9 +3,7 @@
 
 using System;
 using System.Globalization;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -13,167 +11,146 @@ using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata
 {
+    /// <summary>
+    ///     Properties for relational-specific annotations accessed through
+    ///     <see cref="RelationalMetadataExtensions.Relational(IMutableProperty)" />.
+    /// </summary>
     public class RelationalPropertyAnnotations : IRelationalPropertyAnnotations
     {
-        public RelationalPropertyAnnotations([NotNull] IProperty property,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-            : this(new RelationalAnnotations(property), providerFullAnnotationNames)
+        /// <summary>
+        ///     Constructs an instance for annotations of the given <see cref="IProperty" />.
+        /// </summary>
+        /// <param name="property"> The <see cref="IProperty" /> to use. </param>
+        public RelationalPropertyAnnotations([NotNull] IProperty property)
+            : this(new RelationalAnnotations(property))
         {
         }
 
-        protected RelationalPropertyAnnotations([NotNull] RelationalAnnotations annotations,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-        {
-            Annotations = annotations;
-            ProviderFullAnnotationNames = providerFullAnnotationNames;
-        }
+        /// <summary>
+        ///     Constructs an instance for annotations of the <see cref="IProperty" />
+        ///     represented by the given annotation helper.
+        /// </summary>
+        /// <param name="annotations">
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IProperty" /> to annotate.
+        /// </param>
+        protected RelationalPropertyAnnotations([NotNull] RelationalAnnotations annotations)
+            => Annotations = annotations;
 
-        public virtual RelationalFullAnnotationNames ProviderFullAnnotationNames { get; }
-
+        /// <summary>
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IProperty" /> to annotate.
+        /// </summary>
         protected virtual RelationalAnnotations Annotations { get; }
+
+        /// <summary>
+        ///     The <see cref="IProperty" /> to annotate.
+        /// </summary>
         protected virtual IProperty Property => (IProperty)Annotations.Metadata;
+
+        /// <summary>
+        ///     Indicates whether or not an exception should be thrown if conflicting configuration is set.
+        ///     This is typically overridden when building using a fluent API to implement last call wins semantics.
+        /// </summary>
         protected virtual bool ShouldThrowOnConflict => true;
+
+        /// <summary>
+        ///     Indicates whether or not an exception should be thrown if invalid configuration is set.
+        /// </summary>
         protected virtual bool ShouldThrowOnInvalidConfiguration => true;
 
+        /// <summary>
+        ///     Gets a <see cref="RelationalEntityTypeAnnotations" /> instance for the given <see cref="IEntityType" />
+        ///     maintaining the <see cref="RelationalAnnotations" /> semantics being used by this instance to
+        ///     control setting annotations by convention.
+        /// </summary>
+        /// <param name="entityType"> The <see cref="IEntityType" /> to annotate. </param>
+        /// <returns> A new <see cref="RelationalEntityTypeAnnotations" /> instance. </returns>
         protected virtual RelationalEntityTypeAnnotations GetAnnotations([NotNull] IEntityType entityType)
-            => new RelationalEntityTypeAnnotations(entityType, ProviderFullAnnotationNames);
+            => new RelationalEntityTypeAnnotations(entityType);
 
+        /// <summary>
+        ///     Gets a <see cref="RelationalPropertyAnnotations" /> instance for the given <see cref="IProperty" />
+        ///     maintaining the <see cref="RelationalAnnotations" /> semantics being used by this instance to
+        ///     control setting annotations by convention.
+        /// </summary>
+        /// <param name="property"> The <see cref="IProperty" /> to annotate. </param>
+        /// <returns> A new <see cref="RelationalPropertyAnnotations" /> instance. </returns>
         protected virtual RelationalPropertyAnnotations GetAnnotations([NotNull] IProperty property)
-            => new RelationalPropertyAnnotations(property, ProviderFullAnnotationNames);
+            => new RelationalPropertyAnnotations(property);
 
+        /// <summary>
+        ///     The name of the column to which the property is mapped.
+        /// </summary>
         public virtual string ColumnName
         {
-            get
-            {
-                return (string)Annotations.GetAnnotation(
-                           RelationalFullAnnotationNames.Instance.ColumnName,
-                           ProviderFullAnnotationNames?.ColumnName)
-                       ?? GetDefaultColumnName();
-            }
-            [param: CanBeNull] set { SetColumnName(value); }
+            get => (string)Annotations.Metadata[RelationalAnnotationNames.ColumnName]
+                   ?? ConstraintNamer.GetDefaultName(Property);
+
+            [param: CanBeNull] set => SetColumnName(value);
         }
 
-        private string GetDefaultColumnName()
-        {
-            var pk = Property.GetContainingPrimaryKey();
-            if (pk != null)
-            {
-                var entityType = Property.DeclaringEntityType;
-                var ownership = entityType.GetForeignKeys().SingleOrDefault(fk => fk.IsOwnership);
-                if (ownership != null)
-                {
-                    var ownerType = ownership.PrincipalEntityType;
-                    var entityTypeAnnotations = GetAnnotations(entityType);
-                    var ownerTypeAnnotations = GetAnnotations(ownerType);
-                    if (entityTypeAnnotations.TableName == ownerTypeAnnotations.TableName
-                        && entityTypeAnnotations.Schema == ownerTypeAnnotations.Schema)
-                    {
-                        var index = -1;
-                        for (var i = 0; i < pk.Properties.Count; i++)
-                        {
-                            if (pk.Properties[i] == Property)
-                            {
-                                index = i;
-                                break;
-                            }
-                        }
-
-                        return GetAnnotations(ownerType.FindPrimaryKey().Properties[index]).ColumnName;
-                    }
-                }
-            }
-            else
-            {
-                var entityType = Property.DeclaringEntityType;
-                StringBuilder builder = null;
-                do
-                {
-                    var ownership = entityType.GetForeignKeys().SingleOrDefault(fk => fk.IsOwnership);
-                    if (ownership == null)
-                    {
-                        entityType = null;
-                    }
-                    else
-                    {
-                        var ownerType = ownership.PrincipalEntityType;
-                        var entityTypeAnnotations = GetAnnotations(entityType);
-                        var ownerTypeAnnotations = GetAnnotations(ownerType);
-                        if (entityTypeAnnotations.TableName == ownerTypeAnnotations.TableName
-                            && entityTypeAnnotations.Schema == ownerTypeAnnotations.Schema)
-                        {
-                            if (builder == null)
-                            {
-                                builder = new StringBuilder();
-                            }
-                            builder.Insert(0, "_");
-                            builder.Insert(0, ownership.PrincipalToDependent.Name);
-                            entityType = ownerType;
-                        }
-                        else
-                        {
-                            entityType = null;
-                        }
-                    }
-                }
-                while (entityType != null);
-
-                if (builder != null)
-                {
-                    builder.Append(Property.Name);
-                    return builder.ToString();
-                }
-            }
-
-            return Property.Name;
-        }
-
+        /// <summary>
+        ///     Attempts to set the <see cref="ColumnName" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetColumnName([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.ColumnName,
-                ProviderFullAnnotationNames?.ColumnName,
+                RelationalAnnotationNames.ColumnName,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     The database type of the column to which the property is mapped.
+        /// </summary>
         public virtual string ColumnType
         {
-            get
-            {
-                return (string)Annotations.GetAnnotation(
-                    RelationalFullAnnotationNames.Instance.ColumnType,
-                    ProviderFullAnnotationNames?.ColumnType);
-            }
-            [param: CanBeNull] set { SetColumnType(value); }
+            get => (string)Annotations.Metadata[RelationalAnnotationNames.ColumnType]
+                   ?? Property.FindRelationalMapping()?.StoreType;
+
+            [param: CanBeNull] set => SetColumnType(value);
         }
 
+        /// <summary>
+        ///     Attempts to set the <see cref="ColumnType" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetColumnType([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.ColumnType,
-                ProviderFullAnnotationNames?.ColumnType,
+                RelationalAnnotationNames.ColumnType,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     The default constraint SQL expression that should be used when creating a column for this property.
+        /// </summary>
         public virtual string DefaultValueSql
         {
-            get { return GetDefaultValueSql(true); }
-            [param: CanBeNull] set { SetDefaultValueSql(value); }
+            get => GetDefaultValueSql(true);
+            [param: CanBeNull] set => SetDefaultValueSql(value);
         }
 
+        /// <summary>
+        ///     Gets the default constraint SQL expression that should be used when creating a column for this property.
+        /// </summary>
+        /// <param name="fallback">
+        ///     If <c>true</c>, then a non-null value will only be returned if neither of <see cref="DefaultValue" />
+        ///     or <see cref="ComputedColumnSql" /> are set for this property.
+        /// </param>
+        /// <returns> The default constraint SQL expression that should be used when creating a column for this property. </returns>
         protected virtual string GetDefaultValueSql(bool fallback)
-        {
-            if (ProviderFullAnnotationNames != null)
-            {
-                if (fallback
-                    && (GetDefaultValue(false) != null
-                        || GetComputedColumnSql(false) != null))
-                {
-                    return null;
-                }
+            => fallback
+               && (GetDefaultValue(false) != null
+                   || GetComputedColumnSql(false) != null)
+                ? null
+                : (string)Annotations.Metadata[RelationalAnnotationNames.DefaultValueSql];
 
-                return (string)Annotations.GetAnnotation(
-                    fallback ? RelationalFullAnnotationNames.Instance.DefaultValueSql : null,
-                    ProviderFullAnnotationNames?.DefaultValueSql);
-            }
-            return (string)Annotations.GetAnnotation(RelationalFullAnnotationNames.Instance.DefaultValueSql, null);
-        }
-
+        /// <summary>
+        ///     Attempts to set the <see cref="DefaultValueSql" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetDefaultValueSql([CanBeNull] string value)
         {
             if (!CanSetDefaultValueSql(value))
@@ -189,11 +166,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             return Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.DefaultValueSql,
-                ProviderFullAnnotationNames?.DefaultValueSql,
+                RelationalAnnotationNames.DefaultValueSql,
                 Check.NullButNotEmpty(value, nameof(value)));
         }
 
+        /// <summary>
+        ///     <para>
+        ///         Determines whether or not <see cref="DefaultValueSql" /> can be set without conflict.
+        ///     </para>
+        ///     <para>
+        ///         This method may throw if <see cref="ShouldThrowOnConflict" /> returns <c>true</c>.
+        ///     </para>
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the value can be set; <c>false</c> otherwise. </returns>
         protected virtual bool CanSetDefaultValueSql([CanBeNull] string value)
         {
             if (GetDefaultValueSql(false) == value)
@@ -202,8 +188,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             if (!Annotations.CanSetAnnotation(
-                RelationalFullAnnotationNames.Instance.DefaultValueSql,
-                ProviderFullAnnotationNames?.DefaultValueSql,
+                RelationalAnnotationNames.DefaultValueSql,
                 Check.NullButNotEmpty(value, nameof(value))))
             {
                 return false;
@@ -232,30 +217,36 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return true;
         }
 
+        /// <summary>
+        ///     The computed constraint SQL expression that should be used when creating a column for this property.
+        /// </summary>
         public virtual string ComputedColumnSql
         {
-            get { return GetComputedColumnSql(true); }
-            [param: CanBeNull] set { SetComputedColumnSql(value); }
+            get => GetComputedColumnSql(true);
+            [param: CanBeNull] set => SetComputedColumnSql(value);
         }
 
+        /// <summary>
+        ///     Gets the computed constraint SQL expression that should be used when creating a column for this property.
+        /// </summary>
+        /// <param name="fallback">
+        ///     If <c>true</c>, then a non-null value will only be returned if neither of <see cref="DefaultValue" />
+        ///     or <see cref="DefaultValueSql" /> are set for this property.
+        /// </param>
+        /// <returns> The computed constraint SQL expression that should be used when creating a column for this property. </returns>
         protected virtual string GetComputedColumnSql(bool fallback)
-        {
-            if (ProviderFullAnnotationNames != null)
-            {
-                if (fallback
-                    && (GetDefaultValue(false) != null
-                        || GetDefaultValueSql(false) != null))
-                {
-                    return null;
-                }
+            => fallback
+               && (GetDefaultValue(false) != null
+                   || GetDefaultValueSql(false) != null)
+                ? null
+                : (string)Annotations.Metadata[RelationalAnnotationNames.ComputedColumnSql];
 
-                return (string)Annotations.GetAnnotation(
-                    fallback ? RelationalFullAnnotationNames.Instance.ComputedColumnSql : null,
-                    ProviderFullAnnotationNames?.ComputedColumnSql);
-            }
-            return (string)Annotations.GetAnnotation(RelationalFullAnnotationNames.Instance.ComputedColumnSql, null);
-        }
-
+        /// <summary>
+        ///     Attempts to set the <see cref="ComputedColumnSql" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetComputedColumnSql([CanBeNull] string value)
         {
             if (!CanSetComputedColumnSql(value))
@@ -271,11 +262,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             return Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.ComputedColumnSql,
-                ProviderFullAnnotationNames?.ComputedColumnSql,
+                RelationalAnnotationNames.ComputedColumnSql,
                 Check.NullButNotEmpty(value, nameof(value)));
         }
 
+        /// <summary>
+        ///     <para>
+        ///         Determines whether or not <see cref="ComputedColumnSql" /> can be set without conflict.
+        ///     </para>
+        ///     <para>
+        ///         This method may throw if <see cref="ShouldThrowOnConflict" /> returns <c>true</c>.
+        ///     </para>
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the value can be set; <c>false</c> otherwise. </returns>
         protected virtual bool CanSetComputedColumnSql([CanBeNull] string value)
         {
             if (GetComputedColumnSql(false) == value)
@@ -284,8 +284,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             if (!Annotations.CanSetAnnotation(
-                RelationalFullAnnotationNames.Instance.ComputedColumnSql,
-                ProviderFullAnnotationNames?.ComputedColumnSql,
+                RelationalAnnotationNames.ComputedColumnSql,
                 Check.NullButNotEmpty(value, nameof(value))))
             {
                 return false;
@@ -314,33 +313,40 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return true;
         }
 
+        /// <summary>
+        ///     The default value to use in the definition of the column when creating a column for this property.
+        /// </summary>
         public virtual object DefaultValue
         {
-            get { return GetDefaultValue(true); }
-            [param: CanBeNull] set { SetDefaultValue(value); }
+            get => GetDefaultValue(true);
+            [param: CanBeNull] set => SetDefaultValue(value);
         }
 
+        /// <summary>
+        ///     Gets the default value to use in the definition of the column when creating a column for this property.
+        /// </summary>
+        /// <param name="fallback">
+        ///     If <c>true</c>, then a non-null value will only be returned if neither of <see cref="ComputedColumnSql" />
+        ///     or <see cref="DefaultValueSql" /> are set for this property.
+        /// </param>
+        /// <returns> The default value to use in the definition of the column when creating a column for this property. </returns>
         protected virtual object GetDefaultValue(bool fallback)
-        {
-            if (ProviderFullAnnotationNames != null)
-            {
-                if (fallback
-                    && (GetDefaultValueSql(false) != null
-                        || GetComputedColumnSql(false) != null))
-                {
-                    return null;
-                }
+            => fallback
+               && (GetDefaultValueSql(false) != null
+                   || GetComputedColumnSql(false) != null)
+                ? null
+                : Annotations.Metadata[RelationalAnnotationNames.DefaultValue];
 
-                return Annotations.GetAnnotation(
-                    fallback ? RelationalFullAnnotationNames.Instance.DefaultValue : null,
-                    ProviderFullAnnotationNames?.DefaultValue);
-            }
-            return Annotations.GetAnnotation(RelationalFullAnnotationNames.Instance.DefaultValue, null);
-        }
-
+        /// <summary>
+        ///     Attempts to set the <see cref="DefaultValue" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetDefaultValue([CanBeNull] object value)
         {
-            if (value != null)
+            if (value != null
+                && value != DBNull.Value)
             {
                 var valueType = value.GetType();
                 if (Property.ClrType.UnwrapNullableType() != valueType)
@@ -376,11 +382,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             return Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.DefaultValue,
-                ProviderFullAnnotationNames?.DefaultValue,
+                RelationalAnnotationNames.DefaultValue,
                 value);
         }
 
+        /// <summary>
+        ///     <para>
+        ///         Determines whether or not <see cref="DefaultValue" /> can be set without conflict.
+        ///     </para>
+        ///     <para>
+        ///         This method may throw if <see cref="ShouldThrowOnConflict" /> returns <c>true</c>.
+        ///     </para>
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the value can be set; <c>false</c> otherwise. </returns>
         protected virtual bool CanSetDefaultValue([CanBeNull] object value)
         {
             if (GetDefaultValue(false) == value)
@@ -389,8 +404,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             if (!Annotations.CanSetAnnotation(
-                RelationalFullAnnotationNames.Instance.DefaultValue,
-                ProviderFullAnnotationNames?.DefaultValue,
+                RelationalAnnotationNames.DefaultValue,
                 value))
             {
                 return false;
@@ -419,6 +433,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return true;
         }
 
+        /// <summary>
+        ///     Clears any values set for <see cref="DefaultValue" />, <see cref="DefaultValueSql" />, and
+        ///     <see cref="ComputedColumnSql" />.
+        /// </summary>
         protected virtual void ClearAllServerGeneratedValues()
         {
             SetDefaultValue(null);

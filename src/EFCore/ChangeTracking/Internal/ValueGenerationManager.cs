@@ -1,7 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -39,12 +38,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void Propagate(InternalEntityEntry entry)
+        public virtual InternalEntityEntry Propagate(InternalEntityEntry entry)
         {
+            InternalEntityEntry chosenPrincipal = null;
             foreach (var property in FindPropagatingProperties(entry))
             {
-                _keyPropagator.PropagateValue(entry, property);
+                var principalEntry = _keyPropagator.PropagateValue(entry, property);
+                if (chosenPrincipal == null)
+                {
+                    chosenPrincipal = principalEntry;
+                }
             }
+            return chosenPrincipal;
         }
 
         /// <summary>
@@ -72,7 +77,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public virtual async Task GenerateAsync(
             InternalEntityEntry entry,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             var entityEntry = new EntityEntry(entry);
 
@@ -87,20 +92,21 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             }
         }
 
-        private IEnumerable<IProperty>  FindPropagatingProperties(InternalEntityEntry entry)
+        private static IEnumerable<IProperty> FindPropagatingProperties(InternalEntityEntry entry)
             => entry.EntityType.GetProperties().Where(
                 property => property.IsForeignKey()
                             && property.ClrType.IsDefaultValue(entry[property]));
 
-        private IEnumerable<IProperty> FindGeneratingProperties(InternalEntityEntry entry)
+        private static IEnumerable<IProperty> FindGeneratingProperties(InternalEntityEntry entry)
             => entry.EntityType.GetProperties().Where(
                 property => property.RequiresValueGenerator()
                             && property.ClrType.IsDefaultValue(entry[property]));
 
         private ValueGenerator GetValueGenerator(InternalEntityEntry entry, IProperty property)
-            => _valueGeneratorSelector.Select(property, property.IsKey()
-                ? property.DeclaringEntityType
-                : entry.EntityType);
+            => _valueGeneratorSelector.Select(
+                property, property.IsKey()
+                    ? property.DeclaringEntityType
+                    : entry.EntityType);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

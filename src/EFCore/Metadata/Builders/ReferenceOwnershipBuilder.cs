@@ -26,7 +26,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             [NotNull] EntityType declaringEntityType,
             [NotNull] EntityType relatedEntityType,
             [NotNull] InternalRelationshipBuilder builder)
-            : base(builder,
+            : base(
+                builder,
                 new ReferenceReferenceBuilderBase(declaringEntityType, relatedEntityType, builder))
         {
         }
@@ -172,10 +173,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyName"> The name of the property to be configured. </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder<TProperty> Property<TProperty>([NotNull] string propertyName)
-            => new PropertyBuilder<TProperty>(RelatedEntityType.Builder.Property(
-                Check.NotEmpty(propertyName, nameof(propertyName)),
-                typeof(TProperty),
-                ConfigurationSource.Explicit));
+            => new PropertyBuilder<TProperty>(
+                RelatedEntityType.Builder.Property(
+                    Check.NotEmpty(propertyName, nameof(propertyName)),
+                    typeof(TProperty),
+                    ConfigurationSource.Explicit));
 
         /// <summary>
         ///     <para>
@@ -194,10 +196,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyName"> The name of the property to be configured. </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder Property([NotNull] Type propertyType, [NotNull] string propertyName)
-            => new PropertyBuilder(RelatedEntityType.Builder.Property(
-                Check.NotEmpty(propertyName, nameof(propertyName)),
-                Check.NotNull(propertyType, nameof(propertyType)),
-                ConfigurationSource.Explicit));
+            => new PropertyBuilder(
+                RelatedEntityType.Builder.Property(
+                    Check.NotEmpty(propertyName, nameof(propertyName)),
+                    Check.NotNull(propertyType, nameof(propertyType)),
+                    ConfigurationSource.Explicit));
 
         /// <summary>
         ///     <para>
@@ -213,9 +216,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyName"> The name of the property to be configured. </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder Property([NotNull] string propertyName)
-            => new PropertyBuilder(RelatedEntityType.Builder.Property(
-                Check.NotEmpty(propertyName, nameof(propertyName)),
-                ConfigurationSource.Explicit));
+            => new PropertyBuilder(
+                RelatedEntityType.Builder.Property(
+                    Check.NotEmpty(propertyName, nameof(propertyName)),
+                    ConfigurationSource.Explicit));
 
         /// <summary>
         ///     Excludes the given property from the entity type. This method is typically used to remove properties
@@ -238,8 +242,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyNames"> The names of the properties that make up the index. </param>
         /// <returns> An object that can be used to configure the index. </returns>
         public virtual IndexBuilder HasIndex([NotNull] params string[] propertyNames)
-            => new IndexBuilder(RelatedEntityType.Builder.HasIndex(
-                Check.NotEmpty(propertyNames, nameof(propertyNames)), ConfigurationSource.Explicit));
+            => new IndexBuilder(
+                RelatedEntityType.Builder.HasIndex(
+                    Check.NotEmpty(propertyNames, nameof(propertyNames)), ConfigurationSource.Explicit));
 
         /// <summary>
         ///     <para>
@@ -416,7 +421,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 RelatedEntityType,
                 relatedEntityType,
                 navigationName,
-                RelatedEntityType.Builder.Navigation(relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
+                RelatedEntityType.Builder.Navigation(
+                    relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
                     setTargetAsPrincipal: RelatedEntityType == relatedEntityType));
         }
 
@@ -454,7 +460,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 RelatedEntityType,
                 relatedEntityType,
                 navigationName,
-                RelatedEntityType.Builder.Navigation(relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
+                RelatedEntityType.Builder.Navigation(
+                    relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
                     setTargetAsPrincipal: RelatedEntityType == relatedEntityType));
         }
 
@@ -570,11 +577,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties of this entity type as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for all properties of this entity type any access mode that was
+        ///         Calling this method overrides for all properties of this entity type any access mode that was
         ///         set on the model.
         ///     </para>
         /// </summary>
@@ -583,6 +590,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         public virtual ReferenceOwnershipBuilder UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
         {
             RelatedEntityType.Builder.UsePropertyAccessMode(propertyAccessMode, ConfigurationSource.Explicit);
+
+            return this;
+        }
+
+        /// <summary>
+        ///     Configures this entity to have seed data. It is used to generate data motion migrations.
+        /// </summary>
+        /// <param name="data">
+        ///     An array of seed data of the same type as the entity we're building.
+        /// </param>
+        public virtual ReferenceOwnershipBuilder SeedData([NotNull] params object[] data)
+        {
+            Check.NotNull(data, nameof(data));
+
+            OwnedEntityType.AddSeedData(data);
 
             return this;
         }

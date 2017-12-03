@@ -74,7 +74,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="name">
         ///     The name to be used for the parameter when the command is executed against the database.
         /// </param>
-        /// <param name="property"></param>
+        /// <param name="property"> The property that the type for this parameter will come from. </param>
         void AddParameter(
             [NotNull] string invariantName,
             [NotNull] string name,
@@ -114,5 +114,20 @@ namespace Microsoft.EntityFrameworkCore.Storage
             [NotNull] string invariantName,
             [NotNull] string name,
             [NotNull] IProperty property);
+
+        /// <summary>
+        ///     Adds a parameter.
+        /// </summary>
+        /// <param name="invariantName">
+        ///     The key that identifies this parameter. Note that <see cref="IRelationalParameter" /> just represents a
+        ///     placeholder for a parameter and not the actual value. This is because the same command can be
+        ///     reused multiple times with different parameter values.
+        /// </param>
+        /// <param name="dbParameter">
+        ///     The DbParameter being added.
+        /// </param>
+        void AddRawParameter(
+            [NotNull] string invariantName,
+            [NotNull] DbParameter dbParameter);
     }
 }

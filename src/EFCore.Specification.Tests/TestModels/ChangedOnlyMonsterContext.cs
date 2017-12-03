@@ -8,7 +8,10 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
+// ReSharper disable ArrangeAccessorOwnerBody
+// ReSharper disable MemberHidesStaticFromOuterClass
+// ReSharper disable ConvertToAutoProperty
+namespace Microsoft.EntityFrameworkCore.TestModels
 {
     public class ChangedOnlyMonsterContext : MonsterContext<
         ChangedOnlyMonsterContext.Customer, ChangedOnlyMonsterContext.Barcode, ChangedOnlyMonsterContext.IncorrectScan,
@@ -26,8 +29,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
         ChangedOnlyMonsterContext.BackOrderLine, ChangedOnlyMonsterContext.DiscontinuedProduct,
         ChangedOnlyMonsterContext.ProductPageView>
     {
-        public ChangedOnlyMonsterContext(DbContextOptions options, Action<ModelBuilder> onModelCreating)
-            : base(options, onModelCreating)
+        public ChangedOnlyMonsterContext(DbContextOptions options)
+            : base(options)
         {
         }
 
@@ -57,6 +60,11 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
             private ISupplier _supplier;
             private int _supplierId;
             private DateTime _eta;
+
+            public BackOrderLine()
+            {
+                ETA = DateTime.Now;
+            }
 
             public DateTime ETA
             {
@@ -1422,6 +1430,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
                 set { SetWithNotify(value, ref _username); }
             }
         }
+
         public class AuditInfo : NotificationEntity, IAuditInfo
         {
             private DateTime _modifiedDate;
@@ -1431,6 +1440,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
             public AuditInfo()
             {
                 Concurrency = new ConcurrencyInfo();
+                ModifiedDate = DateTime.Now;
             }
 
             public DateTime ModifiedDate

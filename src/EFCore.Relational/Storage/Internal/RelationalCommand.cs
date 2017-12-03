@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -26,18 +25,15 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public RelationalCommand(
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Database.Sql> sqlLogger,
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Database.DataReader> readerLogger,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Database.Command> logger,
             [NotNull] string commandText,
             [NotNull] IReadOnlyList<IRelationalParameter> parameters)
         {
-            Check.NotNull(sqlLogger, nameof(sqlLogger));
-            Check.NotNull(readerLogger, nameof(readerLogger));
+            Check.NotNull(logger, nameof(logger));
             Check.NotNull(commandText, nameof(commandText));
             Check.NotNull(parameters, nameof(parameters));
 
-            SqlLogger = sqlLogger;
-            ReaderLogger = readerLogger;
+            Logger = logger;
             CommandText = commandText;
             Parameters = parameters;
         }
@@ -46,13 +42,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IDiagnosticsLogger<LoggerCategory.Database.Sql> SqlLogger { get; }
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        protected virtual IDiagnosticsLogger<LoggerCategory.Database.DataReader> ReaderLogger { get; }
+        protected virtual IDiagnosticsLogger<DbLoggerCategory.Database.Command> Logger { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -78,10 +68,6 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 DbCommandMethod.ExecuteNonQuery,
                 parameterValues);
 
-        int IRelationalCommand.ExecuteNonQuery(
-            IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-            => ExecuteNonQuery(connection, parameterValues);
-
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -89,16 +75,12 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public virtual Task<int> ExecuteNonQueryAsync(
             IRelationalConnection connection,
             IReadOnlyDictionary<string, object> parameterValues,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => ExecuteAsync(
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteNonQuery,
                 parameterValues,
                 cancellationToken: cancellationToken).Cast<object, int>();
-
-        Task<int> IRelationalCommand.ExecuteNonQueryAsync(
-            IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
-            => ExecuteNonQueryAsync(connection, parameterValues, cancellationToken);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -112,9 +94,6 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 DbCommandMethod.ExecuteScalar,
                 parameterValues);
 
-        object IRelationalCommand.ExecuteScalar(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-            => ExecuteScalar(connection, parameterValues);
-
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -122,16 +101,12 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public virtual Task<object> ExecuteScalarAsync(
             IRelationalConnection connection,
             IReadOnlyDictionary<string, object> parameterValues,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => ExecuteAsync(
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteScalar,
                 parameterValues,
                 cancellationToken: cancellationToken);
-
-        Task<object> IRelationalCommand.ExecuteScalarAsync(
-            IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
-            => ExecuteScalarAsync(connection, parameterValues, cancellationToken);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -143,12 +118,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             => (RelationalDataReader)Execute(
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteReader,
-                parameterValues,
-                closeConnection: false);
-
-        RelationalDataReader IRelationalCommand.ExecuteReader(
-            IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-            => ExecuteReader(connection, parameterValues);
+                parameterValues);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -157,17 +127,12 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public virtual Task<RelationalDataReader> ExecuteReaderAsync(
             IRelationalConnection connection,
             IReadOnlyDictionary<string, object> parameterValues,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => ExecuteAsync(
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteReader,
                 parameterValues,
-                closeConnection: false,
                 cancellationToken: cancellationToken).Cast<object, RelationalDataReader>();
-
-        Task<RelationalDataReader> IRelationalCommand.ExecuteReaderAsync(
-            IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
-            => ExecuteReaderAsync(connection, parameterValues, cancellationToken);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -176,8 +141,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         protected virtual object Execute(
             [NotNull] IRelationalConnection connection,
             DbCommandMethod executeMethod,
-            [CanBeNull] IReadOnlyDictionary<string, object> parameterValues,
-            bool closeConnection = true)
+            [CanBeNull] IReadOnlyDictionary<string, object> parameterValues)
         {
             Check.NotNull(connection, nameof(connection));
 
@@ -185,58 +149,47 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
             connection.Open();
 
-            var startTimestamp = Stopwatch.GetTimestamp();
             var commandId = Guid.NewGuid();
 
-            SqlLogger.CommandExecuting(
+            var startTime = DateTimeOffset.UtcNow;
+            var stopwatch = Stopwatch.StartNew();
+
+            Logger.CommandExecuting(
                 dbCommand,
                 executeMethod,
                 commandId,
                 connection.ConnectionId,
-                async: false, 
-                startTimestamp: startTimestamp);
+                async: false,
+                startTime: startTime);
 
             object result;
+            var readerOpen = false;
             try
             {
                 switch (executeMethod)
                 {
                     case DbCommandMethod.ExecuteNonQuery:
                     {
-                        using (dbCommand)
-                        {
-                            result = dbCommand.ExecuteNonQuery();
-                        }
+                        result = dbCommand.ExecuteNonQuery();
 
                         break;
                     }
                     case DbCommandMethod.ExecuteScalar:
                     {
-                        using (dbCommand)
-                        {
-                            result = dbCommand.ExecuteScalar();
-                        }
+                        result = dbCommand.ExecuteScalar();
 
                         break;
                     }
                     case DbCommandMethod.ExecuteReader:
                     {
-                        try
-                        {
-                            result
-                                = new RelationalDataReader(
-                                    connection,
-                                    dbCommand,
-                                    dbCommand.ExecuteReader(),
-                                    commandId,
-                                    ReaderLogger);
-                        }
-                        catch
-                        {
-                            dbCommand.Dispose();
-
-                            throw;
-                        }
+                        result
+                            = new RelationalDataReader(
+                                connection,
+                                dbCommand,
+                                dbCommand.ExecuteReader(),
+                                commandId,
+                                Logger);
+                        readerOpen = true;
 
                         break;
                     }
@@ -246,44 +199,38 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                     }
                 }
 
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
-                SqlLogger.CommandExecuted(
+                Logger.CommandExecuted(
                     dbCommand,
                     executeMethod,
                     commandId,
                     connection.ConnectionId,
                     result,
                     false,
-                    startTimestamp,
-                    currentTimestamp);
-
-                if (closeConnection)
-                {
-                    connection.Close();
-                }
+                    startTime,
+                    stopwatch.Elapsed);
             }
             catch (Exception exception)
             {
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
-                SqlLogger.CommandError(
+                Logger.CommandError(
                     dbCommand,
                     executeMethod,
                     commandId,
                     connection.ConnectionId,
                     exception,
                     false,
-                    startTimestamp,
-                    currentTimestamp);
-
-                connection.Close();
+                    startTime,
+                    stopwatch.Elapsed);
 
                 throw;
             }
             finally
             {
-                dbCommand.Parameters.Clear();
+                if (!readerOpen)
+                {
+                    dbCommand.Parameters.Clear();
+                    dbCommand.Dispose();
+                    connection.Close();
+                }
             }
 
             return result;
@@ -297,8 +244,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             [NotNull] IRelationalConnection connection,
             DbCommandMethod executeMethod,
             [CanBeNull] IReadOnlyDictionary<string, object> parameterValues,
-            bool closeConnection = true,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             Check.NotNull(connection, nameof(connection));
 
@@ -306,57 +252,46 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
             await connection.OpenAsync(cancellationToken);
 
-            var startTimestamp = Stopwatch.GetTimestamp();
             var commandId = Guid.NewGuid();
 
-            SqlLogger.CommandExecuting(
+            var startTime = DateTimeOffset.UtcNow;
+            var stopwatch = Stopwatch.StartNew();
+
+            Logger.CommandExecuting(
                 dbCommand,
                 executeMethod,
                 commandId,
                 connection.ConnectionId,
-                async: true, 
-                startTimestamp: startTimestamp);
+                async: true,
+                startTime: startTime);
 
             object result;
+            var readerOpen = false;
             try
             {
                 switch (executeMethod)
                 {
                     case DbCommandMethod.ExecuteNonQuery:
                     {
-                        using (dbCommand)
-                        {
-                            result = await dbCommand.ExecuteNonQueryAsync(cancellationToken);
-                        }
+                        result = await dbCommand.ExecuteNonQueryAsync(cancellationToken);
 
                         break;
                     }
                     case DbCommandMethod.ExecuteScalar:
                     {
-                        using (dbCommand)
-                        {
-                            result = await dbCommand.ExecuteScalarAsync(cancellationToken);
-                        }
+                        result = await dbCommand.ExecuteScalarAsync(cancellationToken);
 
                         break;
                     }
                     case DbCommandMethod.ExecuteReader:
                     {
-                        try
-                        {
-                            result = new RelationalDataReader(
-                                connection,
-                                dbCommand,
-                                await dbCommand.ExecuteReaderAsync(cancellationToken),
-                                commandId,
-                                ReaderLogger);
-                        }
-                        catch
-                        {
-                            dbCommand.Dispose();
-
-                            throw;
-                        }
+                        result = new RelationalDataReader(
+                            connection,
+                            dbCommand,
+                            await dbCommand.ExecuteReaderAsync(cancellationToken),
+                            commandId,
+                            Logger);
+                        readerOpen = true;
 
                         break;
                     }
@@ -366,44 +301,38 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                     }
                 }
 
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
-                SqlLogger.CommandExecuted(
+                Logger.CommandExecuted(
                     dbCommand,
                     executeMethod,
                     commandId,
                     connection.ConnectionId,
                     result,
                     true,
-                    startTimestamp,
-                    currentTimestamp);
-
-                if (closeConnection)
-                {
-                    connection.Close();
-                }
+                    startTime,
+                    stopwatch.Elapsed);
             }
             catch (Exception exception)
             {
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
-                SqlLogger.CommandError(
+                Logger.CommandError(
                     dbCommand,
                     executeMethod,
                     commandId,
                     connection.ConnectionId,
                     exception,
                     true,
-                    startTimestamp,
-                    currentTimestamp);
-
-                connection.Close();
+                    startTime,
+                    stopwatch.Elapsed);
 
                 throw;
             }
             finally
             {
-                dbCommand.Parameters.Clear();
+                if (!readerOpen)
+                {
+                    dbCommand.Parameters.Clear();
+                    dbCommand.Dispose();
+                    connection.Close();
+                }
             }
 
             return result;
@@ -438,15 +367,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
                 foreach (var parameter in Parameters)
                 {
-                    if (parameterValues.TryGetValue(parameter.InvariantName, out object parameterValue))
-                    {
-                        parameter.AddDbParameter(command, parameterValue);
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException(
-                            RelationalStrings.MissingParameterValue(parameter.InvariantName));
-                    }
+                    parameter.AddDbParameter(command, parameterValues);
                 }
             }
 

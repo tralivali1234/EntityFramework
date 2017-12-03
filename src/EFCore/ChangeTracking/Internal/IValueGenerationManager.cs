@@ -19,12 +19,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         void Generate([NotNull] InternalEntityEntry entry);
-        
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        void Propagate([NotNull] InternalEntityEntry entry);
+        InternalEntityEntry Propagate([NotNull] InternalEntityEntry entry);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -32,7 +32,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         Task GenerateAsync(
             [NotNull] InternalEntityEntry entry,
-            CancellationToken cancellationToken = default(CancellationToken));
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

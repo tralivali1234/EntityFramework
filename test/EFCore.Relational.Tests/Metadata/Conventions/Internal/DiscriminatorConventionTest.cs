@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata.Conventions.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class DiscriminatorConventionTest
     {
@@ -159,9 +159,15 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata.Conventions.In
         {
         }
 
-        private InternalEntityTypeBuilder CreateInternalEntityTypeBuilder<T>()
+        private static InternalEntityTypeBuilder CreateInternalEntityTypeBuilder<T>()
         {
-            var modelBuilder = new InternalModelBuilder(new Model(new CoreConventionSetBuilder().CreateConventionSet()));
+            var modelBuilder
+                = new InternalModelBuilder(
+                    new Model(
+                        new CoreConventionSetBuilder(
+                                new CoreConventionSetBuilderDependencies(
+                                    new CoreTypeMapper(new CoreTypeMapperDependencies())))
+                            .CreateConventionSet()));
 
             return modelBuilder.Entity(typeof(T), ConfigurationSource.Explicit);
         }

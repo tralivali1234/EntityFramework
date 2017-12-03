@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class ComputedColumnTest : IDisposable
     {
@@ -72,11 +72,11 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             {
                 modelBuilder.Entity<Entity>()
                     .Property(e => e.P4)
-                    .ForSqlServerHasComputedColumnSql("P1 + P2");
+                    .HasComputedColumnSql("P1 + P2");
 
                 modelBuilder.Entity<Entity>()
                     .Property(e => e.P5)
-                    .ForSqlServerHasComputedColumnSql("P1 + P3");
+                    .HasComputedColumnSql("P1 + P3");
             }
         }
 
@@ -127,7 +127,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             protected override void OnModelCreating(ModelBuilder modelBuilder)
                 => modelBuilder.Entity<EnumItem>()
                     .Property(entity => entity.CalculatedFlagEnum)
-                    .ForSqlServerHasComputedColumnSql("FlagEnum | OptionalFlagEnum");
+                    .HasComputedColumnSql("FlagEnum | OptionalFlagEnum");
         }
 
         [Fact]
@@ -150,7 +150,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         public ComputedColumnTest()
         {
-            TestStore = SqlServerTestStore.Create("ComputedColumnTest");
+            TestStore = SqlServerTestStore.CreateInitialized("ComputedColumnTest");
         }
 
         protected SqlServerTestStore TestStore { get; }

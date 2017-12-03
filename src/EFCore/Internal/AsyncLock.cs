@@ -32,13 +32,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public Task<Releaser> LockAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public Task<Releaser> LockAsync(CancellationToken cancellationToken = default)
         {
             var wait = _semaphore.WaitAsync(cancellationToken);
 
-            return wait.IsCompleted ?
-                _releaserTask :
-                wait.ContinueWith((_, state) => ((AsyncLock)state)._releaser,
+            return wait.IsCompleted
+                ? _releaserTask
+                : wait.ContinueWith(
+                    (_, state) => ((AsyncLock)state)._releaser,
                     this, CancellationToken.None,
                     TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }

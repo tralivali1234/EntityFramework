@@ -4,10 +4,9 @@
 using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class InternalModelBuilderTest
     {
@@ -52,7 +51,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             Assert.NotNull(modelBuilder.Entity(typeof(Customer), ConfigurationSource.Explicit));
 
-            Assert.NotNull(modelBuilder.Ignore(typeof(Customer), ConfigurationSource.Explicit));
+            Assert.True(modelBuilder.Ignore(typeof(Customer), ConfigurationSource.Explicit));
             Assert.Null(model.FindEntityType(typeof(Customer)));
         }
 
@@ -115,7 +114,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             Assert.False(modelBuilder.Ignore(typeof(Customer), ConfigurationSource.DataAnnotation));
             Assert.NotNull(model.FindEntityType(typeof(Customer)));
 
-            Assert.NotNull(modelBuilder.Ignore(typeof(Customer), ConfigurationSource.Explicit));
+            Assert.True(modelBuilder.Ignore(typeof(Customer), ConfigurationSource.Explicit));
 
             Assert.Null(model.FindEntityType(typeof(Customer)));
         }
@@ -131,7 +130,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             Assert.False(modelBuilder.Ignore(typeof(Customer).FullName, ConfigurationSource.DataAnnotation));
             Assert.NotNull(model.FindEntityType(typeof(Customer).FullName));
 
-            Assert.NotNull(modelBuilder.Ignore(typeof(Customer).FullName, ConfigurationSource.Explicit));
+            Assert.True(modelBuilder.Ignore(typeof(Customer).FullName, ConfigurationSource.Explicit));
 
             Assert.Null(model.FindEntityType(typeof(Customer).FullName));
         }
@@ -162,8 +161,9 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
                 .PrimaryKey(new[] { Customer.IdProperty }, ConfigurationSource.Convention);
             var orderEntityTypeBuilder = modelBuilder.Entity(typeof(Order), ConfigurationSource.Convention);
 
-            Assert.NotNull(orderEntityTypeBuilder
-                .HasForeignKey(typeof(Customer), new[] { Order.CustomerIdProperty }, ConfigurationSource.DataAnnotation));
+            Assert.NotNull(
+                orderEntityTypeBuilder
+                    .HasForeignKey(typeof(Customer), new[] { Order.CustomerIdProperty }, ConfigurationSource.DataAnnotation));
 
             Assert.True(modelBuilder.Ignore(typeof(Order), ConfigurationSource.DataAnnotation));
 

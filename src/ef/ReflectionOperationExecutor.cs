@@ -4,11 +4,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
-
-#if NET46
 using System.IO;
-#endif
+using System.Reflection;
 
 namespace Microsoft.EntityFrameworkCore.Tools
 {
@@ -25,15 +22,11 @@ namespace Microsoft.EntityFrameworkCore.Tools
             string startupAssembly,
             string projectDir,
             string dataDirectory,
-            string rootNamespace)
-            : base(assembly, startupAssembly, projectDir, dataDirectory, rootNamespace)
+            string rootNamespace,
+            string language)
+            : base(assembly, startupAssembly, projectDir, dataDirectory, rootNamespace, language)
         {
-#if NET46
             AppDomain.CurrentDomain.AssemblyResolve += ResolveAssembly;
-#elif NETCOREAPP1_0
-#else
-#error target frameworks need to be updated.
-#endif
 
             _commandsAssembly = Assembly.Load(new AssemblyName { Name = DesignAssemblyName });
             var reportHandlerType = _commandsAssembly.GetType(ReportHandlerTypeName, throwOnError: true, ignoreCase: false);
@@ -53,7 +46,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     { "targetName", AssemblyFileName },
                     { "startupTargetName", StartupAssemblyFileName },
                     { "projectDir", ProjectDirectory },
-                    { "rootNamespace", RootNamespace }
+                    { "rootNamespace", RootNamespace },
+                    { "language", Language }
                 });
 
             _resultHandlerType = _commandsAssembly.GetType(ResultHandlerTypeName, throwOnError: true, ignoreCase: false);
@@ -69,7 +63,6 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 resultHandler,
                 arguments);
 
-#if NET46
         private Assembly ResolveAssembly(object sender, ResolveEventArgs args)
         {
             var assemblyName = new AssemblyName(args.Name);
@@ -94,9 +87,5 @@ namespace Microsoft.EntityFrameworkCore.Tools
 
         public override void Dispose()
             => AppDomain.CurrentDomain.AssemblyResolve -= ResolveAssembly;
-#elif NETCOREAPP1_0
-#else
-#error target frameworks need to be updated.
-#endif
     }
 }

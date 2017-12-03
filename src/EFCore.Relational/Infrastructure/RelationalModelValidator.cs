@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
     /// <summary>
     ///     The validator that enforces rules common for all relational providers.
     /// </summary>
-    public class RelationalModelValidator : CoreModelValidator
+    public class RelationalModelValidator : ModelValidator
     {
         /// <summary>
         ///     Creates a new instance of <see cref="RelationalModelValidator" />.
@@ -39,11 +39,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         protected virtual RelationalModelValidatorDependencies RelationalDependencies { get; }
 
         /// <summary>
-        ///     Gets the relational annotation provider.
-        /// </summary>
-        protected virtual IRelationalAnnotationProvider RelationalExtensions => RelationalDependencies.RelationalExtensions;
-
-        /// <summary>
         ///     Gets the type mapper.
         /// </summary>
         protected virtual IRelationalTypeMapper TypeMapper => RelationalDependencies.TypeMapper;
@@ -60,6 +55,68 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             ValidateInheritanceMapping(model);
             ValidateDataTypes(model);
             ValidateDefaultValuesOnKeys(model);
+            ValidateBoolsWithDefaults(model);
+            ValidateDbFunctions(model);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void ValidateDbFunctions([NotNull] IModel model)
+        {
+            foreach (var dbFunction in model.Relational().DbFunctions)
+            {
+                var methodInfo = dbFunction.MethodInfo;
+
+                if (string.IsNullOrEmpty(dbFunction.FunctionName))
+                {
+                    throw new InvalidOperationException(
+                        RelationalStrings.DbFunctionNameEmpty(methodInfo.DisplayName()));
+                }
+
+                if (dbFunction.Translation == null)
+                {
+                    if (!RelationalDependencies.TypeMapper.IsTypeMapped(methodInfo.ReturnType))
+                    {
+                        throw new InvalidOperationException(
+                            RelationalStrings.DbFunctionInvalidReturnType(
+                                methodInfo.DisplayName(),
+                                methodInfo.ReturnType.ShortDisplayName()));
+                    }
+
+                    foreach (var parameter in methodInfo.GetParameters())
+                    {
+                        if (!RelationalDependencies.TypeMapper.IsTypeMapped(parameter.ParameterType))
+                        {
+                            throw new InvalidOperationException(
+                                RelationalStrings.DbFunctionInvalidParameterType(
+                                    parameter.Name,
+                                    methodInfo.DisplayName(),
+                                    parameter.ParameterType.ShortDisplayName()));
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void ValidateBoolsWithDefaults([NotNull] IModel model)
+        {
+            Check.NotNull(model, nameof(model));
+
+            foreach (var property in model.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties()))
+            {
+                if (property.ClrType == typeof(bool)
+                    && (property.Relational().DefaultValue != null
+                        || property.Relational().DefaultValueSql != null))
+                {
+                    Dependencies.Logger.BoolWithDefaultWarning(property);
+                }
+            }
         }
 
         /// <summary>
@@ -72,7 +129,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             {
                 foreach (var property in entityType.GetDeclaredProperties())
                 {
-                    var dataType = RelationalExtensions.For(property).ColumnType;
+                    var dataType = property.GetConfiguredColumnType();
                     if (dataType != null)
                     {
                         TypeMapper.ValidateTypeName(dataType);
@@ -88,8 +145,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         protected virtual void ValidateDefaultValuesOnKeys([NotNull] IModel model)
         {
             foreach (var property in model.GetEntityTypes().SelectMany(
-                t => t.GetDeclaredKeys().SelectMany(k => k.Properties))
-                .Where(p => RelationalExtensions.For(p).DefaultValue != null))
+                    t => t.GetDeclaredKeys().SelectMany(k => k.Properties))
+                .Where(p => p.Relational().DefaultValue != null))
             {
                 Dependencies.Logger.ModelValidationKeyDefaultValueWarning(property);
             }
@@ -104,14 +161,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var tables = new Dictionary<string, List<IEntityType>>();
             foreach (var entityType in model.GetEntityTypes())
             {
-                var annotations = RelationalExtensions.For(entityType);
+                var annotations = entityType.Relational();
                 var tableName = Format(annotations.Schema, annotations.TableName);
 
-                if (tables.TryGetValue(tableName, out var mappedTypes))
-                {
-                    ValidateSharedTableCompatibility(entityType, mappedTypes, tableName);
-                }
-                else
+                if (!tables.TryGetValue(tableName, out var mappedTypes))
                 {
                     mappedTypes = new List<IEntityType>();
                     tables[tableName] = mappedTypes;
@@ -122,10 +175,13 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             foreach (var tableMapping in tables)
             {
-                ValidateSharedColumnsCompatibility(tableMapping.Value, tableMapping.Key);
-                ValidateSharedKeysCompatibility(tableMapping.Value, tableMapping.Key);
-                ValidateSharedForeignKeysCompatibility(tableMapping.Value, tableMapping.Key);
-                ValidateSharedIndexesCompatibility(tableMapping.Value, tableMapping.Key);
+                var mappedTypes = tableMapping.Value;
+                var tableName = tableMapping.Key;
+                ValidateSharedTableCompatibility(mappedTypes, tableName);
+                ValidateSharedColumnsCompatibility(mappedTypes, tableName);
+                ValidateSharedKeysCompatibility(mappedTypes, tableName);
+                ValidateSharedForeignKeysCompatibility(mappedTypes, tableName);
+                ValidateSharedIndexesCompatibility(mappedTypes, tableName);
             }
         }
 
@@ -134,46 +190,101 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         protected virtual void ValidateSharedTableCompatibility(
-            [NotNull] IEntityType newEntityType, [NotNull] List<IEntityType> otherMappedTypes, [NotNull] string tableName)
+            [NotNull] IReadOnlyList<IEntityType> mappedTypes, [NotNull] string tableName)
         {
-            var key = newEntityType.FindPrimaryKey();
-            var identifyingForeignKeys = newEntityType.FindForeignKeys(key.Properties).ToList();
-            var relationshipFound = false;
-            foreach (var otherMappedType in otherMappedTypes)
+            if (mappedTypes.Count == 1)
             {
-                var otherKey = otherMappedType.FindPrimaryKey();
-                if (RelationalExtensions.For(key).Name != RelationalExtensions.For(otherKey).Name)
+                return;
+            }
+
+            var firstValidatedType = mappedTypes[0];
+            var typesToValidate = new Queue<IEntityType>();
+            typesToValidate.Enqueue(firstValidatedType);
+            var unvalidatedTypes = new HashSet<IEntityType>(mappedTypes.Skip(1));
+            while (typesToValidate.Count > 0)
+            {
+                var entityType = typesToValidate.Dequeue();
+                var typesToValidateLeft = typesToValidate.Count;
+                var nextTypeSet = unvalidatedTypes.Where(
+                    unvalidatedType =>
+                        entityType.RootType() == unvalidatedType.RootType()
+                        || IsIdentifyingPrincipal(entityType, unvalidatedType)
+                        || IsIdentifyingPrincipal(unvalidatedType, entityType));
+                foreach (var nextEntityType in nextTypeSet)
                 {
-                    ShowError(RelationalStrings.IncompatibleTableKeyNameMismatch(
-                        tableName,
-                        newEntityType.DisplayName(),
-                        otherMappedType.DisplayName(),
-                        RelationalExtensions.For(key).Name,
-                        Property.Format(key.Properties),
-                        RelationalExtensions.For(otherKey).Name,
-                        Property.Format(otherKey.Properties)));
+                    var key = entityType.FindPrimaryKey();
+                    var otherKey = nextEntityType.FindPrimaryKey();
+                    if (key.Relational().Name != otherKey.Relational().Name)
+                    {
+                        throw new InvalidOperationException(
+                            RelationalStrings.IncompatibleTableKeyNameMismatch(
+                                tableName,
+                                entityType.DisplayName(),
+                                nextEntityType.DisplayName(),
+                                key.Relational().Name,
+                                Property.Format(key.Properties),
+                                otherKey.Relational().Name,
+                                Property.Format(otherKey.Properties)));
+                    }
+
+                    typesToValidate.Enqueue(nextEntityType);
                 }
 
-                if (!relationshipFound
-                    && (newEntityType.RootType() == otherMappedType.RootType()
-                        || identifyingForeignKeys.Any(fk => fk.PrincipalEntityType == otherMappedType && fk.PrincipalKey == otherKey)
-                        || otherMappedType.FindForeignKeys(otherKey.Properties)
-                            .Any(fk => fk.PrincipalEntityType == newEntityType && fk.PrincipalKey == key)))
+                foreach (var typeToValidate in typesToValidate.Skip(typesToValidateLeft))
                 {
-                    relationshipFound = true;
+                    unvalidatedTypes.Remove(typeToValidate);
                 }
             }
 
-            if (!relationshipFound)
+            if (unvalidatedTypes.Count == 0)
             {
-                ShowError(
+                return;
+            }
+
+            foreach (var invalidEntityType in unvalidatedTypes)
+            {
+                throw new InvalidOperationException(
                     RelationalStrings.IncompatibleTableNoRelationship(
                         tableName,
-                        newEntityType.DisplayName(),
-                        otherMappedTypes[0].DisplayName(),
-                        Property.Format(key.Properties),
-                        Property.Format(otherMappedTypes[0].FindPrimaryKey().Properties)));
+                        invalidEntityType.DisplayName(),
+                        firstValidatedType.DisplayName(),
+                        Property.Format(invalidEntityType.FindPrimaryKey().Properties),
+                        Property.Format(firstValidatedType.FindPrimaryKey().Properties)));
             }
+        }
+
+        private static bool IsIdentifyingPrincipal(IEntityType dependEntityType, IEntityType principalEntityType)
+        {
+            var identifyingForeignKeys = new Queue<IForeignKey>(
+                dependEntityType.FindForeignKeys(dependEntityType.FindPrimaryKey().Properties));
+            while (identifyingForeignKeys.Count > 0)
+            {
+                var fk = identifyingForeignKeys.Dequeue();
+                if (fk.PrincipalKey.IsPrimaryKey())
+                {
+                    if (fk.PrincipalEntityType == principalEntityType)
+                    {
+                        if (principalEntityType.BaseType != null)
+                        {
+                            // #8973
+                            throw new InvalidOperationException(
+                                RelationalStrings.IncompatibleTableDerivedPrincipal(
+                                    dependEntityType.Relational().TableName,
+                                    dependEntityType.DisplayName(),
+                                    principalEntityType.DisplayName(),
+                                    principalEntityType.RootType().DisplayName()));
+                        }
+                        return true;
+                    }
+
+                    foreach (var principalFk in fk.PrincipalEntityType.FindForeignKeys(fk.PrincipalEntityType.FindPrimaryKey().Properties))
+                    {
+                        identifyingForeignKeys.Enqueue(principalFk);
+                    }
+                }
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -187,82 +298,87 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             foreach (var property in mappedTypes.SelectMany(et => et.GetDeclaredProperties()))
             {
-                var propertyAnnotations = RelationalExtensions.For(property);
+                var propertyAnnotations = property.Relational();
                 var columnName = propertyAnnotations.ColumnName;
                 if (propertyMappings.TryGetValue(columnName, out var duplicateProperty))
                 {
-                    var previousAnnotations = RelationalExtensions.For(duplicateProperty);
+                    var previousAnnotations = duplicateProperty.Relational();
                     var currentTypeString = propertyAnnotations.ColumnType
-                                            ?? TypeMapper.GetMapping(property).StoreType;
+                                            ?? property.FindRelationalMapping()?.StoreType;
                     var previousTypeString = previousAnnotations.ColumnType
-                                             ?? TypeMapper.GetMapping(duplicateProperty).StoreType;
-                    if (!currentTypeString.Equals(previousTypeString, StringComparison.OrdinalIgnoreCase))
+                                             ?? duplicateProperty.FindRelationalMapping()?.StoreType;
+                    if (!string.Equals(currentTypeString, previousTypeString, StringComparison.OrdinalIgnoreCase))
                     {
-                        ShowError(RelationalStrings.DuplicateColumnNameDataTypeMismatch(
-                            duplicateProperty.DeclaringEntityType.DisplayName(),
-                            duplicateProperty.Name,
-                            property.DeclaringEntityType.DisplayName(),
-                            property.Name,
-                            columnName,
-                            tableName,
-                            previousTypeString,
-                            currentTypeString));
+                        throw new InvalidOperationException(
+                            RelationalStrings.DuplicateColumnNameDataTypeMismatch(
+                                duplicateProperty.DeclaringEntityType.DisplayName(),
+                                duplicateProperty.Name,
+                                property.DeclaringEntityType.DisplayName(),
+                                property.Name,
+                                columnName,
+                                tableName,
+                                previousTypeString,
+                                currentTypeString));
                     }
 
                     if (property.IsColumnNullable() != duplicateProperty.IsColumnNullable())
                     {
-                        ShowError(RelationalStrings.DuplicateColumnNameNullabilityMismatch(
-                            duplicateProperty.DeclaringEntityType.DisplayName(),
-                            duplicateProperty.Name,
-                            property.DeclaringEntityType.DisplayName(),
-                            property.Name,
-                            columnName,
-                            tableName));
+                        throw new InvalidOperationException(
+                            RelationalStrings.DuplicateColumnNameNullabilityMismatch(
+                                duplicateProperty.DeclaringEntityType.DisplayName(),
+                                duplicateProperty.Name,
+                                property.DeclaringEntityType.DisplayName(),
+                                property.Name,
+                                columnName,
+                                tableName));
                     }
 
                     var currentComputedColumnSql = propertyAnnotations.ComputedColumnSql ?? "";
                     var previousComputedColumnSql = previousAnnotations.ComputedColumnSql ?? "";
                     if (!currentComputedColumnSql.Equals(previousComputedColumnSql, StringComparison.OrdinalIgnoreCase))
                     {
-                        ShowError(RelationalStrings.DuplicateColumnNameComputedSqlMismatch(
-                            duplicateProperty.DeclaringEntityType.DisplayName(),
-                            duplicateProperty.Name,
-                            property.DeclaringEntityType.DisplayName(),
-                            property.Name,
-                            columnName,
-                            tableName,
-                            previousComputedColumnSql,
-                            currentComputedColumnSql));
+                        throw new InvalidOperationException(
+                            RelationalStrings.DuplicateColumnNameComputedSqlMismatch(
+                                duplicateProperty.DeclaringEntityType.DisplayName(),
+                                duplicateProperty.Name,
+                                property.DeclaringEntityType.DisplayName(),
+                                property.Name,
+                                columnName,
+                                tableName,
+                                previousComputedColumnSql,
+                                currentComputedColumnSql));
                     }
 
                     var currentDefaultValue = propertyAnnotations.DefaultValue;
                     var previousDefaultValue = previousAnnotations.DefaultValue;
                     if (!Equals(currentDefaultValue, previousDefaultValue))
                     {
-                        ShowError(RelationalStrings.DuplicateColumnNameDefaultSqlMismatch(
-                            duplicateProperty.DeclaringEntityType.DisplayName(),
-                            duplicateProperty.Name,
-                            property.DeclaringEntityType.DisplayName(),
-                            property.Name,
-                            columnName,
-                            tableName,
-                            previousDefaultValue ?? "NULL",
-                            currentDefaultValue ?? "NULL"));
+                        throw new InvalidOperationException(
+                            RelationalStrings.DuplicateColumnNameDefaultSqlMismatch(
+                                duplicateProperty.DeclaringEntityType.DisplayName(),
+                                duplicateProperty.Name,
+                                property.DeclaringEntityType.DisplayName(),
+                                property.Name,
+                                columnName,
+                                tableName,
+                                previousDefaultValue ?? "NULL",
+                                currentDefaultValue ?? "NULL"));
                     }
 
                     var currentDefaultValueSql = propertyAnnotations.DefaultValueSql ?? "";
                     var previousDefaultValueSql = previousAnnotations.DefaultValueSql ?? "";
                     if (!currentDefaultValueSql.Equals(previousDefaultValueSql, StringComparison.OrdinalIgnoreCase))
                     {
-                        ShowError(RelationalStrings.DuplicateColumnNameDefaultSqlMismatch(
-                            duplicateProperty.DeclaringEntityType.DisplayName(),
-                            duplicateProperty.Name,
-                            property.DeclaringEntityType.DisplayName(),
-                            property.Name,
-                            columnName,
-                            tableName,
-                            previousDefaultValueSql,
-                            currentDefaultValueSql));
+                        throw new InvalidOperationException(
+                            RelationalStrings.DuplicateColumnNameDefaultSqlMismatch(
+                                duplicateProperty.DeclaringEntityType.DisplayName(),
+                                duplicateProperty.Name,
+                                property.DeclaringEntityType.DisplayName(),
+                                property.Name,
+                                columnName,
+                                tableName,
+                                previousDefaultValueSql,
+                                currentDefaultValueSql));
                     }
                 }
                 else
@@ -283,7 +399,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             foreach (var foreignKey in mappedTypes.SelectMany(et => et.GetDeclaredForeignKeys()))
             {
-                var foreignKeyAnnotations = RelationalExtensions.For(foreignKey);
+                var foreignKeyAnnotations = foreignKey.Relational();
                 var foreignKeyName = foreignKeyAnnotations.Name;
 
                 if (!foreignKeyMappings.TryGetValue(foreignKeyName, out var duplicateForeignKey))
@@ -292,75 +408,81 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                     continue;
                 }
 
-                var principalAnnotations = RelationalExtensions.For(foreignKey.PrincipalEntityType);
+                var principalAnnotations = foreignKey.PrincipalEntityType.Relational();
                 var principalTable = Format(principalAnnotations.Schema, principalAnnotations.TableName);
-                var duplicateAnnotations = RelationalExtensions.For(duplicateForeignKey.PrincipalEntityType);
+                var duplicateAnnotations = duplicateForeignKey.PrincipalEntityType.Relational();
                 var duplicatePrincipalTable = Format(duplicateAnnotations.Schema, duplicateAnnotations.TableName);
                 if (!string.Equals(principalTable, duplicatePrincipalTable, StringComparison.OrdinalIgnoreCase))
                 {
-                    ShowError(RelationalStrings.DuplicateForeignKeyPrincipalTableMismatch(
-                        Property.Format(foreignKey.Properties),
-                        foreignKey.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateForeignKey.Properties),
-                        duplicateForeignKey.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        foreignKeyName,
-                        principalTable,
-                        duplicatePrincipalTable));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateForeignKeyPrincipalTableMismatch(
+                            Property.Format(foreignKey.Properties),
+                            foreignKey.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateForeignKey.Properties),
+                            duplicateForeignKey.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            foreignKeyName,
+                            principalTable,
+                            duplicatePrincipalTable));
                 }
 
-                if (!foreignKey.Properties.Select(p => RelationalExtensions.For(p).ColumnName)
-                    .SequenceEqual(duplicateForeignKey.Properties.Select(p => RelationalExtensions.For(p).ColumnName)))
+                if (!foreignKey.Properties.Select(p => p.Relational().ColumnName)
+                    .SequenceEqual(duplicateForeignKey.Properties.Select(p => p.Relational().ColumnName)))
                 {
-                    ShowError(RelationalStrings.DuplicateForeignKeyColumnMismatch(
-                        Property.Format(foreignKey.Properties),
-                        foreignKey.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateForeignKey.Properties),
-                        duplicateForeignKey.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        foreignKeyName,
-                        RelationalExtensions.FormatColumns(foreignKey.Properties),
-                        RelationalExtensions.FormatColumns(duplicateForeignKey.Properties)));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateForeignKeyColumnMismatch(
+                            Property.Format(foreignKey.Properties),
+                            foreignKey.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateForeignKey.Properties),
+                            duplicateForeignKey.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            foreignKeyName,
+                            foreignKey.Properties.FormatColumns(),
+                            duplicateForeignKey.Properties.FormatColumns()));
                 }
 
                 if (!foreignKey.PrincipalKey.Properties
-                    .Select(p => RelationalExtensions.For(p).ColumnName)
-                    .SequenceEqual(duplicateForeignKey.PrincipalKey.Properties
-                        .Select(p => RelationalExtensions.For(p).ColumnName)))
+                    .Select(p => p.Relational().ColumnName)
+                    .SequenceEqual(
+                        duplicateForeignKey.PrincipalKey.Properties
+                            .Select(p => p.Relational().ColumnName)))
                 {
-                    ShowError(RelationalStrings.DuplicateForeignKeyPrincipalColumnMismatch(
-                        Property.Format(foreignKey.Properties),
-                        foreignKey.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateForeignKey.Properties),
-                        duplicateForeignKey.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        foreignKeyName,
-                        RelationalExtensions.FormatColumns(foreignKey.PrincipalKey.Properties),
-                        RelationalExtensions.FormatColumns(duplicateForeignKey.PrincipalKey.Properties)));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateForeignKeyPrincipalColumnMismatch(
+                            Property.Format(foreignKey.Properties),
+                            foreignKey.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateForeignKey.Properties),
+                            duplicateForeignKey.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            foreignKeyName,
+                            foreignKey.PrincipalKey.Properties.FormatColumns(),
+                            duplicateForeignKey.PrincipalKey.Properties.FormatColumns()));
                 }
 
                 if (foreignKey.IsUnique != duplicateForeignKey.IsUnique)
                 {
-                    ShowError(RelationalStrings.DuplicateForeignKeyUniquenessMismatch(
-                        Property.Format(foreignKey.Properties),
-                        foreignKey.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateForeignKey.Properties),
-                        duplicateForeignKey.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        foreignKeyName));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateForeignKeyUniquenessMismatch(
+                            Property.Format(foreignKey.Properties),
+                            foreignKey.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateForeignKey.Properties),
+                            duplicateForeignKey.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            foreignKeyName));
                 }
 
                 if (foreignKey.DeleteBehavior != duplicateForeignKey.DeleteBehavior)
                 {
-                    ShowError(RelationalStrings.DuplicateForeignKeyDeleteBehaviorMismatch(
-                        Property.Format(foreignKey.Properties),
-                        foreignKey.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateForeignKey.Properties),
-                        duplicateForeignKey.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        foreignKeyName,
-                        foreignKey.DeleteBehavior,
-                        duplicateForeignKey.DeleteBehavior));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateForeignKeyDeleteBehaviorMismatch(
+                            Property.Format(foreignKey.Properties),
+                            foreignKey.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateForeignKey.Properties),
+                            duplicateForeignKey.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            foreignKeyName,
+                            foreignKey.DeleteBehavior,
+                            duplicateForeignKey.DeleteBehavior));
                 }
             }
         }
@@ -376,8 +498,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             foreach (var index in mappedTypes.SelectMany(et => et.GetDeclaredIndexes()))
             {
-                var indexAnnotations = RelationalExtensions.For(index);
-                var indexName = indexAnnotations.Name;
+                var indexName = index.Relational().Name;
 
                 if (!indexMappings.TryGetValue(indexName, out var duplicateIndex))
                 {
@@ -385,29 +506,31 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                     continue;
                 }
 
-                if (!index.Properties.Select(p => RelationalExtensions.For(p).ColumnName)
-                    .SequenceEqual(duplicateIndex.Properties.Select(p => RelationalExtensions.For(p).ColumnName)))
+                if (!index.Properties.Select(p => p.Relational().ColumnName)
+                    .SequenceEqual(duplicateIndex.Properties.Select(p => p.Relational().ColumnName)))
                 {
-                    ShowError(RelationalStrings.DuplicateIndexColumnMismatch(
-                        Property.Format(index.Properties),
-                        index.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateIndex.Properties),
-                        duplicateIndex.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        indexName,
-                        RelationalExtensions.FormatColumns(index.Properties),
-                        RelationalExtensions.FormatColumns(duplicateIndex.Properties)));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateIndexColumnMismatch(
+                            Property.Format(index.Properties),
+                            index.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateIndex.Properties),
+                            duplicateIndex.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            indexName,
+                            index.Properties.FormatColumns(),
+                            duplicateIndex.Properties.FormatColumns()));
                 }
 
                 if (index.IsUnique != duplicateIndex.IsUnique)
                 {
-                    ShowError(RelationalStrings.DuplicateIndexUniquenessMismatch(
-                        Property.Format(index.Properties),
-                        index.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateIndex.Properties),
-                        duplicateIndex.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        indexName));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateIndexUniquenessMismatch(
+                            Property.Format(index.Properties),
+                            index.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateIndex.Properties),
+                            duplicateIndex.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            indexName));
                 }
             }
         }
@@ -423,8 +546,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             foreach (var key in mappedTypes.SelectMany(et => et.GetDeclaredKeys()))
             {
-                var keyAnnotations = RelationalExtensions.For(key);
-                var keyName = keyAnnotations.Name;
+                var keyName = key.Relational().Name;
 
                 if (!keyMappings.TryGetValue(keyName, out var duplicateKey))
                 {
@@ -432,18 +554,19 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                     continue;
                 }
 
-                if (!key.Properties.Select(p => RelationalExtensions.For(p).ColumnName)
-                    .SequenceEqual(duplicateKey.Properties.Select(p => RelationalExtensions.For(p).ColumnName)))
+                if (!key.Properties.Select(p => p.Relational().ColumnName)
+                    .SequenceEqual(duplicateKey.Properties.Select(p => p.Relational().ColumnName)))
                 {
-                    ShowError(RelationalStrings.DuplicateKeyColumnMismatch(
-                        Property.Format(key.Properties),
-                        key.DeclaringEntityType.DisplayName(),
-                        Property.Format(duplicateKey.Properties),
-                        duplicateKey.DeclaringEntityType.DisplayName(),
-                        tableName,
-                        keyName,
-                        RelationalExtensions.FormatColumns(key.Properties),
-                        RelationalExtensions.FormatColumns(duplicateKey.Properties)));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateKeyColumnMismatch(
+                            Property.Format(key.Properties),
+                            key.DeclaringEntityType.DisplayName(),
+                            Property.Format(duplicateKey.Properties),
+                            duplicateKey.DeclaringEntityType.DisplayName(),
+                            tableName,
+                            keyName,
+                            key.Properties.FormatColumns(),
+                            duplicateKey.Properties.FormatColumns()));
                 }
             }
         }
@@ -462,14 +585,16 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
         private void ValidateDiscriminator(IEntityType entityType)
         {
-            var annotations = RelationalExtensions.For(entityType);
+            var annotations = entityType.Relational();
             if (annotations.DiscriminatorProperty == null)
             {
-                ShowError(RelationalStrings.NoDiscriminatorProperty(entityType.DisplayName()));
+                throw new InvalidOperationException(
+                    RelationalStrings.NoDiscriminatorProperty(entityType.DisplayName()));
             }
             if (annotations.DiscriminatorValue == null)
             {
-                ShowError(RelationalStrings.NoDiscriminatorValue(entityType.DisplayName()));
+                throw new InvalidOperationException(
+                    RelationalStrings.NoDiscriminatorValue(entityType.DisplayName()));
             }
         }
 
@@ -491,11 +616,12 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
                 ValidateDiscriminator(derivedType);
 
-                var discriminatorValue = RelationalExtensions.For(derivedType).DiscriminatorValue;
+                var discriminatorValue = derivedType.Relational().DiscriminatorValue;
                 if (discriminatorValues.TryGetValue(discriminatorValue, out var duplicateEntityType))
                 {
-                    ShowError(RelationalStrings.DuplicateDiscriminatorValue(
-                        derivedType.DisplayName(), discriminatorValue, duplicateEntityType.DisplayName()));
+                    throw new InvalidOperationException(
+                        RelationalStrings.DuplicateDiscriminatorValue(
+                            derivedType.DisplayName(), discriminatorValue, duplicateEntityType.DisplayName()));
                 }
                 discriminatorValues[discriminatorValue] = derivedType;
             }

@@ -2,11 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class CascadeDeleteConventionTest
     {
@@ -35,7 +34,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
                 .HasMany(e => e.Posts)
                 .WithOne(e => e.Blog).Metadata;
 
-            Assert.Equal(DeleteBehavior.Restrict, fk.DeleteBehavior);
+            Assert.Equal(DeleteBehavior.ClientSetNull, fk.DeleteBehavior);
         }
 
         [Fact]
@@ -71,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
                 .Property(e => e.BlogId)
                 .IsRequired(false);
 
-            Assert.Equal(DeleteBehavior.Restrict, fk.DeleteBehavior);
+            Assert.Equal(DeleteBehavior.ClientSetNull, fk.DeleteBehavior);
         }
 
         [Fact]
@@ -126,6 +125,9 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
         }
 
         private static ModelBuilder CreateModelBuilder()
-            => new ModelBuilder(new CoreConventionSetBuilder().CreateConventionSet());
+            => new ModelBuilder(
+                new CoreConventionSetBuilder(
+                        new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies())))
+                    .CreateConventionSet());
     }
 }

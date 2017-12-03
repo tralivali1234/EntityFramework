@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Linq;
-using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
@@ -21,7 +20,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override void VisitQueryModel([NotNull] QueryModel queryModel)
+        public override void VisitQueryModel(QueryModel queryModel)
         {
             queryModel.TransformExpressions(new TransformingQueryModelExpressionVisitor<AdditionalFromClauseOptimizingQueryModelVisitor>(this).Visit);
 
@@ -33,8 +32,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public override void VisitAdditionalFromClause(
-            [NotNull] AdditionalFromClause fromClause,
-            [NotNull] QueryModel queryModel,
+            AdditionalFromClause fromClause,
+            QueryModel queryModel,
             int index)
         {
             if (fromClause.FromExpression is SubQueryExpression subQueryExpression
@@ -69,7 +68,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             }
         }
 
-        private void ShiftBodyClauses(QueryModel oldQueryModel, QueryModel newQueryModel)
+        private static void ShiftBodyClauses(QueryModel oldQueryModel, QueryModel newQueryModel)
         {
             var querySourceMapping = new QuerySourceMapping();
 
@@ -79,11 +78,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             foreach (var bodyClause in oldQueryModel.BodyClauses.ToArray())
             {
-                bodyClause.TransformExpressions(expression =>
-                    ReferenceReplacingExpressionVisitor.ReplaceClauseReferences(
-                        expression,
-                        querySourceMapping,
-                        throwOnUnmappedReferences: false));
+                bodyClause.TransformExpressions(
+                    expression =>
+                        ReferenceReplacingExpressionVisitor.ReplaceClauseReferences(
+                            expression,
+                            querySourceMapping,
+                            throwOnUnmappedReferences: false));
 
                 oldQueryModel.BodyClauses.Remove(bodyClause);
                 newQueryModel.BodyClauses.Add(bodyClause);

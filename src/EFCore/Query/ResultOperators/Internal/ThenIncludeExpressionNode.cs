@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class ThenIncludeExpressionNode : ResultOperatorExpressionNodeBase
+    public class ThenIncludeExpressionNode : IncludeExpressionNodeBase
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -25,11 +25,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         public static readonly IReadOnlyCollection<MethodInfo> SupportedMethods = new[]
         {
             EntityFrameworkQueryableExtensions.ThenIncludeAfterEnumerableMethodInfo,
-            EntityFrameworkQueryableExtensions.ThenIncludeAfterCollectionMethodInfo,
-            EntityFrameworkQueryableExtensions.ThenIncludeAfterReferenceMethodInfo
+            EntityFrameworkQueryableExtensions.ThenIncludeAfterReferenceMethodInfo,
+            EntityFrameworkQueryableExtensions.ThenIncludeOnDerivedAfterEnumerableMethodInfo,
+            EntityFrameworkQueryableExtensions.ThenIncludeOnDerivedAfterReferenceMethodInfo,
         };
-
-        private readonly LambdaExpression _navigationPropertyPathLambda;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -38,9 +37,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         public ThenIncludeExpressionNode(
             MethodCallExpressionParseInfo parseInfo,
             [NotNull] LambdaExpression navigationPropertyPathLambda)
-            : base(parseInfo, null, null)
+            : base(parseInfo, navigationPropertyPathLambda)
         {
-            _navigationPropertyPathLambda = navigationPropertyPathLambda;
         }
 
         /// <summary>
@@ -54,7 +52,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
                 = (IncludeResultOperator)clauseGenerationContext.GetContextInfo(Source);
 
             includeResultOperator
-                .AppendToNavigationPath(_navigationPropertyPathLambda.GetComplexPropertyAccess());
+                .AppendToNavigationPath(
+                    NavigationPropertyPathLambda.GetComplexPropertyAccess(
+                        nameof(EntityFrameworkQueryableExtensions.ThenInclude)));
 
             clauseGenerationContext.AddContextInfo(this, includeResultOperator);
         }
@@ -65,18 +65,5 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         /// </summary>
         protected override ResultOperatorBase CreateResultOperator(ClauseGenerationContext clauseGenerationContext)
             => null;
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public override Expression Resolve(
-            ParameterExpression inputParameter,
-            Expression expressionToBeResolved,
-            ClauseGenerationContext clauseGenerationContext)
-            => Source.Resolve(
-                inputParameter,
-                expressionToBeResolved,
-                clauseGenerationContext);
     }
 }

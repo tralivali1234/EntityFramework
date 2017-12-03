@@ -8,7 +8,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -29,7 +29,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         private readonly IMigrationCommandExecutor _migrationCommandExecutor;
         private readonly IRelationalConnection _connection;
         private readonly ISqlGenerationHelper _sqlGenerationHelper;
-        private readonly IDiagnosticsLogger<LoggerCategory.Migrations> _logger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Migrations> _logger;
         private readonly string _activeProvider;
 
         /// <summary>
@@ -45,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             [NotNull] IMigrationCommandExecutor migrationCommandExecutor,
             [NotNull] IRelationalConnection connection,
             [NotNull] ISqlGenerationHelper sqlGenerationHelper,
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Migrations> logger,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Migrations> logger,
             [NotNull] IDatabaseProvider databaseProvider)
         {
             Check.NotNull(migrationsAssembly, nameof(migrationsAssembly));
@@ -68,7 +68,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             _connection = connection;
             _sqlGenerationHelper = sqlGenerationHelper;
             _logger = logger;
-            _activeProvider = databaseProvider.InvariantName;
+            _activeProvider = databaseProvider.Name;
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         /// </summary>
         public virtual async Task MigrateAsync(
             string targetMigration = null,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             _logger.MigrateUsingConnection(this, _connection);
 
@@ -166,6 +166,11 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                         return GenerateUpSql(migration);
                     };
             }
+
+            if (migrationsToRevert.Count + migrationsToApply.Count == 0)
+            {
+                _logger.MigrationsNotApplied(this);
+            }
         }
 
         private void PopulateMigrations(
@@ -177,6 +182,10 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             var appliedMigrations = new Dictionary<string, TypeInfo>();
             var unappliedMigrations = new Dictionary<string, TypeInfo>();
             var appliedMigrationEntrySet = new HashSet<string>(appliedMigrationEntries, StringComparer.OrdinalIgnoreCase);
+            if (_migrationsAssembly.Migrations.Count == 0)
+            {
+                _logger.MigrationsNotFound(this, _migrationsAssembly);
+            }
             foreach (var migration in _migrationsAssembly.Migrations)
             {
                 if (appliedMigrationEntrySet.Contains(migration.Key))
@@ -346,19 +355,6 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 .Generate(migration.DownOperations, previousMigration?.TargetModel)
                 .Concat(new[] { new MigrationCommand(deleteCommand) })
                 .ToList();
-        }
-
-        private string FormatCommandsForReporting(IEnumerable<MigrationCommand> commands)
-        {
-            var builder = new IndentedStringBuilder();
-            foreach (var command in commands)
-            {
-                builder
-                   .AppendLine(command.CommandText)
-                   .Append(_sqlGenerationHelper.BatchTerminator);
-            }
-
-            return builder.ToString();
         }
     }
 }

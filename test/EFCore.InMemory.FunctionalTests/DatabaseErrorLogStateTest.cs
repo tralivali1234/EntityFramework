@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -15,23 +15,23 @@ using Xunit;
 // ReSharper disable AccessToDisposedClosure
 // ReSharper disable ReturnValueOfPureMethodIsNotUsed
 // ReSharper disable StringStartsWithIsCultureSpecific
-namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class DatabaseErrorLogStateTest
     {
         [Fact]
         public async Task SaveChanges_logs_DatabaseErrorLogState_nonasync()
         {
-            await SaveChanges_logs_DatabaseErrorLogState(async: false);
+            await SaveChanges_logs_DatabaseErrorLogState_test(async: false);
         }
 
         [Fact]
         public async Task SaveChanges_logs_DatabaseErrorLogState_async()
         {
-            await SaveChanges_logs_DatabaseErrorLogState(async: true);
+            await SaveChanges_logs_DatabaseErrorLogState_test(async: true);
         }
 
-        public async Task SaveChanges_logs_DatabaseErrorLogState(bool async)
+        private async Task SaveChanges_logs_DatabaseErrorLogState_test(bool async)
         {
             var loggerFactory = new TestLoggerFactory();
             var serviceProvider = new ServiceCollection()
@@ -56,7 +56,7 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
                 }
 
                 Assert.Same(ex, loggerFactory.Logger.LastDatabaseErrorException);
-                Assert.Same(typeof(BloggingContext), loggerFactory.Logger.LastDatabaseErrorState.ContextType);
+                Assert.Same(typeof(BloggingContext), loggerFactory.Logger.LastDatabaseErrorState.Single(p => p.Key == "contextType").Value);
                 Assert.EndsWith(ex.ToString(), loggerFactory.Logger.LastDatabaseErrorFormatter(loggerFactory.Logger.LastDatabaseErrorState, ex));
             }
         }
@@ -64,19 +64,19 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
         [Fact]
         public void Query_logs_DatabaseErrorLogState_during_DbSet_enumeration()
         {
-            Query_logs_DatabaseErrorLogState(c => c.Blogs.ToList());
+            Query_logs_DatabaseErrorLogState_test(c => c.Blogs.ToList());
         }
 
         [Fact]
         public void Query_logs_DatabaseErrorLogState_during_DbSet_enumeration_async()
         {
-            Query_logs_DatabaseErrorLogState(c => c.Blogs.ToListAsync().Wait());
+            Query_logs_DatabaseErrorLogState_test(c => c.Blogs.ToListAsync().Wait());
         }
 
         [Fact]
         public void Query_logs_DatabaseErrorLogState_during_LINQ_enumeration()
         {
-            Query_logs_DatabaseErrorLogState(
+            Query_logs_DatabaseErrorLogState_test(
                 c =>
                     c.Blogs
                         .OrderBy(b => b.Name)
@@ -87,7 +87,7 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
         [Fact]
         public void Query_logs_DatabaseErrorLogState_during_LINQ_enumeration_async()
         {
-            Query_logs_DatabaseErrorLogState(
+            Query_logs_DatabaseErrorLogState_test(
                 c =>
                     c.Blogs
                         .OrderBy(b => b.Name)
@@ -99,16 +99,16 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
         [Fact]
         public void Query_logs_DatabaseErrorLogState_during_single()
         {
-            Query_logs_DatabaseErrorLogState(c => c.Blogs.FirstOrDefault());
+            Query_logs_DatabaseErrorLogState_test(c => c.Blogs.FirstOrDefault());
         }
 
         [Fact]
         public void Query_logs_DatabaseErrorLogState_during_single_async()
         {
-            Query_logs_DatabaseErrorLogState(c => c.Blogs.FirstOrDefaultAsync().Wait());
+            Query_logs_DatabaseErrorLogState_test(c => c.Blogs.FirstOrDefaultAsync().Wait());
         }
 
-        public void Query_logs_DatabaseErrorLogState(Action<BloggingContext> test)
+        private void Query_logs_DatabaseErrorLogState_test(Action<BloggingContext> test)
         {
             var loggerFactory = new TestLoggerFactory();
             var serviceProvider = new ServiceCollection()
@@ -131,48 +131,8 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
 
                 Assert.Equal("Jim said to throw from ctor!", ex.Message);
                 Assert.Same(ex, loggerFactory.Logger.LastDatabaseErrorException);
-                Assert.Same(typeof(BloggingContext), loggerFactory.Logger.LastDatabaseErrorState.ContextType);
+                Assert.Same(typeof(BloggingContext), loggerFactory.Logger.LastDatabaseErrorState.Single(p => p.Key == "contextType").Value);
                 Assert.EndsWith(ex.ToString(), loggerFactory.Logger.LastDatabaseErrorFormatter(loggerFactory.Logger.LastDatabaseErrorState, ex));
-            }
-        }
-
-        [Fact]
-        public async Task SaveChanges_logs_concurrent_access_nonasync()
-        {
-            await SaveChanges_logs_concurrent_access(async: false);
-        }
-
-        [Fact]
-        public async Task SaveChanges_logs_concurrent_access_async()
-        {
-            await SaveChanges_logs_concurrent_access(async: true);
-        }
-
-        public async Task SaveChanges_logs_concurrent_access(bool async)
-        {
-            var loggerFactory = new TestLoggerFactory();
-            var serviceProvider = new ServiceCollection()
-                .AddEntityFrameworkInMemoryDatabase()
-                .AddSingleton<ILoggerFactory>(loggerFactory)
-                .BuildServiceProvider();
-
-            using (var context = new BloggingContext(serviceProvider))
-            {
-                context.Blogs.Add(new BloggingContext.Blog(false) { Url = "http://sample.com" });
-
-                context.GetService<IConcurrencyDetector>().EnterCriticalSection();
-
-                Exception ex;
-                if (async)
-                {
-                    ex = await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync());
-                }
-                else
-                {
-                    ex = Assert.Throws<InvalidOperationException>(() => context.SaveChanges());
-                }
-
-                Assert.Equal(CoreStrings.ConcurrentMethodInvocation, ex.Message);
             }
         }
 
@@ -211,7 +171,7 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder
-                    .UseTransientInMemoryDatabase()
+                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
                     .UseInternalServiceProvider(_serviceProvider);
         }
 
@@ -233,12 +193,17 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
             {
                 public IDisposable BeginScope<TState>(TState state) => NullScope.Instance;
 
-                public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+                public void Log<TState>(
+                    LogLevel logLevel,
+                    EventId eventId,
+                    TState state,
+                    Exception exception,
+                    Func<TState, Exception, string> formatter)
                 {
-                    var error = state as DatabaseErrorLogState;
-                    if (error != null)
+                    if (eventId.Id == CoreEventId.SaveChangesFailed.Id
+                        || eventId.Id == CoreEventId.QueryIterationFailed.Id)
                     {
-                        LastDatabaseErrorState = error;
+                        LastDatabaseErrorState = (IReadOnlyList<KeyValuePair<string, object>>)state;
                         LastDatabaseErrorException = exception;
                         LastDatabaseErrorFormatter = (s, e) => formatter((TState)s, e);
                     }
@@ -246,7 +211,7 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
 
                 public bool IsEnabled(LogLevel logLevel) => true;
 
-                public DatabaseErrorLogState LastDatabaseErrorState { get; private set; }
+                public IReadOnlyList<KeyValuePair<string, object>> LastDatabaseErrorState { get; private set; }
                 public Exception LastDatabaseErrorException { get; private set; }
                 public Func<object, Exception, string> LastDatabaseErrorFormatter { get; private set; }
 

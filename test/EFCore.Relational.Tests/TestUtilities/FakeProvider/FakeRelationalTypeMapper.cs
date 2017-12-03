@@ -4,21 +4,20 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider
+namespace Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider
 {
     public class FakeRelationalTypeMapper : RelationalTypeMapper
     {
-        private static readonly RelationalTypeMapping _int = new RelationalTypeMapping("DefaultInt", typeof(int), DbType.Int32);
-        private static readonly RelationalTypeMapping _long = new RelationalTypeMapping("DefaultLong", typeof(long), DbType.Int64);
-        private static readonly RelationalTypeMapping _string = new RelationalTypeMapping("DefaultString", typeof(string), DbType.String);
+        private static readonly RelationalTypeMapping _int = new IntTypeMapping("int", DbType.Int32);
+        private static readonly RelationalTypeMapping _long = new LongTypeMapping("DefaultLong", DbType.Int64);
+        private static readonly RelationalTypeMapping _string = new StringTypeMapping("DefaultString", DbType.String);
 
-        protected override string GetColumnType(IProperty property) => property.TestProvider().ColumnType;
-
-        public FakeRelationalTypeMapper(RelationalTypeMapperDependencies dependencies)
-            : base(dependencies)
+        public FakeRelationalTypeMapper(
+            CoreTypeMapperDependencies coreDependencies,
+            RelationalTypeMapperDependencies dependencies)
+            : base(coreDependencies, dependencies)
         {
         }
 
@@ -30,18 +29,18 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvi
                 { typeof(string), _string }
             };
 
-        private readonly IReadOnlyDictionary<string, RelationalTypeMapping> _simpleNameMappings
-            = new Dictionary<string, RelationalTypeMapping>
+        private readonly IReadOnlyDictionary<string, IList<RelationalTypeMapping>> _simpleNameMappings
+            = new Dictionary<string, IList<RelationalTypeMapping>>
             {
-                { "DefaultInt", _int },
-                { "DefaultLong", _long },
-                { "DefaultString", _string }
+                { "DefaultInt", new List<RelationalTypeMapping> { _int } },
+                { "DefaultLong", new List<RelationalTypeMapping> { _long } },
+                { "DefaultString", new List<RelationalTypeMapping> { _string } }
             };
 
         protected override IReadOnlyDictionary<Type, RelationalTypeMapping> GetClrTypeMappings()
             => _simpleMappings;
 
-        protected override IReadOnlyDictionary<string, RelationalTypeMapping> GetStoreTypeMappings()
+        protected override IReadOnlyDictionary<string, IList<RelationalTypeMapping>> GetMultipleStoreTypeMappings()
             => _simpleNameMappings;
     }
 }

@@ -10,12 +10,11 @@ using System.Runtime.ExceptionServices;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
-using Microsoft.Extensions.Logging;
 using Remotion.Linq.Clauses.StreamedData;
 using Remotion.Linq.Parsing.ExpressionVisitors.Transformation;
 using Remotion.Linq.Parsing.ExpressionVisitors.TreeEvaluation;
@@ -34,14 +33,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             = typeof(IDatabase).GetTypeInfo()
                 .GetDeclaredMethod(nameof(IDatabase.CompileQuery));
 
-        private static readonly IEvaluatableExpressionFilter _evaluatableExpressionFilter
-            = new EvaluatableExpressionFilter();
+        private readonly IEvaluatableExpressionFilter _evaluatableExpressionFilter;
 
         private readonly IQueryContextFactory _queryContextFactory;
         private readonly ICompiledQueryCache _compiledQueryCache;
         private readonly ICompiledQueryCacheKeyGenerator _compiledQueryCacheKeyGenerator;
         private readonly IDatabase _database;
-        private readonly IDiagnosticsLogger<LoggerCategory.Query> _logger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
         private readonly INodeTypeProviderFactory _nodeTypeProviderFactory;
 
         private readonly Type _contextType;
@@ -57,9 +55,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             [NotNull] ICompiledQueryCache compiledQueryCache,
             [NotNull] ICompiledQueryCacheKeyGenerator compiledQueryCacheKeyGenerator,
             [NotNull] IDatabase database,
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Query> logger,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Query> logger,
             [NotNull] INodeTypeProviderFactory nodeTypeProviderFactory,
-            [NotNull] ICurrentDbContext currentContext)
+            [NotNull] ICurrentDbContext currentContext,
+            [NotNull] IEvaluatableExpressionFilter evaluatableExpressionFilter)
         {
             Check.NotNull(queryContextFactory, nameof(queryContextFactory));
             Check.NotNull(compiledQueryCache, nameof(compiledQueryCache));
@@ -67,7 +66,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             Check.NotNull(database, nameof(database));
             Check.NotNull(logger, nameof(logger));
             Check.NotNull(currentContext, nameof(currentContext));
-            
+            Check.NotNull(evaluatableExpressionFilter, nameof(evaluatableExpressionFilter));
+
             _queryContextFactory = queryContextFactory;
             _compiledQueryCache = compiledQueryCache;
             _compiledQueryCacheKeyGenerator = compiledQueryCacheKeyGenerator;
@@ -75,6 +75,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             _logger = logger;
             _nodeTypeProviderFactory = nodeTypeProviderFactory;
             _contextType = currentContext.Context.GetType();
+            _evaluatableExpressionFilter = evaluatableExpressionFilter;
         }
 
         /// <summary>
@@ -117,8 +118,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             return CompileQueryCore<TResult>(query, NodeTypeProvider, _database, _logger, _contextType);
         }
 
-        private static Func<QueryContext, TResult> CompileQueryCore<TResult>(
-            Expression query, INodeTypeProvider nodeTypeProvider, IDatabase database, IDiagnosticsLogger<LoggerCategory.Query> logger, Type contextType)
+        private Func<QueryContext, TResult> CompileQueryCore<TResult>(
+            Expression query,
+            INodeTypeProvider nodeTypeProvider,
+            IDatabase database,
+            IDiagnosticsLogger<DbLoggerCategory.Query> logger,
+            Type contextType)
         {
             var queryModel
                 = CreateQueryParser(nodeTypeProvider)
@@ -206,7 +211,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         }
 
         private static Func<QueryContext, Task<TResult>> CreateCompiledSingletonAsyncQuery<TResult>(
-                Func<QueryContext, IAsyncEnumerable<TResult>> compiledQuery, IDiagnosticsLogger<LoggerCategory.Query> logger, Type contextType)
+            Func<QueryContext, IAsyncEnumerable<TResult>> compiledQuery, IDiagnosticsLogger<DbLoggerCategory.Query> logger, Type contextType)
             => qc => ExecuteSingletonAsyncQuery(qc, compiledQuery, logger, contextType);
 
         /// <summary>
@@ -231,7 +236,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         private static async Task<TResult> ExecuteSingletonAsyncQuery<TResult>(
             QueryContext queryContext,
             Func<QueryContext, IAsyncEnumerable<TResult>> compiledQuery,
-            IDiagnosticsLogger<LoggerCategory.Query> logger,
+            IDiagnosticsLogger<DbLoggerCategory.Query> logger,
             Type contextType)
         {
             try
@@ -267,7 +272,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     () => CompileAsyncQueryCore<TResult>(query, NodeTypeProvider, _database));
         }
 
-        private static Func<QueryContext, IAsyncEnumerable<TResult>> CompileAsyncQueryCore<TResult>(
+        private Func<QueryContext, IAsyncEnumerable<TResult>> CompileAsyncQueryCore<TResult>(
             Expression query,
             INodeTypeProvider nodeTypeProvider,
             IDatabase database)
@@ -301,7 +306,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             return visitor.ExtractParameters(query);
         }
 
-        private static QueryParser CreateQueryParser(INodeTypeProvider nodeTypeProvider)
+        private QueryParser CreateQueryParser(INodeTypeProvider nodeTypeProvider)
             => new QueryParser(
                 new ExpressionTreeParser(
                     nodeTypeProvider,

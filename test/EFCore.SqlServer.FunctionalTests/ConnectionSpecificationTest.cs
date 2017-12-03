@@ -2,14 +2,19 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable InconsistentNaming
+// ReSharper disable ClassNeverInstantiated.Local
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+namespace Microsoft.EntityFrameworkCore
 {
     public class ConnectionSpecificationTest
     {
@@ -45,7 +50,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         private class StringInOnConfiguringContext : NorthwindContextBase
         {
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                => optionsBuilder.UseSqlServer(SqlServerTestStore.NorthwindConnectionString, b => b.ApplyConfiguration());
+                => optionsBuilder.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString, b => b.ApplyConfiguration());
         }
 
         [Fact]
@@ -53,7 +58,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             var serviceProvider
                 = new ServiceCollection()
-                    .AddScoped(p => new SqlConnection(SqlServerTestStore.NorthwindConnectionString))
+                    .AddScoped(p => new SqlConnection(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString))
                     .AddDbContext<ConnectionInOnConfiguringContext>().BuildServiceProvider();
 
             using (SqlServerTestStore.GetNorthwindStore())
@@ -70,7 +75,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             using (SqlServerTestStore.GetNorthwindStore())
             {
-                using (var context = new ConnectionInOnConfiguringContext(new SqlConnection(SqlServerTestStore.NorthwindConnectionString)))
+                using (var context = new ConnectionInOnConfiguringContext(new SqlConnection(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString)))
                 {
                     Assert.True(context.Customers.Any());
                 }
@@ -96,6 +101,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             }
         }
 
+        // ReSharper disable once UnusedMember.Local
         private class StringInConfigContext : NorthwindContextBase
         {
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -141,7 +147,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             var serviceProvider
                 = new ServiceCollection()
-                    .AddScoped(p => new SqlConnection(SqlServerTestStore.NorthwindConnectionString))
+                    .AddScoped(p => new SqlConnection(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString))
                     .AddDbContext<OptionsContext>()
                     .BuildServiceProvider();
 
@@ -161,7 +167,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             {
                 using (var context = new OptionsContext(
                     new DbContextOptions<OptionsContext>(),
-                    new SqlConnection(SqlServerTestStore.NorthwindConnectionString)))
+                    new SqlConnection(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString)))
                 {
                     Assert.True(context.Customers.Any());
                 }
@@ -239,9 +245,49 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             {
                 Assert.Same(_options, optionsBuilder.Options);
 
-                optionsBuilder.UseSqlServer(SqlServerTestStore.NorthwindConnectionString, b => b.ApplyConfiguration());
+                optionsBuilder.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString, b => b.ApplyConfiguration());
 
                 Assert.NotSame(_options, optionsBuilder.Options);
+            }
+        }
+
+        [Theory]
+        [InlineData("MyConnectuonString", "name=MyConnectuonString")]
+        [InlineData("ConnectionStrings:DefaultConnection", "name=ConnectionStrings:DefaultConnection")]
+        [InlineData("ConnectionStrings:DefaultConnection", " NamE   =   ConnectionStrings:DefaultConnection  ")]
+        public void Can_use_AddDbContext_and_get_connection_string_from_config(string key, string connectionString)
+        {
+            var configBuilder = new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string>
+                    {
+                        { key, SqlServerNorthwindTestStoreFactory.NorthwindConnectionString }
+                    });
+
+            var serviceProvider
+                = new ServiceCollection()
+                    .AddSingleton<IConfiguration>(configBuilder.Build())
+                    .AddDbContext<UseConfigurationContext>(
+                        b => b.UseSqlServer(connectionString))
+                    .BuildServiceProvider();
+
+            using (SqlServerTestStore.GetNorthwindStore())
+            {
+                using (var serviceScope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+                {
+                    using (var context = serviceScope.ServiceProvider.GetRequiredService<UseConfigurationContext>())
+                    {
+                        Assert.True(context.Customers.Any());
+                    }
+                }
+            }
+        }
+
+        private class UseConfigurationContext : NorthwindContextBase
+        {
+            public UseConfigurationContext(DbContextOptions options)
+                : base(options)
+            {
             }
         }
 
@@ -260,19 +306,24 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Customer>(b =>
-                    {
-                        b.HasKey(c => c.CustomerID);
-                        b.ForSqlServerToTable("Customers");
-                    });
+                modelBuilder.Entity<Customer>(
+                    b =>
+                        {
+                            b.HasKey(c => c.CustomerID);
+                            b.ToTable("Customers");
+                        });
             }
         }
 
         private class Customer
         {
             public string CustomerID { get; set; }
+
+            // ReSharper disable UnusedMember.Local
             public string CompanyName { get; set; }
+
             public string Fax { get; set; }
+            // ReSharper restore UnusedMember.Local
         }
     }
 }

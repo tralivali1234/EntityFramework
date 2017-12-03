@@ -3,19 +3,20 @@
 
 using System;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
+namespace Microsoft.EntityFrameworkCore.Infrastructure
 {
     public class ServiceCollectionMapTest
     {
         [Fact]
         public void Can_add_delegate_services()
         {
+#pragma warning disable IDE0039 // Use local function
             Func<IServiceProvider, FakeService> factory = p => new FakeService();
+#pragma warning restore IDE0039 // Use local function
 
             AddServiceDelegateTest(m => m.TryAddTransient<IFakeService, FakeService>(factory), factory, ServiceLifetime.Transient);
             AddServiceDelegateTest(m => m.TryAddScoped<IFakeService, FakeService>(factory), factory, ServiceLifetime.Scoped);
@@ -179,8 +180,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
         [Fact]
         public void Can_add_multiple_delegate_services()
         {
+#pragma warning disable IDE0039 // Use local function
             Func<IServiceProvider, FakeService> factory1 = p => new FakeService();
             Func<IServiceProvider, DerivedFakeService> factory2 = p => new DerivedFakeService();
+#pragma warning restore IDE0039 // Use local function
 
             AddServiceDelegateEnumerableTest(
                 m => m.TryAddTransientEnumerable<IFakeService, FakeService>(factory1),
@@ -265,7 +268,9 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
             public DbContext Context { get; private set; }
 
             void IPatchServiceInjectionSite.InjectServices(IServiceProvider serviceProvider)
-                => Context = serviceProvider.GetService<ICurrentDbContext>().Context;
+            {
+                Context = serviceProvider.GetService<ICurrentDbContext>().Context;
+            }
         }
 
         private class DerivedFakeService : FakeService

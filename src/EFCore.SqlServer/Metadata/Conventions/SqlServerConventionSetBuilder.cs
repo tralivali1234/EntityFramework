@@ -3,17 +3,24 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class SqlServerConventionSetBuilder : RelationalConventionSetBuilder
     {
         private readonly ISqlGenerationHelper _sqlGenerationHelper;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqlServerConventionSetBuilder(
             [NotNull] RelationalConventionSetBuilderDependencies dependencies,
             [NotNull] ISqlGenerationHelper sqlGenerationHelper)
@@ -22,6 +29,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
             _sqlGenerationHelper = sqlGenerationHelper;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public override ConventionSet AddConventions(ConventionSet conventionSet)
         {
             Check.NotNull(conventionSet, nameof(conventionSet));
@@ -30,14 +41,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 
             var valueGenerationStrategyConvention = new SqlServerValueGenerationStrategyConvention();
             conventionSet.ModelInitializedConventions.Add(valueGenerationStrategyConvention);
+            conventionSet.ModelInitializedConventions.Add(new RelationalMaxIdentifierLengthConvention(128));
 
-            ValueGeneratorConvention valueGeneratorConvention = new SqlServerValueGeneratorConvention(Dependencies.AnnotationProvider);
-            ReplaceConvention(conventionSet.BaseEntityTypeSetConventions, valueGeneratorConvention);
+            ValueGeneratorConvention valueGeneratorConvention = new SqlServerValueGeneratorConvention();
+            ReplaceConvention(conventionSet.BaseEntityTypeChangedConventions, valueGeneratorConvention);
 
             var sqlServerInMemoryTablesConvention = new SqlServerMemoryOptimizedTablesConvention();
-            conventionSet.EntityTypeAnnotationSetConventions.Add(sqlServerInMemoryTablesConvention);
+            conventionSet.EntityTypeAnnotationChangedConventions.Add(sqlServerInMemoryTablesConvention);
 
-            ReplaceConvention(conventionSet.PrimaryKeySetConventions, valueGeneratorConvention);
+            ReplaceConvention(conventionSet.PrimaryKeyChangedConventions, valueGeneratorConvention);
 
             conventionSet.KeyAddedConventions.Add(sqlServerInMemoryTablesConvention);
 
@@ -49,28 +61,37 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
             conventionSet.IndexAddedConventions.Add(sqlServerInMemoryTablesConvention);
             conventionSet.IndexAddedConventions.Add(sqlServerIndexConvention);
 
-            conventionSet.IndexUniquenessConventions.Add(sqlServerIndexConvention);
+            conventionSet.IndexUniquenessChangedConventions.Add(sqlServerIndexConvention);
 
-            conventionSet.IndexAnnotationSetConventions.Add(sqlServerIndexConvention);
+            conventionSet.IndexAnnotationChangedConventions.Add(sqlServerIndexConvention);
 
-            conventionSet.PropertyNullableChangedConventions.Add(sqlServerIndexConvention);
+            conventionSet.PropertyNullabilityChangedConventions.Add(sqlServerIndexConvention);
 
-            conventionSet.PropertyAnnotationSetConventions.Add(sqlServerIndexConvention);
-            conventionSet.PropertyAnnotationSetConventions.Add((SqlServerValueGeneratorConvention)valueGeneratorConvention);
+            conventionSet.PropertyAnnotationChangedConventions.Add(sqlServerIndexConvention);
+            conventionSet.PropertyAnnotationChangedConventions.Add((SqlServerValueGeneratorConvention)valueGeneratorConvention);
+
+            ReplaceConvention(conventionSet.ModelAnnotationChangedConventions, (RelationalDbFunctionConvention)new SqlServerDbFunctionConvention());
 
             return conventionSet;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static ConventionSet Build()
-            => new SqlServerConventionSetBuilder(
-                new RelationalConventionSetBuilderDependencies(
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies()),
-                    new SqlServerAnnotationProvider(),
-                    null,
-                    null),
-                new SqlServerSqlGenerationHelper(
-                    new RelationalSqlGenerationHelperDependencies()))
-                .AddConventions(new CoreConventionSetBuilder().CreateConventionSet());
+        {
+            var sqlServerTypeMapper = new SqlServerTypeMapper(
+                new CoreTypeMapperDependencies(), 
+                new RelationalTypeMapperDependencies());
+
+            return new SqlServerConventionSetBuilder(
+                    new RelationalConventionSetBuilderDependencies(sqlServerTypeMapper, null, null),
+                    new SqlServerSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()))
+                .AddConventions(
+                    new CoreConventionSetBuilder(
+                            new CoreConventionSetBuilderDependencies(sqlServerTypeMapper))
+                        .CreateConventionSet());
+        }
     }
 }

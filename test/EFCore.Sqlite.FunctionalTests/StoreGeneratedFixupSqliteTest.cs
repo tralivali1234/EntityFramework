@@ -1,15 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public class StoreGeneratedFixupSqliteTest
-        : StoreGeneratedFixupTestBase<SqliteTestStore, StoreGeneratedFixupSqliteTest.StoreGeneratedFixupSqliteFixture>
+    public class StoreGeneratedFixupSqliteTest : StoreGeneratedFixupRelationalTestBase<StoreGeneratedFixupSqliteTest.StoreGeneratedFixupSqliteFixture>
     {
         public StoreGeneratedFixupSqliteTest(StoreGeneratedFixupSqliteFixture fixture)
             : base(fixture)
@@ -39,47 +39,12 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
 
         protected override bool EnforcesFKs => true;
 
-        public class StoreGeneratedFixupSqliteFixture : StoreGeneratedFixupFixtureBase
+        protected override void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)
+            => facade.UseTransaction(transaction.GetDbTransaction());
+
+        public class StoreGeneratedFixupSqliteFixture : StoreGeneratedFixupRelationalFixtureBase
         {
-            private const string DatabaseName = "StoreGeneratedFixup";
-
-            private readonly IServiceProvider _serviceProvider;
-
-            public StoreGeneratedFixupSqliteFixture()
-            {
-                _serviceProvider = new ServiceCollection()
-                    .AddEntityFrameworkSqlite()
-                    .AddSingleton(TestModelSource.GetFactory(OnModelCreating))
-                    .BuildServiceProvider();
-            }
-
-            public override SqliteTestStore CreateTestStore()
-            {
-                return SqliteTestStore.GetOrCreateShared(DatabaseName, () =>
-                    {
-                        var optionsBuilder = new DbContextOptionsBuilder()
-                            .UseSqlite(SqliteTestStore.CreateConnectionString(DatabaseName))
-                            .UseInternalServiceProvider(_serviceProvider);
-
-                        using (var context = new StoreGeneratedFixupContext(optionsBuilder.Options))
-                        {
-                            context.Database.EnsureClean();
-                            Seed(context);
-                        }
-                    });
-            }
-
-            public override DbContext CreateContext(SqliteTestStore testStore)
-            {
-                var optionsBuilder = new DbContextOptionsBuilder()
-                    .UseSqlite(testStore.Connection)
-                    .UseInternalServiceProvider(_serviceProvider);
-
-                var context = new StoreGeneratedFixupContext(optionsBuilder.Options);
-                context.Database.UseTransaction(testStore.Transaction);
-
-                return context;
-            }
+            protected override ITestStoreFactory TestStoreFactory => SqliteTestStoreFactory.Instance;
         }
     }
 }

@@ -3,14 +3,14 @@
 
 using System;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
+namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
 {
     public class Employee
     {
-        public int EmployeeID { get; set; }
+        public uint EmployeeID { get; set; }
         public string LastName { get; set; }
         public string FirstName { get; set; }
-        public string Title { get; set; } // shadow-prop in EF model
+        public string Title { get; set; }
         public string TitleOfCourtesy { get; set; }
         public DateTime? BirthDate { get; set; }
         public DateTime? HireDate { get; set; }
@@ -23,7 +23,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
         public string Extension { get; set; }
         public byte[] Photo { get; set; }
         public string Notes { get; set; }
-        public int? ReportsTo { get; set; }
+        public uint? ReportsTo { get; set; }
         public string PhotoPath { get; set; }
 
         public Employee Manager { get; set; }
@@ -32,7 +32,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

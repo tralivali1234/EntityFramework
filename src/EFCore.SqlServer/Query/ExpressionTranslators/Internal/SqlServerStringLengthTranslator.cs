@@ -17,11 +17,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual Expression Translate(MemberExpression memberExpression)
-            => (memberExpression.Expression != null)
-               && (memberExpression.Expression.Type == typeof(string))
-               && (memberExpression.Member.Name == nameof(string.Length))
+            => memberExpression.Expression != null
+               && memberExpression.Expression.Type == typeof(string)
+               && memberExpression.Member.Name == nameof(string.Length)
                 ? new ExplicitCastExpression(
-                    new SqlFunctionExpression("LEN", memberExpression.Type, new[] { memberExpression.Expression }), 
+                    new SqlFunctionExpression("LEN", memberExpression.Type, new[] { memberExpression.Expression }),
                     typeof(int))
                 : null;
     }

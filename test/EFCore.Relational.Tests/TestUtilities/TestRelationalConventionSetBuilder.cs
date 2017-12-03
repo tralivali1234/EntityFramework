@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities
+namespace Microsoft.EntityFrameworkCore.TestUtilities
 {
     public class TestRelationalConventionSetBuilder : RelationalConventionSetBuilder
     {
@@ -17,7 +17,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities
         public static ConventionSet Build()
             => new TestRelationalConventionSetBuilder(
                     new RelationalConventionSetBuilderDependencies(
-                        new TestRelationalTypeMapper(new RelationalTypeMapperDependencies()), new TestAnnotationProvider(), null, null))
-                .AddConventions(new CoreConventionSetBuilder().CreateConventionSet());
+                        new TestRelationalTypeMapper(
+                            new CoreTypeMapperDependencies(),
+                            new RelationalTypeMapperDependencies()), null, null))
+                .AddConventions(
+                    new CoreConventionSetBuilder(
+                            new CoreConventionSetBuilderDependencies(
+                                new CoreTypeMapper(
+                                    new CoreTypeMapperDependencies())))
+                        .CreateConventionSet());
     }
 }

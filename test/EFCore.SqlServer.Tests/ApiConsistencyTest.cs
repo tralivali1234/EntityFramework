@@ -3,12 +3,17 @@
 
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.EntityFrameworkCore.Tests;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class ApiConsistencyTest : ApiConsistencyTestBase
     {
+        protected override void AddServices(ServiceCollection serviceCollection)
+        {
+            serviceCollection.AddEntityFrameworkSqlServer();
+        }
+
         protected override Assembly TargetAssembly => typeof(SqlServerConnection).GetTypeInfo().Assembly;
     }
 }

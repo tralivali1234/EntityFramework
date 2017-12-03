@@ -1,4 +1,4 @@
-﻿﻿// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
@@ -66,7 +66,8 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
         private void CheckState()
         {
-            var _ = EntityType;
+            // ReSharper disable once AssignmentIsFullyDiscarded
+            _ = EntityType;
         }
 
         private EntityQueryable<TEntity> EntityQueryable
@@ -83,7 +84,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         }
 
         private EntityQueryable<TEntity> CreateEntityQueryable()
-            => new EntityQueryable<TEntity>(_context.GetInfrastructure<DbContextDependencies>().QueryProvider);
+            => new EntityQueryable<TEntity>(_context.GetDependencies().QueryProvider);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -133,7 +134,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public override Task<EntityEntry<TEntity>> AddAsync(
             TEntity entity,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => _context.AddAsync(entity, cancellationToken);
 
         /// <summary>
@@ -210,7 +211,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public override Task AddRangeAsync(
             IEnumerable<TEntity> entities,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => _context.AddRangeAsync(entities, cancellationToken);
 
         /// <summary>
@@ -235,7 +236,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => _context.UpdateRange(entities);
 
         private IEntityFinder<TEntity> Finder
-            => (IEntityFinder<TEntity>)_context.GetInfrastructure<DbContextDependencies>().EntityFinderSource.Create(_context, EntityType);
+            => (IEntityFinder<TEntity>)_context.GetDependencies().EntityFinderFactory.Create(EntityType);
 
         IEnumerator<TEntity> IEnumerable<TEntity>.GetEnumerator() => EntityQueryable.GetEnumerator();
 
@@ -250,6 +251,6 @@ namespace Microsoft.EntityFrameworkCore.Internal
         IQueryProvider IQueryable.Provider => EntityQueryable.Provider;
 
         IServiceProvider IInfrastructure<IServiceProvider>.Instance
-            => _context.GetInfrastructure<IServiceProvider>();
+            => _context.GetInfrastructure();
     }
 }

@@ -5,7 +5,7 @@ using System;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class InMemoryIntegerValueGeneratorTest
     {
@@ -33,10 +33,10 @@ namespace Microsoft.EntityFrameworkCore.InMemory.Tests
             Assert.Equal(1, new InMemoryIntegerValueGenerator<int>().Next(null));
             Assert.Equal(1L, new InMemoryIntegerValueGenerator<long>().Next(null));
             Assert.Equal((short)1, new InMemoryIntegerValueGenerator<short>().Next(null));
-            Assert.Equal(unchecked((byte)1), new InMemoryIntegerValueGenerator<byte>().Next(null));
-            Assert.Equal(unchecked((uint)1), new InMemoryIntegerValueGenerator<uint>().Next(null));
-            Assert.Equal(unchecked((ulong)1), new InMemoryIntegerValueGenerator<ulong>().Next(null));
-            Assert.Equal(unchecked((ushort)1), new InMemoryIntegerValueGenerator<ushort>().Next(null));
+            Assert.Equal((byte)1, new InMemoryIntegerValueGenerator<byte>().Next(null));
+            Assert.Equal((uint)1, new InMemoryIntegerValueGenerator<uint>().Next(null));
+            Assert.Equal((ulong)1, new InMemoryIntegerValueGenerator<ulong>().Next(null));
+            Assert.Equal((ushort)1, new InMemoryIntegerValueGenerator<ushort>().Next(null));
             Assert.Equal((sbyte)1, new InMemoryIntegerValueGenerator<sbyte>().Next(null));
         }
 

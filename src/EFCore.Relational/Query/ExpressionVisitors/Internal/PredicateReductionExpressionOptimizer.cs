@@ -30,16 +30,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
                 if (node.NodeType == ExpressionType.AndAlso)
                 {
-                    if ((constantLeft != null)
-                        && (constantLeft.Type == typeof(bool)))
+                    if (constantLeft != null
+                        && constantLeft.Type == typeof(bool))
                     {
                         // true && a => a
                         // false && a => false
                         return (bool)constantLeft.Value ? newRight : newLeft;
                     }
 
-                    if ((constantRight != null)
-                        && (constantRight.Type == typeof(bool)))
+                    if (constantRight != null
+                        && constantRight.Type == typeof(bool))
                     {
                         // a && true => a
                         // a && false => false
@@ -49,16 +49,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
                 if (node.NodeType == ExpressionType.OrElse)
                 {
-                    if ((constantLeft != null)
-                        && (constantLeft.Type == typeof(bool)))
+                    if (constantLeft != null
+                        && constantLeft.Type == typeof(bool))
                     {
                         // true || a => true
                         // false || a => a
                         return (bool)constantLeft.Value ? newLeft : newRight;
                     }
 
-                    if ((constantRight != null)
-                        && (constantRight.Type == typeof(bool)))
+                    if (constantRight != null
+                        && constantRight.Type == typeof(bool))
                     {
                         // a || true => true
                         // a || false => a
@@ -79,16 +79,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var newLeft = Visit(node.Left);
                 var newRight = Visit(node.Right);
 
-                var leftConstant = newLeft as ConstantExpression;
-                if (leftConstant != null
-                    && (bool?)leftConstant.Value == true)
+                if (newLeft is ConstantExpression leftConstant && (bool?)leftConstant.Value == true)
                 {
                     return newRight.Type == typeof(bool) ? newRight : Expression.Convert(newRight, typeof(bool));
                 }
 
-                var rightConstant = newRight as ConstantExpression;
-                if (rightConstant != null
-                    && (bool?)rightConstant.Value == true)
+                if (newRight is ConstantExpression rightConstant && (bool?)rightConstant.Value == true)
                 {
                     return newLeft.Type == typeof(bool) ? newLeft : Expression.Convert(newLeft, typeof(bool));
                 }

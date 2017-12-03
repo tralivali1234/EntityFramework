@@ -150,6 +150,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 || relationalQueryModelVisitor.RequiresClientFilter
                 || relationalQueryModelVisitor.RequiresClientOrderBy
                 || relationalQueryModelVisitor.RequiresClientResultOperator
+                || relationalQueryModelVisitor.RequiresStreamingGroupResultOperator
                 || !_resultHandlers.TryGetValue(resultOperator.GetType(), out var resultHandler)
                 || selectExpression == null)
             {
@@ -163,6 +164,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             var sqlTranslatingVisitor
                 = handlerContext.CreateSqlTranslatingVisitor();
+
+            PrepareSelectExpressionForAggregate(handlerContext.SelectExpression);
 
             var predicate
                 = sqlTranslatingVisitor.Visit(
@@ -207,7 +210,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             SetConditionAsProjection(
                 handlerContext,
-                    new ExistsExpression(innerSelectExpression));
+                new ExistsExpression(innerSelectExpression));
 
             return TransformClientExpression<bool>(handlerContext);
         }
@@ -233,8 +236,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         outputType = inputType.IsNullableType() ? typeof(double?) : typeof(double);
                     }
 
+                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
                     expression = new ExplicitCastExpression(expression, outputType);
-                    Expression averageExpression = new SqlFunctionExpression("AVG", outputType, new [] { expression });
+                    Expression averageExpression = new SqlFunctionExpression("AVG", outputType, new[] { expression });
 
                     if (nonNullableInputType == typeof(float))
                     {
@@ -243,9 +247,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                     handlerContext.SelectExpression.SetProjectionExpression(averageExpression);
 
+                    var averageExpressionType = averageExpression.Type;
+                    var throwOnNullResult = DetermineAggregateThrowingBehavior(handlerContext, averageExpressionType);
+
                     return (Expression)_transformClientExpressionMethodInfo
-                        .MakeGenericMethod(averageExpression.Type)
-                        .Invoke(null, new object [] { handlerContext });
+                        .MakeGenericMethod(averageExpressionType)
+                        .Invoke(null, new object[] { handlerContext, throwOnNullResult });
                 }
             }
 
@@ -451,13 +458,21 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             if (sqlExpression != null)
             {
+                var selectExpression = handlerContext.SelectExpression;
+
+                PrepareSelectExpressionForAggregate(selectExpression);
+
+                sqlExpression
+                    = sqlTranslatingExpressionVisitor.Visit(groupResultOperator.KeySelector);
+
                 var columns = (sqlExpression as ConstantExpression)?.Value as Expression[] ?? new[] { sqlExpression };
 
-                handlerContext.SelectExpression
-                    .PrependToOrderBy(columns.Select(c => new Ordering(c, OrderingDirection.Asc)));
+                selectExpression.PrependToOrderBy(columns.Select(c => new Ordering(c, OrderingDirection.Asc)));
+
+                handlerContext.QueryModelVisitor.RequiresStreamingGroupResultOperator = true;
             }
 
-            var oldGroupByCall = (MethodCallExpression)handlerContext.EvalOnClient();
+            var oldGroupByCall = (MethodCallExpression)handlerContext.EvalOnClient(requiresClientResultOperator: sqlExpression == null);
 
             var newGroupByCall
                 = handlerContext.QueryModelVisitor.QueryCompilationContext.QueryMethodProvider.GroupByMethod;
@@ -468,7 +483,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
 
             return sqlExpression != null
-                ? Expression.Call(newGroupByCall
+                ? Expression.Call(
+                    newGroupByCall
                         .MakeGenericMethod(oldGroupByCall.Method.GetGenericArguments()),
                     oldGroupByCall.Arguments)
                 : oldGroupByCall;
@@ -589,7 +605,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             requiresClientResultOperator
                 = requiresClientResultOperator
-                || !((LastResultOperator)handlerContext.ResultOperator).ReturnDefaultWhenEmpty
+                  || !((LastResultOperator)handlerContext.ResultOperator).ReturnDefaultWhenEmpty
                   && handlerContext.QueryModelVisitor.ParentQueryModelVisitor != null;
 
             return handlerContext.EvalOnClient(requiresClientResultOperator);
@@ -621,13 +637,17 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
-                    var minExpression = new SqlFunctionExpression("MIN", handlerContext.QueryModel.SelectClause.Selector.Type, new [] { expression });
+                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
+                    var minExpression = new SqlFunctionExpression("MIN", handlerContext.QueryModel.SelectClause.Selector.Type, new[] { expression });
 
                     handlerContext.SelectExpression.SetProjectionExpression(minExpression);
 
+                    var minExpressionType = minExpression.Type;
+                    var throwOnNullResult = DetermineAggregateThrowingBehavior(handlerContext, minExpressionType);
+
                     return (Expression)_transformClientExpressionMethodInfo
-                        .MakeGenericMethod(minExpression.Type)
-                        .Invoke(null, new object [] { handlerContext });
+                        .MakeGenericMethod(minExpressionType)
+                        .Invoke(null, new object[] { handlerContext, throwOnNullResult });
                 }
             }
 
@@ -644,17 +664,42 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
-                    var maxExpression = new SqlFunctionExpression("MAX", handlerContext.QueryModel.SelectClause.Selector.Type, new [] { expression });
+                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
+                    var maxExpression = new SqlFunctionExpression("MAX", handlerContext.QueryModel.SelectClause.Selector.Type, new[] { expression });
 
                     handlerContext.SelectExpression.SetProjectionExpression(maxExpression);
 
+                    var maxExpressionType = maxExpression.Type;
+                    var throwOnNullResult = DetermineAggregateThrowingBehavior(handlerContext, maxExpressionType);
+
                     return (Expression)_transformClientExpressionMethodInfo
-                        .MakeGenericMethod(maxExpression.Type)
-                        .Invoke(null, new object [] { handlerContext });
+                        .MakeGenericMethod(maxExpressionType)
+                        .Invoke(null, new object[] { handlerContext, throwOnNullResult });
                 }
             }
 
             return handlerContext.EvalOnClient();
+        }
+
+        private static bool DetermineAggregateThrowingBehavior(HandlerContext handlerContext, Type maxExpressionType)
+        {
+            if (handlerContext.QueryModel.MainFromClause.FromExpression.Type.IsGrouping())
+            {
+                return false;
+            }
+
+            var throwOnNullResult = !maxExpressionType.IsNullableType();
+
+            if (throwOnNullResult
+                && handlerContext.QueryModelVisitor.ParentQueryModelVisitor != null)
+            {
+                handlerContext.QueryModelVisitor.QueryCompilationContext.Logger
+                    .QueryPossibleExceptionWithAggregateOperator();
+            }
+
+            handlerContext.QueryModelVisitor.RequiresClientResultOperator = throwOnNullResult;
+
+            return throwOnNullResult;
         }
 
         private static Expression HandleSingle(HandlerContext handlerContext)
@@ -702,17 +747,24 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 {
                     var inputType = handlerContext.QueryModel.SelectClause.Selector.Type;
 
-                    Expression sumExpression = new SqlFunctionExpression("SUM", inputType, new [] { expression });
+                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
+                    Expression sumExpression = new SqlFunctionExpression("SUM", inputType, new[] { expression });
                     if (inputType.UnwrapNullableType() == typeof(float))
                     {
                         sumExpression = new ExplicitCastExpression(sumExpression, inputType);
                     }
 
                     handlerContext.SelectExpression.SetProjectionExpression(sumExpression);
-
-                    return (Expression)_transformClientExpressionMethodInfo
-                        .MakeGenericMethod(sumExpression.Type)
-                        .Invoke(null, new object [] { handlerContext });
+                    
+                    var clientExpression 
+                        = (Expression)_transformClientExpressionMethodInfo
+                            .MakeGenericMethod(sumExpression.Type.UnwrapNullableType())
+                            .Invoke(null, new object[] { handlerContext, /*throwOnNullResult:*/ false });
+                    
+                    return
+                        sumExpression.Type.IsNullableType()
+                            ? Expression.Convert(clientExpression, sumExpression.Type)
+                            : clientExpression;
                 }
             }
 
@@ -744,7 +796,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             handlerContext.SelectExpression.Clear();
 
             handlerContext.SelectExpression.AddToProjection(
-                Expression.Condition(condition,
+                Expression.Condition(
+                    condition,
                     Expression.Constant(true),
                     Expression.Constant(false),
                     typeof(bool)));
@@ -765,7 +818,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             = typeof(RelationalResultOperatorHandler).GetTypeInfo()
                 .GetDeclaredMethod(nameof(TransformClientExpression));
 
-        private static Expression TransformClientExpression<TResult>(HandlerContext handlerContext)
+        private static Expression TransformClientExpression<TResult>(
+            HandlerContext handlerContext, bool throwOnNullResult = false)
         {
             var querySource
                 = handlerContext.QueryModel.BodyClauses
@@ -776,7 +830,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             var visitor
                 = new ResultTransformingExpressionVisitor<TResult>(
                     querySource,
-                    handlerContext.QueryModelVisitor.QueryCompilationContext);
+                    handlerContext.QueryModelVisitor.QueryCompilationContext,
+                    throwOnNullResult);
 
             return visitor.Visit(handlerContext.QueryModelVisitor.Expression);
         }

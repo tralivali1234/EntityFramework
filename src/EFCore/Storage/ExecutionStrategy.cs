@@ -5,9 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Storage
 {
@@ -44,11 +46,28 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <summary>
         ///     Creates a new instance of <see cref="ExecutionStrategy" />.
         /// </summary>
-        /// <param name="context"> The required dependencies. </param>
+        /// <param name="context"> The context on which the operations will be invoked. </param>
         /// <param name="maxRetryCount"> The maximum number of retry attempts. </param>
         /// <param name="maxRetryDelay"> The maximum delay between retries. </param>
         protected ExecutionStrategy(
-            [NotNull] ExecutionStrategyContext context,
+            [NotNull] DbContext context,
+            int maxRetryCount,
+            TimeSpan maxRetryDelay)
+            : this(
+                context.GetService<ExecutionStrategyDependencies>(),
+                maxRetryCount,
+                maxRetryDelay)
+        {
+        }
+
+        /// <summary>
+        ///     Creates a new instance of <see cref="ExecutionStrategy" />.
+        /// </summary>
+        /// <param name="dependencies"> Parameter object containing service dependencies. </param>
+        /// <param name="maxRetryCount"> The maximum number of retry attempts. </param>
+        /// <param name="maxRetryDelay"> The maximum delay between retries. </param>
+        protected ExecutionStrategy(
+            [NotNull] ExecutionStrategyDependencies dependencies,
             int maxRetryCount,
             TimeSpan maxRetryDelay)
         {
@@ -61,8 +80,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
                 throw new ArgumentOutOfRangeException(nameof(maxRetryDelay));
             }
 
-            Context = context.Context;
-            Logger = context.Logger;
+            Dependencies = dependencies;
             MaxRetryCount = maxRetryCount;
             MaxRetryDelay = maxRetryDelay;
         }
@@ -73,7 +91,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         protected virtual List<Exception> ExceptionsEncountered { get; } = new List<Exception>();
 
         /// <summary>
-        ///     A pseudo-random number generater that can be used to vary the delay between retries.
+        ///     A pseudo-random number generator that can be used to vary the delay between retries.
         /// </summary>
         protected virtual Random Random { get; } = new Random();
 
@@ -88,14 +106,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         protected virtual TimeSpan MaxRetryDelay { get; }
 
         /// <summary>
-        ///     The context on which the operations will be invoked.
+        ///     Parameter object containing service dependencies.
         /// </summary>
-        protected virtual DbContext Context { get; }
-
-        /// <summary>
-        ///     The logger for this <see cref="ExecutionStrategy" />.
-        /// </summary>
-        protected virtual IDiagnosticsLogger<LoggerCategory.Infrastructure> Logger { get; }
+        protected virtual ExecutionStrategyDependencies Dependencies { get; }
 
         private static readonly AsyncLocal<bool?> _suspended = new AsyncLocal<bool?>();
 
@@ -117,25 +130,27 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <summary>
         ///     Executes the specified operation and returns the result.
         /// </summary>
+        /// <param name="state"> The state that will be passed to the operation. </param>
         /// <param name="operation">
         ///     A delegate representing an executable operation that returns the result of type <typeparamref name="TResult" />.
         /// </param>
         /// <param name="verifySucceeded"> A delegate that tests whether the operation succeeded even though an exception was thrown. </param>
-        /// <param name="state"> The state that will be passed to the operation. </param>
         /// <typeparam name="TState"> The type of the state. </typeparam>
         /// <typeparam name="TResult"> The return type of <paramref name="operation" />. </typeparam>
         /// <returns> The result from the operation. </returns>
         /// <exception cref="RetryLimitExceededException">
-        ///     Thrown if the operation has not succeeded after the configured number of retries.
+        ///     The operation has not succeeded after the configured number of retries.
         /// </exception>
         public virtual TResult Execute<TState, TResult>(
-            Func<TState, TResult> operation,
-            Func<TState, ExecutionResult<TResult>> verifySucceeded,
-            TState state)
+            TState state,
+            Func<DbContext, TState, TResult> operation,
+            Func<DbContext, TState, ExecutionResult<TResult>> verifySucceeded)
         {
+            Check.NotNull(operation, nameof(operation));
+
             if (Suspended)
             {
-                return operation(state);
+                return operation(Dependencies.CurrentDbContext.Context, state);
             }
 
             OnFirstExecution();
@@ -144,8 +159,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
         }
 
         private TResult ExecuteImplementation<TState, TResult>(
-            Func<TState, TResult> operation,
-            Func<TState, ExecutionResult<TResult>> verifySucceeded,
+            Func<DbContext, TState, TResult> operation,
+            Func<DbContext, TState, ExecutionResult<TResult>> verifySucceeded,
             TState state)
         {
             while (true)
@@ -154,7 +169,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
                 try
                 {
                     Suspended = true;
-                    var result = operation(state);
+                    var result = operation(Dependencies.CurrentDbContext.Context, state);
                     Suspended = false;
                     return result;
                 }
@@ -197,6 +212,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <summary>
         ///     Executes the specified asynchronous operation and returns the result.
         /// </summary>
+        /// <param name="state"> The state that will be passed to the operation. </param>
         /// <param name="operation">
         ///     A function that returns a started task of type <typeparamref name="TResult" />.
         /// </param>
@@ -205,7 +221,6 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     A cancellation token used to cancel the retry operation, but not operations that are already in flight
         ///     or that already completed successfully.
         /// </param>
-        /// <param name="state"> The state that will be passed to the operation. </param>
         /// <typeparam name="TState"> The type of the state. </typeparam>
         /// <typeparam name="TResult"> The result type of the <see cref="Task{T}" /> returned by <paramref name="operation" />. </typeparam>
         /// <returns>
@@ -214,17 +229,19 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     the retry limit is reached, the returned task will become faulted and the exception must be observed.
         /// </returns>
         /// <exception cref="RetryLimitExceededException">
-        ///     Thrown if the operation has not succeeded after the configured number of retries.
+        ///     The operation has not succeeded after the configured number of retries.
         /// </exception>
         public virtual Task<TResult> ExecuteAsync<TState, TResult>(
-            Func<TState, CancellationToken, Task<TResult>> operation,
-            Func<TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
             TState state,
-            CancellationToken cancellationToken = default(CancellationToken))
+            Func<DbContext, TState, CancellationToken, Task<TResult>> operation,
+            Func<DbContext, TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
+            CancellationToken cancellationToken = default)
         {
+            Check.NotNull(operation, nameof(operation));
+
             if (Suspended)
             {
-                return operation(state, cancellationToken);
+                return operation(Dependencies.CurrentDbContext.Context, state, cancellationToken);
             }
 
             OnFirstExecution();
@@ -232,8 +249,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
         }
 
         private async Task<TResult> ExecuteImplementationAsync<TState, TResult>(
-            Func<TState, CancellationToken, Task<TResult>> operation,
-            Func<TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
+            Func<DbContext, TState, CancellationToken, Task<TResult>> operation,
+            Func<DbContext, TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
             TState state,
             CancellationToken cancellationToken)
         {
@@ -245,7 +262,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
                 try
                 {
                     Suspended = true;
-                    var result = await operation(state, cancellationToken);
+                    var result = await operation(Dependencies.CurrentDbContext.Context, state, cancellationToken);
                     Suspended = false;
                     return result;
                 }
@@ -283,66 +300,13 @@ namespace Microsoft.EntityFrameworkCore.Storage
         }
 
         /// <summary>
-        ///     Executes the specified operation in a transaction and returns the result after commiting it.
-        /// </summary>
-        /// <param name="operation">
-        ///     A delegate representing an executable operation that returns the result of type <typeparamref name="TResult" />.
-        /// </param>
-        /// <param name="verifySucceeded">
-        ///     A delegate that tests whether the operation succeeded even though an exception was thrown when the
-        ///     transaction was being committed.
-        /// </param>
-        /// <param name="state"> The state that will be passed to the operation. </param>
-        /// <typeparam name="TState"> The type of the state. </typeparam>
-        /// <typeparam name="TResult"> The return type of <paramref name="operation" />. </typeparam>
-        /// <returns> The result from the operation. </returns>
-        /// <exception cref="RetryLimitExceededException">
-        ///     Thrown if the operation has not succeeded after the configured number of retries.
-        /// </exception>
-        public virtual TResult ExecuteInTransaction<TState, TResult>(
-            [NotNull] Func<TState, TResult> operation,
-            [CanBeNull] Func<TState, bool> verifySucceeded,
-            [CanBeNull] TState state)
-            => this.ExecuteInTransaction(operation, verifySucceeded, state, Context);
-
-        /// <summary>
-        ///     Executes the specified asynchronous operation and returns the result.
-        /// </summary>
-        /// <param name="operation">
-        ///     A function that returns a started task of type <typeparamref name="TResult" />.
-        /// </param>
-        /// <param name="verifySucceeded">
-        ///     A delegate that tests whether the operation succeeded even though an exception was thrown when the
-        ///     transaction was being committed.
-        /// </param>
-        /// <param name="cancellationToken">
-        ///     A cancellation token used to cancel the retry operation, but not operations that are already in flight
-        ///     or that already completed successfully.
-        /// </param>
-        /// <param name="state"> The state that will be passed to the operation. </param>
-        /// <typeparam name="TState"> The type of the state. </typeparam>
-        /// <typeparam name="TResult"> The result type of the <see cref="Task{T}" /> returned by <paramref name="operation" />. </typeparam>
-        /// <returns>
-        ///     A task that will run to completion if the original task completes successfully (either the
-        ///     first time or after retrying transient failures). If the task fails with a non-transient error or
-        ///     the retry limit is reached, the returned task will become faulted and the exception must be observed.
-        /// </returns>
-        /// <exception cref="RetryLimitExceededException">
-        ///     Thrown if the operation has not succeeded after the configured number of retries.
-        /// </exception>
-        public virtual Task<TResult> ExecuteInTransactionAsync<TState, TResult>(
-            [NotNull] Func<TState, CancellationToken, Task<TResult>> operation,
-            [CanBeNull] Func<TState, CancellationToken, Task<bool>> verifySucceeded,
-            [CanBeNull] TState state,
-            CancellationToken cancellationToken = default(CancellationToken))
-            => this.ExecuteInTransactionAsync(operation, verifySucceeded, state, Context, cancellationToken);
-
-        /// <summary>
         ///     Method called before the first operation execution
         /// </summary>
         protected virtual void OnFirstExecution()
         {
-            if (Context?.Database.CurrentTransaction != null)
+            if (Dependencies.CurrentDbContext.Context.Database.CurrentTransaction != null
+                || Dependencies.CurrentDbContext.Context.Database.GetEnlistedTransaction() != null
+                || Transaction.Current != null)
             {
                 throw new InvalidOperationException(
                     CoreStrings.ExecutionStrategyExistingTransaction(
@@ -417,11 +381,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </returns>
         public static TResult CallOnWrappedException<TResult>(
             [NotNull] Exception exception, [NotNull] Func<Exception, TResult> exceptionHandler)
-        {
-            var dbUpdateException = exception as DbUpdateException;
-            return dbUpdateException != null
+            => exception is DbUpdateException dbUpdateException
                 ? CallOnWrappedException(dbUpdateException.InnerException, exceptionHandler)
                 : exceptionHandler(exception);
-        }
     }
 }

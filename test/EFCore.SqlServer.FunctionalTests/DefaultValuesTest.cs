@@ -3,11 +3,11 @@
 
 using System;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class DefaultValuesTest : IDisposable
     {
@@ -21,6 +21,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             using (var context = new ChipsContext(_serviceProvider, TestStore.Name))
             {
                 context.Database.EnsureCreated();
+
+                context.Chippers.Add(new Chipper { Id = "Default" });
+
+                context.SaveChanges();
 
                 var honeyDijon = context.Add(new KettleChips { Name = "Honey Dijon" }).Entity;
                 var buffaloBleu = context.Add(new KettleChips { Name = "Buffalo Bleu", BestBuyDate = new DateTime(2111, 1, 11) }).Entity;
@@ -50,6 +54,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             }
 
             public DbSet<KettleChips> Chips { get; set; }
+            public DbSet<Chipper> Chippers { get; set; }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder
@@ -57,10 +62,17 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
                     .UseInternalServiceProvider(_serviceProvider);
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<KettleChips>()
-                    .Property(e => e.BestBuyDate)
-                    .ValueGeneratedOnAdd()
-                    .HasDefaultValue(new DateTime(2035, 9, 25));
+                => modelBuilder.Entity<KettleChips>(
+                    b =>
+                        {
+                            b.Property(e => e.BestBuyDate)
+                                .ValueGeneratedOnAdd()
+                                .HasDefaultValue(new DateTime(2035, 9, 25));
+
+                            b.Property(e => e.ChipperId)
+                                .IsRequired()
+                                .HasDefaultValue("Default");
+                        });
         }
 
         private class KettleChips
@@ -68,11 +80,19 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             public int Id { get; set; }
             public string Name { get; set; }
             public DateTime BestBuyDate { get; set; }
+            public string ChipperId { get; set; }
+
+            public Chipper Manufacturer { get; set; }
+        }
+
+        private class Chipper
+        {
+            public string Id { get; set; }
         }
 
         public DefaultValuesTest()
         {
-            TestStore = SqlServerTestStore.Create("DefaultValuesTest");
+            TestStore = SqlServerTestStore.CreateInitialized("DefaultValuesTest");
         }
 
         protected SqlServerTestStore TestStore { get; }

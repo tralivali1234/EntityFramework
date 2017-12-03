@@ -11,7 +11,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
@@ -45,10 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             protected readonly IAsyncEnumerable<TResult> Results;
 
-            public EnumerableAdapter(IAsyncEnumerable<TResult> results)
-            {
-                Results = results;
-            }
+            public EnumerableAdapter(IAsyncEnumerable<TResult> results) => Results = results;
 
             IAsyncEnumerator<TResult> IAsyncEnumerable<TResult>.GetEnumerator() => Results.GetEnumerator();
 
@@ -106,18 +103,18 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         [UsedImplicitly]
         // ReSharper disable once InconsistentNaming
         private static IAsyncEnumerable<T> _InterceptExceptions<T>(
-            IAsyncEnumerable<T> source, Type contextType, IDiagnosticsLogger<LoggerCategory.Query> logger, QueryContext queryContext)
+            IAsyncEnumerable<T> source, Type contextType, IDiagnosticsLogger<DbLoggerCategory.Query> logger, QueryContext queryContext)
             => new ExceptionInterceptor<T>(source, contextType, logger, queryContext);
 
         private sealed class ExceptionInterceptor<T> : IAsyncEnumerable<T>
         {
             private readonly IAsyncEnumerable<T> _innerAsyncEnumerable;
             private readonly Type _contextType;
-            private readonly IDiagnosticsLogger<LoggerCategory.Query> _logger;
+            private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
             private readonly QueryContext _queryContext;
 
             public ExceptionInterceptor(
-                IAsyncEnumerable<T> innerAsyncEnumerable, Type contextType, IDiagnosticsLogger<LoggerCategory.Query> logger, QueryContext queryContext)
+                IAsyncEnumerable<T> innerAsyncEnumerable, Type contextType, IDiagnosticsLogger<DbLoggerCategory.Query> logger, QueryContext queryContext)
             {
                 _innerAsyncEnumerable = innerAsyncEnumerable;
                 _contextType = contextType;
@@ -131,12 +128,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             private sealed class EnumeratorExceptionInterceptor : IAsyncEnumerator<T>
             {
                 private readonly ExceptionInterceptor<T> _exceptionInterceptor;
-                private readonly IAsyncEnumerator<T> _innerEnumerator;
+                private IAsyncEnumerator<T> _innerEnumerator;
 
                 public EnumeratorExceptionInterceptor(ExceptionInterceptor<T> exceptionInterceptor)
                 {
                     _exceptionInterceptor = exceptionInterceptor;
-                    _innerEnumerator = _exceptionInterceptor._innerAsyncEnumerable.GetEnumerator();
                 }
 
                 public T Current => _innerEnumerator.Current;
@@ -148,6 +144,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     {
                         try
                         {
+                            if (_innerEnumerator == null)
+                            {
+                                _innerEnumerator = _exceptionInterceptor._innerAsyncEnumerable.GetEnumerator();
+                            }
                             return await _innerEnumerator.MoveNext(cancellationToken);
                         }
                         catch (Exception exception)
@@ -161,7 +161,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 public void Dispose()
                 {
-                    _innerEnumerator.Dispose();
+                    _innerEnumerator?.Dispose();
                     _exceptionInterceptor._queryContext.Dispose();
                 }
             }
@@ -307,8 +307,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         [UsedImplicitly]
         // ReSharper disable once InconsistentNaming
-        private static IAsyncEnumerable<T> _ToSequence<T>(Task<T> task)
-            => new TaskResultAsyncEnumerable<T>(task);
+        private static IAsyncEnumerable<T> _ToSequence<T>(Func<Task<T>> getElement)
+            => new TaskResultAsyncEnumerable<T>(getElement);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -316,34 +316,31 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         private sealed class TaskResultAsyncEnumerable<T> : IAsyncEnumerable<T>
         {
-            private readonly Task<T> _task;
+            private readonly Func<Task<T>> _getElement;
 
             /// <summary>
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
             ///     directly from your code. This API may change or be removed in future releases.
             /// </summary>
-            public TaskResultAsyncEnumerable([NotNull] Task<T> task)
+            public TaskResultAsyncEnumerable([NotNull] Func<Task<T>> getElement)
             {
-                Check.NotNull(task, nameof(task));
+                Check.NotNull(getElement, nameof(getElement));
 
-                _task = task;
+                _getElement = getElement;
             }
 
             /// <summary>
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
             ///     directly from your code. This API may change or be removed in future releases.
             /// </summary>
-            public IAsyncEnumerator<T> GetEnumerator() => new Enumerator(_task);
+            public IAsyncEnumerator<T> GetEnumerator() => new Enumerator(_getElement());
 
             private sealed class Enumerator : IAsyncEnumerator<T>
             {
                 private readonly Task<T> _task;
                 private bool _moved;
 
-                public Enumerator(Task<T> task)
-                {
-                    _task = task;
-                }
+                public Enumerator(Task<T> task) => _task = task;
 
                 public async Task<bool> MoveNext(CancellationToken cancellationToken)
                 {
@@ -361,7 +358,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     return false;
                 }
 
-                public T Current => !_moved ? default(T) : _task.Result;
+                public T Current => !_moved ? default : _task.Result;
 
                 void IDisposable.Dispose()
                 {
@@ -483,11 +480,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         [UsedImplicitly]
         // ReSharper disable once InconsistentNaming
-        private static IAsyncEnumerable<IAsyncGrouping<TKey, TElement>> _GroupBy<TSource, TKey, TElement>(
+        private static IAsyncEnumerable<IGrouping<TKey, TElement>> _GroupBy<TSource, TKey, TElement>(
             IAsyncEnumerable<TSource> source,
             Func<TSource, TKey> keySelector,
             Func<TSource, TElement> elementSelector)
-            => source.GroupBy(keySelector, elementSelector);
+            => source.GroupBy(keySelector, elementSelector).Cast<IGrouping<TKey, TElement>>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -504,7 +501,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         // ReSharper disable once InconsistentNaming
-        public static IAsyncEnumerable<TResult> _Select<TSource, TResult>(
+        private static IAsyncEnumerable<TResult> _Select<TSource, TResult>(
             [NotNull] IAsyncEnumerable<TSource> source, [NotNull] Func<TSource, TResult> selector)
             => source.Select(selector);
 
@@ -733,6 +730,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         // Set operations
         private static readonly MethodInfo _concat = GetMethod("Concat", 1);
+
         private static readonly MethodInfo _except = GetMethod("Except", 1);
         private static readonly MethodInfo _intersect = GetMethod("Intersect", 1);
         private static readonly MethodInfo _union = GetMethod("Union", 1);
@@ -752,14 +750,16 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             var aggregateMethods
                 = typeof(AsyncEnumerable).GetTypeInfo().GetDeclaredMethods(methodName)
-                    .Where(mi => mi.GetParameters().Length == 2
-                                 && mi.GetParameters()[1].ParameterType == typeof(CancellationToken))
+                    .Where(
+                        mi => mi.GetParameters().Length == 2
+                              && mi.GetParameters()[1].ParameterType == typeof(CancellationToken))
                     .ToList();
 
             return
                 aggregateMethods
-                    .SingleOrDefault(mi => mi.GetParameters()[0].ParameterType
-                                           == typeof(IAsyncEnumerable<>).MakeGenericType(elementType))
+                    .SingleOrDefault(
+                        mi => mi.GetParameters()[0].ParameterType
+                              == typeof(IAsyncEnumerable<>).MakeGenericType(elementType))
                 ?? aggregateMethods.Single(mi => mi.IsGenericMethod)
                     .MakeGenericMethod(elementType);
         }
@@ -779,9 +779,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     .ToList();
 
             return candidateMethods
-                .SingleOrDefault(mi =>
-                    mi.GetParameters().Length == parameterCount + 2
-                    && mi.GetParameters().Last().ParameterType == typeof(CancellationToken))
+                       .SingleOrDefault(
+                           mi =>
+                               mi.GetParameters().Length == parameterCount + 2
+                               && mi.GetParameters().Last().ParameterType == typeof(CancellationToken))
                    ?? candidateMethods.Single(mi => mi.GetParameters().Length == parameterCount + 1);
         }
 

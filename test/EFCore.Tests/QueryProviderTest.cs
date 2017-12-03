@@ -7,7 +7,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class QueryProviderTest
     {
@@ -34,7 +34,7 @@ namespace Microsoft.EntityFrameworkCore.Tests
             public DbSet<TestEntity> TestEntities { get; set; }
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                => optionsBuilder.UseTransientInMemoryDatabase();
+                => optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
         }
 
         #endregion

@@ -3,10 +3,10 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Utilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Utilities
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Utilities
 {
     public class CheckTest
     {

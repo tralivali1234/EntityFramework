@@ -1,16 +1,20 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ConcurrencyModel;
+using Microsoft.EntityFrameworkCore.TestModels.ConcurrencyModel;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests
+namespace Microsoft.EntityFrameworkCore
 {
-    public abstract class F1RelationalFixture<TTestStore> : F1FixtureBase<TTestStore>
-        where TTestStore : TestStore
+    public abstract class F1RelationalFixture : F1FixtureBase
     {
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        public TestSqlLoggerFactory TestSqlLoggerFactory => (TestSqlLoggerFactory)ServiceProvider.GetRequiredService<ILoggerFactory>();
+
+        protected override void OnModelCreating(ModelBuilder modelBuilder, DbContext context)
         {
-            base.OnModelCreating(modelBuilder);
+            base.OnModelCreating(modelBuilder, context);
 
             modelBuilder.Entity<Chassis>().ToTable("Chassis");
             modelBuilder.Entity<Team>().ToTable("Teams").Property(e => e.Id).ValueGeneratedNever();

@@ -6,7 +6,7 @@
 
 Register-TabExpansion Add-Migration @{
     OutputDir = { <# Disabled. Otherwise, paths would be relative to the solution directory. #> }
-    Context = { param($x) GetContextTypes $x.Project $x.StartupProject $x.Environment }
+    Context = { param($x) GetContextTypes $x.Project $x.StartupProject }
     Project = { GetProjects }
     StartupProject = { GetProjects }
 }
@@ -27,9 +27,6 @@ Register-TabExpansion Add-Migration @{
 .PARAMETER Context
     The DbContext type to use.
 
-.PARAMETER Environment
-    The environment to use. Defaults to "Development".
-
 .PARAMETER Project
     The project to use.
 
@@ -49,7 +46,6 @@ function Add-Migration
         [string] $Name,
         [string] $OutputDir,
         [string] $Context,
-        [string] $Environment,
         [string] $Project,
         [string] $StartupProject)
 
@@ -65,7 +61,7 @@ function Add-Migration
         $params += '--output-dir', $OutputDir
     }
 
-    $params += GetParams $Context $Environment
+    $params += GetParams $Context
 
     # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
     $result = (EF $dteProject $dteStartupProject $params) -join "`n" | ConvertFrom-Json
@@ -85,7 +81,7 @@ function Add-Migration
 #
 
 Register-TabExpansion Drop-Database @{
-    Context = { param($x) GetContextTypes $x.Environment $x.Project $x.StartupProject }
+    Context = { param($x) GetContextTypes $x.Project $x.StartupProject }
     Project = { GetProjects }
     StartupProject = { GetProjects }
 }
@@ -99,9 +95,6 @@ Register-TabExpansion Drop-Database @{
 
 .PARAMETER Context
     The DbContext to use.
-
-.PARAMETER Environment
-    The environment to use. Defaults to "Development".
 
 .PARAMETER Project
     The project to use.
@@ -116,27 +109,17 @@ Register-TabExpansion Drop-Database @{
 function Drop-Database
 {
     [CmdletBinding(PositionalBinding = $false, SupportsShouldProcess = $true, ConfirmImpact = 'High')]
-    param([string] $Context, [string] $Environment, [string] $Project, [string] $StartupProject)
+    param([string] $Context, [string] $Project, [string] $StartupProject)
 
     $dteProject = GetProject $Project
     $dteStartupProject = GetStartupProject $StartupProject $dteProject
 
-    if (IsUWP $dteProject)
-    {
-        throw 'Drop-Database shouldn''t be used with Universal Windows Platform apps. Instead, call ' +
-            'DbContext.Database.EnsureDeleted() at runtime.'
-    }
-
-    $params = 'dbcontext', 'info', '--json'
-    $params += GetParams $Context $Environment
-
-    # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
-    $info = (EF $dteProject $dteStartupProject $params) -join "`n" | ConvertFrom-Json
+    $info = Get-DbContext -Context $Context -Project $Project -StartupProject $StartupProject
 
     if ($PSCmdlet.ShouldProcess("database '$($info.databaseName)' on server '$($info.dataSource)'"))
     {
         $params = 'database', 'drop', '--force'
-        $params += GetParams $Context $Environment
+        $params += GetParams $Context
 
         EF $dteProject $dteStartupProject $params -skipBuild
     }
@@ -148,8 +131,52 @@ function Drop-Database
 
 function Enable-Migrations
 {
-    WarnIfEF6 'Update-Database'
+    WarnIfEF6 'Enable-Migrations'
     Write-Warning 'Enable-Migrations is obsolete. Use Add-Migration to start using Migrations.'
+}
+
+#
+# Get-DbContext
+#
+
+Register-TabExpansion Get-DbContext @{
+    Context = { param($x) GetContextTypes $x.Project $x.StartupProject }
+    Project = { GetProjects }
+    StartupProject = { GetProjects }
+}
+
+<#
+.SYNOPSIS
+    Gets information about a DbContext type.
+
+.DESCRIPTION
+    Gets information about a DbContext type.
+
+.PARAMETER Context
+    The DbContext to use.
+
+.PARAMETER Project
+    The project to use.
+
+.PARAMETER StartupProject
+    The startup project to use. Defaults to the solution's startup project.
+
+.LINK
+    about_EntityFrameworkCore
+#>
+function Get-DbContext
+{
+    [CmdletBinding(PositionalBinding = $false)]
+    param([string] $Context, [string] $Project, [string] $StartupProject)
+
+    $dteProject = GetProject $Project
+    $dteStartupProject = GetStartupProject $StartupProject $dteProject
+
+    $params = 'dbcontext', 'info', '--json'
+    $params += GetParams $Context
+
+    # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
+    return (EF $dteProject $dteStartupProject $params) -join "`n" | ConvertFrom-Json
 }
 
 #
@@ -157,7 +184,7 @@ function Enable-Migrations
 #
 
 Register-TabExpansion Remove-Migration @{
-    Context = { param($x) GetContextTypes $x.Environment $x.Project $x.StartupProject }
+    Context = { param($x) GetContextTypes $x.Project $x.StartupProject }
     Project = { GetProjects }
     StartupProject = { GetProjects }
 }
@@ -172,11 +199,11 @@ Register-TabExpansion Remove-Migration @{
 .PARAMETER Force
     Don't check to see if the migration has been applied to the database. Always implied on UWP apps.
 
+.PARAMETER Revert
+    Revert the migration if it has been applied to the database.
+
 .PARAMETER Context
     The DbContext to use.
-
-.PARAMETER Environment
-    The environment to use. Defaults to "Development".
 
 .PARAMETER Project
     The project to use.
@@ -191,15 +218,10 @@ Register-TabExpansion Remove-Migration @{
 function Remove-Migration
 {
     [CmdletBinding(PositionalBinding = $false)]
-    param([switch] $Force, [string] $Context, [string] $Environment, [string] $Project, [string] $StartupProject)
+    param([switch] $Force, [switch] $Revert, [string] $Context, [string] $Project, [string] $StartupProject)
 
     $dteProject = GetProject $Project
     $dteStartupProject = GetStartupProject $StartupProject $dteProject
-
-    if (IsUWP $dteStartupProject)
-    {
-        $Force = [switch]::Present
-    }
 
     $params = 'migrations', 'remove', '--json'
 
@@ -208,12 +230,18 @@ function Remove-Migration
         $params += '--force'
     }
 
-    $params += GetParams $Context $Environment
+    if ($Revert)
+    {
+        $params += '--revert'
+    }
+
+    $params += GetParams $Context
 
     # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
     $result = (EF $dteProject $dteStartupProject $params) -join "`n" | ConvertFrom-Json
 
-    $result | %{
+    $files = $result.migrationFile, $result.metadataFile, $result.snapshotFile
+    $files | ?{ $_ -ne $null } | %{
         $projectItem = GetProjectItem $dteProject $_
         if ($projectItem)
         {
@@ -247,7 +275,7 @@ Register-TabExpansion Scaffold-DbContext @{
     The provider to use. (E.g. Microsoft.EntityFrameworkCore.SqlServer)
 
 .PARAMETER OutputDir
-    The directory to put files in. Paths are relaive to the project directory.
+    The directory to put files in. Paths are relative to the project directory.
 
 .PARAMETER Context
     The name of the DbContext to generate.
@@ -261,11 +289,11 @@ Register-TabExpansion Scaffold-DbContext @{
 .PARAMETER DataAnnotations
     Use attributes to configure the model (where possible). If omitted, only the fluent API is used.
 
+.PARAMETER UseDatabaseNames
+    Use table and column names directly from the database.
+
 .PARAMETER Force
     Overwrite existing files.
-
-.PARAMETER Environment
-    The environment to use. Defaults to "Development".
 
 .PARAMETER Project
     The project to use.
@@ -289,8 +317,8 @@ function Scaffold-DbContext
         [string[]] $Schemas = @(),
         [string[]] $Tables = @(),
         [switch] $DataAnnotations,
+        [switch] $UseDatabaseNames,
         [switch] $Force,
-        [string] $Environment,
         [string] $Project,
         [string] $StartupProject)
 
@@ -317,18 +345,22 @@ function Scaffold-DbContext
         $params += '--data-annotations'
     }
 
+    if ($UseDatabaseNames)
+    {
+        $params += '--use-database-names'
+    }
+
     if ($Force)
     {
         $params += '--force'
     }
 
-    $params += GetParams -Environment $Environment
-
     # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
     $result = (EF $dteProject $dteStartupProject $params) -join "`n" | ConvertFrom-Json
 
-    $result | %{ $dteProject.ProjectItems.AddFromFile($_) | Out-Null }
-    $DTE.ItemOperations.OpenFile($result[0]) | Out-Null
+    $files = $result.entityTypeFiles + $result.contextFile
+    $files | %{ $dteProject.ProjectItems.AddFromFile($_) | Out-Null }
+    $DTE.ItemOperations.OpenFile($result.contextFile) | Out-Null
     ShowConsole
 }
 
@@ -337,9 +369,9 @@ function Scaffold-DbContext
 #
 
 Register-TabExpansion Script-Migration @{
-    From = { param($x) GetMigrations $x.Context $x.Environment $x.Project $x.StartupProject }
-    To = { param($x) GetMigrations $x.Context $x.Environment $x.Project $x.StartupProject }
-    Context = { param($x) GetContextTypes $x.Environment $x.Project $x.StartupProject }
+    From = { param($x) GetMigrations $x.Context $x.Project $x.StartupProject }
+    To = { param($x) GetMigrations $x.Context $x.Project $x.StartupProject }
+    Context = { param($x) GetContextTypes $x.Project $x.StartupProject }
     Project = { GetProjects }
     StartupProject = { GetProjects }
 }
@@ -366,9 +398,6 @@ Register-TabExpansion Script-Migration @{
 .PARAMETER Context
     The DbContext to use.
 
-.PARAMETER Environment
-    The environment to use. Defaults to "Development".
-
 .PARAMETER Project
     The project to use.
 
@@ -391,7 +420,6 @@ function Script-Migration
         [switch] $Idempotent,
         [string] $Output,
         [string] $Context,
-        [string] $Environment,
         [string] $Project,
         [string] $StartupProject)
 
@@ -404,7 +432,7 @@ function Script-Migration
         if (!(Split-Path $intermediatePath -IsAbsolute))
         {
             $projectDir = GetProperty $dteProject.Properties 'FullPath'
-            $intermediatePath = Join-Path $projectDir $intermediatePath -Resolve
+            $intermediatePath = Join-Path $projectDir $intermediatePath -Resolve | Convert-Path
         }
 
         $scriptFileName = [IO.Path]::ChangeExtension([IO.Path]::GetRandomFileName(), '.sql')
@@ -432,7 +460,7 @@ function Script-Migration
         $params += '--idempotent'
     }
 
-    $params += GetParams $Context $Environment
+    $params += GetParams $Context
 
     EF $dteProject $dteStartupProject $params
 
@@ -445,8 +473,8 @@ function Script-Migration
 #
 
 Register-TabExpansion Update-Database @{
-    Migration = { param($x) GetMigrations $x.Context $x.Environment $x.Project $x.StartupProject }
-    Context = { param($x) GetContextTypes $x.Environment $x.Project $x.StartupProject }
+    Migration = { param($x) GetMigrations $x.Context $x.Project $x.StartupProject }
+    Context = { param($x) GetContextTypes $x.Project $x.StartupProject }
     Project = { GetProjects }
     StartupProject = { GetProjects }
 }
@@ -463,9 +491,6 @@ Register-TabExpansion Update-Database @{
 
 .PARAMETER Context
     The DbContext to use.
-
-.PARAMETER Environment
-    The environment to use. Defaults to "Development".
 
 .PARAMETER Project
     The project to use.
@@ -484,7 +509,6 @@ function Update-Database
         [Parameter(Position = 0)]
         [string] $Migration,
         [string] $Context,
-        [string] $Environment,
         [string] $Project,
         [string] $StartupProject)
 
@@ -493,12 +517,6 @@ function Update-Database
     $dteProject = GetProject $Project
     $dteStartupProject = GetStartupProject $StartupProject $dteProject
 
-    if (IsUWP $dteStartupProject)
-    {
-        throw 'Update-Database shouldn''t be used with Universal Windows Platform apps. Instead, call ' +
-            'DbContext.Database.Migrate() at runtime.'
-    }
-
     $params = 'database', 'update'
 
     if ($Migration)
@@ -506,7 +524,7 @@ function Update-Database
         $params += $Migration
     }
 
-    $params += GetParams $Context $Environment
+    $params += GetParams $Context
 
     EF $dteProject $dteStartupProject $params
 }
@@ -530,13 +548,12 @@ function GetProviders($projectName)
     return Get-Package -ProjectName $projectName | %{ $_.Id }
 }
 
-function GetContextTypes($environment, $projectName, $startupProjectName)
+function GetContextTypes($projectName, $startupProjectName)
 {
     $project = GetProject $projectName
     $startupProject = GetStartupProject $startupProjectName $project
 
     $params = 'dbcontext', 'list', '--json'
-    $params += GetParams -Environment $environment
 
     # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
     $result = (EF $project $startupProject $params -skipBuild) -join "`n" | ConvertFrom-Json
@@ -544,13 +561,13 @@ function GetContextTypes($environment, $projectName, $startupProjectName)
     return $result | %{ $_.safeName }
 }
 
-function GetMigrations($context, $environment, $projectName, $startupProjectName)
+function GetMigrations($context, $projectName, $startupProjectName)
 {
     $project = GetProject $projectName
     $startupProject = GetStartupProject $startupProjectName $project
 
     $params = 'migrations', 'list', '--json'
-    $params += GetParams $context $environment
+    $params += GetParams $context
 
     # NB: -join is here to support ConvertFrom-Json on PowerShell 3.0
     $result = (EF $project $startupProject $params -skipBuild) -join "`n" | ConvertFrom-Json
@@ -592,7 +609,7 @@ function GetStartupProject($name, $fallbackProject)
             if (!(Split-Path -IsAbsolute $startupProjectPath))
             {
                 $solutionPath = Split-Path (GetProperty $DTE.Solution.Properties 'Path')
-                $startupProjectPath = Join-Path $solutionPath $startupProjectPath -Resolve
+                $startupProjectPath = Join-Path $solutionPath $startupProjectPath -Resolve | Convert-Path
             }
 
             $startupProject = GetSolutionProjects | ?{
@@ -655,18 +672,13 @@ function GetSolutionProjects()
     }
 }
 
-function GetParams($context, $environment)
+function GetParams($context)
 {
     $params = @()
 
     if ($context)
     {
         $params += '--context', $context
-    }
-
-    if ($environment)
-    {
-        $params += '--environment', $environment
     }
 
     return $params
@@ -679,49 +691,45 @@ function ShowConsole
     $powerConsoleWindow.Show()
 }
 
+function WriteErrorLine($message)
+{
+    try
+    {
+        # Call the internal API NuGet uses to display errors
+        $componentModel = Get-VSComponentModel
+        $powerConsoleWindow = $componentModel.GetService([NuGetConsole.IPowerConsoleWindow])
+        $bindingFlags = [Reflection.BindingFlags]::Instance -bor [Reflection.BindingFlags]::NonPublic
+        $activeHostInfo = $powerConsoleWindow.GetType().GetProperty('ActiveHostInfo', $bindingFlags).GetValue($powerConsoleWindow)
+        $internalHost = $activeHostInfo.WpfConsole.Host
+        $reportErrorMethod = $internalHost.GetType().GetMethod('ReportError', $bindingFlags, $null, [Exception], $null)
+        $exception = New-Object Exception $message
+        $reportErrorMethod.Invoke($internalHost, $exception)
+    }
+    catch
+    {
+        Write-Host $message -ForegroundColor DarkRed
+    }
+}
+
 function EF($project, $startupProject, $params, [switch] $skipBuild)
 {
-    if (IsUWP $project)
-    {
-        $outputType = GetProperty $project.Properties 'OutputType'
-        $outputTypeEx = GetProperty $project.Properties 'OutputTypeEx'
-        if ($outputType -eq 2 -and $outputTypeEx -eq 3)
-        {
-            throw "Project '$($project.ProjectName)' is a Windows Runtime component. The Entity Framework Core " +
-                'Package Manager Console Tools don''t support this type of project.'
-        }
-    }
-
     if (IsXproj $startupProject)
     {
         throw "Startup project '$($startupProject.ProjectName)' is an ASP.NET Core or .NET Core project for Visual " +
             'Studio 2015. This version of the Entity Framework Core Package Manager Console Tools doesn''t support ' +
             'these types of projects.'
     }
+    if (IsDocker $startupProject)
+    {
+        throw "Startup project '$($startupProject.ProjectName)' is a Docker project. Select an ASP.NET Core Web " +
+            'Application as your startup project and try again.'
+    }
     if (IsUWP $startupProject)
     {
-        $useDotNetNative = GetProperty $startupProject.ConfigurationManager.ActiveConfiguration.Properties 'ProjectN.UseDotNetNativeToolchain'
-        if ($useDotNetNative -eq 'True')
-        {
-            throw "Startup project '$($startupProject.ProjectName)' compiles with the .NET Native tool chan. Uncheck " +
-                'this option in the project settings or use a different configuration and try again.'
-        }
-
-        $outputType = GetProperty $startupProject.Properties 'OutputType'
-        if ($outputType -eq 2)
-        {
-            $outputTypeEx = GetProperty $startupProject.Properties 'OutputTypeEx'
-            if ($outputTypeEx -eq 2)
-            {
-                throw "Startup project '$($startupProject.ProjectName)' is a class library. Select a Universal " +
-                    'Windows Platform app as your startup project and try again.'
-            }
-            if ($outputTypeEx -eq 3)
-            {
-                throw "Startup project '$($startupProject.ProjectName)' is a Windows Runtime component. The Entity " +
-                    'Framework Core Package Manager Console Tools don''t support this type of project.'
-            }
-        }
+        throw "Startup project '$($startupProject.ProjectName)' is a Universal Windows Platform app. This version of " +
+            'the Entity Framework Core Package Manager Console Tools doesn''t support this type of project. For more ' +
+            'information on using the EF Core Tools with UWP projects, see ' +
+            'https://go.microsoft.com/fwlink/?linkid=858496'
     }
 
     Write-Verbose "Using project '$($project.ProjectName)'."
@@ -743,24 +751,25 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
     }
 
     $startupProjectDir = GetProperty $startupProject.Properties 'FullPath'
-    $outputPath = GetProperty $startupProject.ConfigurationManager.ActiveConfiguration.Properties 'OutputPath'
-    $targetDir = Join-Path $startupProjectDir $outputPath -Resolve
+    $activeConfiguration = $startupProject.ConfigurationManager.ActiveConfiguration
+    $outputPath = GetProperty $activeConfiguration.Properties 'OutputPath'
+    $targetDir = Join-Path $startupProjectDir $outputPath -Resolve | Convert-Path
     $startupTargetFileName = GetOutputFileName $startupProject
     $startupTargetPath = Join-Path $targetDir $startupTargetFileName
     $targetFrameworkMoniker = GetProperty $startupProject.Properties 'TargetFrameworkMoniker'
     $frameworkName = New-Object 'System.Runtime.Versioning.FrameworkName' $targetFrameworkMoniker
     $targetFramework = $frameworkName.Identifier
 
-    if ($targetFramework -in '.NETFramework', '.NETCore')
+    if ($targetFramework -in '.NETFramework')
     {
         $platformTarget = GetPlatformTarget $startupProject
         if ($platformTarget -eq 'x86')
         {
-            $exePath = Join-Path $PSScriptRoot 'net46\ef.x86.exe'
+            $exePath = Join-Path $PSScriptRoot 'net461\ef.x86.exe'
         }
         elseif ($platformTarget -in 'AnyCPU', 'x64')
         {
-            $exePath = Join-Path $PSScriptRoot 'net46\ef.exe'
+            $exePath = Join-Path $PSScriptRoot 'net461\ef.exe'
         }
         else
         {
@@ -768,23 +777,16 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
                 'a different platform and try again.'
         }
     }
-    elseif ($targetFramework -in '.NETCoreApp', '.NETStandard')
+    elseif ($targetFramework -eq '.NETCoreApp')
     {
-        if ($targetFramework -eq '.NETStandard')
-        {
-            Write-Warning ("Startup project '$($startupProject.ProjectName)' targets framework '.NETStandard'. This " +
-                "framework is not intended for execution and may fail to resolve runtime dependencies. If so, select " +
-                "a different startup project and try again.")
-        }
-
         $exePath = (Get-Command 'dotnet').Path
 
         $startupTargetName = GetProperty $startupProject.Properties 'AssemblyName'
         $depsFile = Join-Path $targetDir ($startupTargetName + '.deps.json')
-        $projectAssetsFile = GetCsproj2Property $startupProject 'ProjectAssetsFile'
+        $projectAssetsFile = GetCpsProperty $startupProject 'ProjectAssetsFile'
         $runtimeConfig = Join-Path $targetDir ($startupTargetName + '.runtimeconfig.json')
-        $runtimeFrameworkVersion = GetCsproj2Property $startupProject 'RuntimeFrameworkVersion'
-        $efPath = Join-Path $PSScriptRoot 'netcoreapp1.0\ef.dll'
+        $runtimeFrameworkVersion = GetCpsProperty $startupProject 'RuntimeFrameworkVersion'
+        $efPath = Join-Path $PSScriptRoot 'netcoreapp2.0\ef.dll'
 
         $dotnetParams = 'exec', '--depsfile', $depsFile
 
@@ -795,6 +797,15 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
             $projectAssets.packageFolders.psobject.Properties.Name | %{
                 $dotnetParams += '--additionalprobingpath', $_.TrimEnd('\')
             }
+        }
+
+        if (!(Test-Path $runtimeConfig))
+        {
+            $configuration = $activeConfiguration.ConfigurationName
+            $platformTarget = GetPlatformTarget $startupProject
+            $projectPath = $startupProject.FullName
+
+            dotnet msbuild /t:GenerateBuildRuntimeConfigurationFiles "/p:GenerateRuntimeConfigurationFiles=True;Configuration=$configuration;Platform=$platformTarget" /verbosity:quiet /nologo $projectPath | Out-Null
         }
 
         if (Test-Path $runtimeConfig)
@@ -810,6 +821,14 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
 
         $params = $dotnetParams + $params
     }
+    elseif ($targetFramework -eq '.NETStandard')
+    {
+        throw "Startup project '$($startupProject.ProjectName)' targets framework '.NETStandard'. There is no " +
+            'runtime associated with this framework, and projects targeting it cannot be executed directly. To use ' +
+            'the Entity Framework Core Package Manager Console Tools with this project, add an executable project ' +
+            'targeting .NET Framework or .NET Core that references this project, and set it as the startup project; ' +
+            'or, update this project to cross-target .NET Framework or .NET Core.'
+    }
     else
     {
         throw "Startup project '$($startupProject.ProjectName)' targets framework '$targetFramework'. " +
@@ -820,21 +839,19 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
     $targetFileName = GetOutputFileName $project
     $targetPath = Join-Path $targetDir $targetFileName
     $rootNamespace = GetProperty $project.Properties 'RootNamespace'
+    $language = GetLanguage $project
 
     $params += '--verbose',
         '--no-color',
         '--prefix-output',
         '--assembly', $targetPath,
         '--startup-assembly', $startupTargetPath,
-        '--project-dir', $projectDir
+        '--project-dir', $projectDir,
+        '--language', $language
 
     if (IsWeb $startupProject)
     {
         $params += '--data-dir', (Join-Path $startupProjectDir 'App_Data')
-    }
-    elseif (IsUWP $startupProject)
-    {
-        $params += '--no-appdomain'
     }
 
     if ($rootNamespace)
@@ -866,12 +883,20 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
         if ($parts.Length -eq 2)
         {
             $level = $parts[0]
-            $text = $parts[1].Substring(8 - $level.Length)
+
+            $i = 0
+            $count = 8 - $level.Length
+            while ($i -lt $count -and $parts[1][$i] -eq ' ')
+            {
+                $i++
+            }
+
+            $text = $parts[1].Substring($i)
         }
 
         switch ($level)
         {
-            'error' { throw $text }
+            'error' { WriteErrorLine $text }
             'warn' { Write-Warning $text }
             'info' { Write-Host $text }
             'data' { Write-Output $text }
@@ -881,6 +906,11 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
     }
 
     $process.WaitForExit()
+
+    if ($process.ExitCode)
+    {
+        exit
+    }
 }
 
 function IsXproj($project)
@@ -888,9 +918,19 @@ function IsXproj($project)
     return $project.Kind -eq '{8BB2217D-0F2D-49D1-97BC-3654ED321F3B}'
 }
 
-function IsCsproj2($project)
+function IsDocker($project)
 {
-    return $project.Kind -eq '{9A19103F-16F7-4668-BE54-9A1E7A4F7556}'
+    return $project.Kind -eq '{E53339B2-1760-4266-BCC7-CA923CBCF16C}'
+}
+
+function IsCpsProject($project)
+{
+    $hierarchy = GetVsHierarchy $project
+    $isCapabilityMatch = [Microsoft.VisualStudio.Shell.PackageUtilities].GetMethod(
+        'IsCapabilityMatch',
+        [type[]]([Microsoft.VisualStudio.Shell.Interop.IVsHierarchy], [string]))
+
+    return $isCapabilityMatch.Invoke($null, ($hierarchy, 'CPS'))
 }
 
 function IsWeb($project)
@@ -910,49 +950,83 @@ function IsUWP($project)
 function GetIntermediatePath($project)
 {
     # TODO: Remove when dotnet/roslyn-project-system#665 is fixed
-    if (IsCsproj2 $project)
+    if (IsCpsProject $project)
     {
-        return GetCsproj2Property $project 'IntermediateOutputPath'
+        return GetCpsProperty $project 'IntermediateOutputPath'
     }
 
-    return GetProperty $project.ConfigurationManager.ActiveConfiguration.Properties 'IntermediatePath'
+    $intermediatePath = GetProperty $project.ConfigurationManager.ActiveConfiguration.Properties 'IntermediatePath'
+    if ($intermediatePath)
+    {
+        return $intermediatePath
+    }
+
+    return GetMSBuildProperty $project 'IntermediateOutputPath'
 }
 
 function GetPlatformTarget($project)
 {
     # TODO: Remove when dotnet/roslyn-project-system#669 is fixed
-    if (IsCsproj2 $project)
+    if (IsCpsProject $project)
     {
-        $platformTarget = GetCsproj2Property $project 'PlatformTarget'
+        $platformTarget = GetCpsProperty $project 'PlatformTarget'
         if ($platformTarget)
         {
             return $platformTarget
         }
 
-        return GetCsproj2Property $project 'Platform'
+        return GetCpsProperty $project 'Platform'
     }
 
-    return GetProperty $project.ConfigurationManager.ActiveConfiguration.Properties 'PlatformTarget'
+    $platformTarget = GetProperty $project.ConfigurationManager.ActiveConfiguration.Properties 'PlatformTarget'
+    if ($platformTarget)
+    {
+        return $platformTarget
+    }
+
+    $platformTarget = GetMSBuildProperty $project 'PlatfromTarget'
+    if ($platformTarget)
+    {
+        return $platformTarget
+    }
+
+    return 'AnyCPU'
 }
 
 function GetOutputFileName($project)
 {
     # TODO: Remove when dotnet/roslyn-project-system#667 is fixed
-    if (IsCsproj2 $project)
+    if (IsCpsProject $project)
     {
-        return GetCsproj2Property $project 'TargetFileName'
+        return GetCpsProperty $project 'TargetFileName'
     }
 
     return GetProperty $project.Properties 'OutputFileName'
 }
 
-function GetProjectTypes($project)
+function GetLanguage($project)
+{
+    if (IsCpsProject $project)
+    {
+        return GetCpsProperty $project 'Language'
+    }
+
+    return GetMSBuildProperty $project 'Language'
+}
+
+function GetVsHierarchy($project)
 {
     $solution = Get-VSService 'Microsoft.VisualStudio.Shell.Interop.SVsSolution' 'Microsoft.VisualStudio.Shell.Interop.IVsSolution'
     $hierarchy = $null
     $hr = $solution.GetProjectOfUniqueName($project.UniqueName, [ref] $hierarchy)
     [Runtime.InteropServices.Marshal]::ThrowExceptionForHR($hr)
 
+    return $hierarchy
+}
+
+function GetProjectTypes($project)
+{
+    $hierarchy = GetVsHierarchy $project
     $aggregatableProject = Get-Interface $hierarchy 'Microsoft.VisualStudio.Shell.Interop.IVsAggregatableProject'
     if (!$aggregatableProject)
     {
@@ -978,7 +1052,7 @@ function GetProperty($properties, $propertyName)
     }
 }
 
-function GetCsproj2Property($project, $propertyName)
+function GetCpsProperty($project, $propertyName)
 {
     $browseObjectContext = Get-Interface $project 'Microsoft.VisualStudio.ProjectSystem.Properties.IVsBrowseObjectContext'
     $unconfiguredProject = $browseObjectContext.UnconfiguredProject
@@ -986,6 +1060,14 @@ function GetCsproj2Property($project, $propertyName)
     $properties = $configuredProject.Services.ProjectPropertiesProvider.GetCommonProperties()
 
     return $properties.GetEvaluatedPropertyValueAsync($propertyName).Result
+}
+
+function GetMSBuildProperty($project, $propertyName)
+{
+    $msbuildProject = [Microsoft.Build.Evaluation.ProjectCollection]::GlobalProjectCollection.LoadedProjects |
+        ? FullPath -eq $project.FullName
+
+    return $msbuildProject.GetProperty($propertyName).EvaluatedValue
 }
 
 function GetProjectItem($project, $path)
@@ -1036,7 +1118,7 @@ function ToArguments($params)
     {
         if ($i)
         {
-            $arguments += " "
+            $arguments += ' '
         }
 
         if (!$params[$i].Contains(' '))

@@ -2,14 +2,14 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.ComponentModel.DataAnnotations.Schema;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
+namespace Microsoft.EntityFrameworkCore.Metadata
 {
     public class RelationalEntityTypeAttributeConventionTest
     {
@@ -29,8 +29,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
         {
             var entityBuilder = CreateInternalEntityTypeBuilder<A>();
 
-            entityBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.TableName, "ConventionalName", ConfigurationSource.Convention);
-            entityBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.Schema, "ConventionalSchema", ConfigurationSource.Convention);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.TableName, "ConventionalName", ConfigurationSource.Convention);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.Schema, "ConventionalSchema", ConfigurationSource.Convention);
 
             new RelationalTableAttributeConvention().Apply(entityBuilder);
 
@@ -43,8 +43,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
         {
             var entityBuilder = CreateInternalEntityTypeBuilder<A>();
 
-            entityBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.TableName, "ExplicitName", ConfigurationSource.Explicit);
-            entityBuilder.HasAnnotation(RelationalFullAnnotationNames.Instance.Schema, "ExplicitName", ConfigurationSource.Explicit);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.TableName, "ExplicitName", ConfigurationSource.Explicit);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.Schema, "ExplicitName", ConfigurationSource.Explicit);
 
             new RelationalTableAttributeConvention().Apply(entityBuilder);
 
@@ -55,7 +55,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
         private InternalEntityTypeBuilder CreateInternalEntityTypeBuilder<T>()
         {
             var conventionSet = new ConventionSet();
-            conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention());
+            conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())));
 
             var modelBuilder = new InternalModelBuilder(new Model(conventionSet));
 

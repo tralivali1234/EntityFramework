@@ -3,7 +3,7 @@
 
 using System;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit
+namespace Microsoft.EntityFrameworkCore.TestUtilities.Xunit
 {
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Assembly)]
     public class FrameworkSkipConditionAttribute : Attribute, ITestCondition
@@ -26,7 +26,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit
                 return true;
             }
 
-#if NET46
+#if NET461
             if (excludedFrameworks.HasFlag(RuntimeFrameworks.CLR))
             {
                 return false;

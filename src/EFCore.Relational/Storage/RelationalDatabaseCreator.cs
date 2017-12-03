@@ -2,8 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -57,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     A task that represents the asynchronous operation. The task result contains
         ///     true if the database exists; otherwise false.
         /// </returns>
-        public virtual Task<bool> ExistsAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<bool> ExistsAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -76,7 +78,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <returns>
         ///     A task that represents the asynchronous operation.
         /// </returns>
-        public virtual Task CreateAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task CreateAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -97,7 +99,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <returns>
         ///     A task that represents the asynchronous operation.
         /// </returns>
-        public virtual Task DeleteAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task DeleteAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -121,7 +123,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <returns>
         ///     A task that represents the asynchronous operation.
         /// </returns>
-        public virtual async Task CreateTablesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task CreateTablesAsync(CancellationToken cancellationToken = default)
             => await Dependencies.MigrationCommandExecutor.ExecuteNonQueryAsync(GetCreateTablesCommands(), Dependencies.Connection, cancellationToken);
 
         /// <summary>
@@ -147,7 +149,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     A task that represents the asynchronous operation. The task result contains
         ///     a value indicating whether any tables are present in the database.
         /// </returns>
-        protected virtual Task<bool> HasTablesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        protected virtual Task<bool> HasTablesAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -192,7 +194,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     A task that represents the asynchronous save operation. The task result contains true if the database is deleted,
         ///     false if it did not exist.
         /// </returns>
-        public virtual async Task<bool> EnsureDeletedAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task<bool> EnsureDeletedAsync(CancellationToken cancellationToken = default)
         {
             if (await ExistsAsync(cancellationToken))
             {
@@ -213,17 +215,20 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </returns>
         public virtual bool EnsureCreated()
         {
-            if (!Exists())
+            using (new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled))
             {
-                Create();
-                CreateTables();
-                return true;
-            }
+                if (!Exists())
+                {
+                    Create();
+                    CreateTables();
+                    return true;
+                }
 
-            if (!HasTables())
-            {
-                CreateTables();
-                return true;
+                if (!HasTables())
+                {
+                    CreateTables();
+                    return true;
+                }
             }
 
             return false;
@@ -239,24 +244,47 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     A task that represents the asynchronous save operation. The task result contains true if the database is created,
         ///     false if it already existed.
         /// </returns>
-        public virtual async Task<bool> EnsureCreatedAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task<bool> EnsureCreatedAsync(CancellationToken cancellationToken = default)
         {
-            if (!await ExistsAsync(cancellationToken))
+            using (new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled))
             {
-                await CreateAsync(cancellationToken);
-                await CreateTablesAsync(cancellationToken);
+                if (!await ExistsAsync(cancellationToken))
+                {
+                    await CreateAsync(cancellationToken);
+                    await CreateTablesAsync(cancellationToken);
 
-                return true;
-            }
+                    return true;
+                }
 
-            if (!await HasTablesAsync(cancellationToken))
-            {
-                await CreateTablesAsync(cancellationToken);
+                if (!await HasTablesAsync(cancellationToken))
+                {
+                    await CreateTablesAsync(cancellationToken);
 
-                return true;
+                    return true;
+                }
             }
 
             return false;
+        }
+
+        /// <summary>
+        ///     Generates a script to create all tables for the current model.
+        /// </summary>
+        /// <returns>
+        ///     A SQL script.
+        /// </returns>
+        public virtual string GenerateCreateScript()
+        {
+            var commands = GetCreateTablesCommands();
+            var builder = new StringBuilder();
+            foreach (var command in commands)
+            {
+                builder
+                    .Append(command.CommandText)
+                    .AppendLine(Dependencies.SqlGenerationHelper.BatchTerminator);
+            }
+
+            return builder.ToString();
         }
     }
 }

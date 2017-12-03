@@ -2,9 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq.Expressions;
+using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -23,7 +27,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="name"> The name of the sequence. </param>
         /// <param name="schema">The schema of the sequence. </param>
         /// <returns> A builder to further configure the sequence. </returns>
-        public static RelationalSequenceBuilder HasSequence(
+        public static SequenceBuilder HasSequence(
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] string name,
             [CanBeNull] string schema = null)
@@ -32,8 +36,7 @@ namespace Microsoft.EntityFrameworkCore
             Check.NotEmpty(name, nameof(name));
             Check.NullButNotEmpty(schema, nameof(schema));
 
-            return new RelationalSequenceBuilder(
-                modelBuilder.Model.Relational().GetOrAddSequence(name, schema));
+            return new SequenceBuilder(modelBuilder.Model.Relational().GetOrAddSequence(name, schema));
         }
 
         /// <summary>
@@ -46,7 +49,7 @@ namespace Microsoft.EntityFrameworkCore
         public static ModelBuilder HasSequence(
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] string name,
-            [NotNull] Action<RelationalSequenceBuilder> builderAction)
+            [NotNull] Action<SequenceBuilder> builderAction)
             => modelBuilder.HasSequence(name, null, builderAction);
 
         /// <summary>
@@ -61,7 +64,7 @@ namespace Microsoft.EntityFrameworkCore
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] string name,
             [CanBeNull] string schema,
-            [NotNull] Action<RelationalSequenceBuilder> builderAction)
+            [NotNull] Action<SequenceBuilder> builderAction)
         {
             Check.NotNull(modelBuilder, nameof(modelBuilder));
             Check.NotEmpty(name, nameof(name));
@@ -81,7 +84,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="name"> The name of the sequence. </param>
         /// <param name="schema">The schema of the sequence. </param>
         /// <returns> A builder to further configure the sequence. </returns>
-        public static RelationalSequenceBuilder HasSequence(
+        public static SequenceBuilder HasSequence(
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] Type clrType,
             [NotNull] string name,
@@ -95,7 +98,7 @@ namespace Microsoft.EntityFrameworkCore
             var sequence = modelBuilder.Model.Relational().GetOrAddSequence(name, schema);
             sequence.ClrType = clrType;
 
-            return new RelationalSequenceBuilder(sequence);
+            return new SequenceBuilder(sequence);
         }
 
         /// <summary>
@@ -110,7 +113,7 @@ namespace Microsoft.EntityFrameworkCore
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] Type clrType,
             [NotNull] string name,
-            [NotNull] Action<RelationalSequenceBuilder> builderAction)
+            [NotNull] Action<SequenceBuilder> builderAction)
             => modelBuilder.HasSequence(clrType, name, null, builderAction);
 
         /// <summary>
@@ -127,7 +130,7 @@ namespace Microsoft.EntityFrameworkCore
             [NotNull] Type clrType,
             [NotNull] string name,
             [CanBeNull] string schema,
-            [NotNull] Action<RelationalSequenceBuilder> builderAction)
+            [NotNull] Action<SequenceBuilder> builderAction)
         {
             Check.NotNull(clrType, nameof(clrType));
             Check.NotNull(modelBuilder, nameof(modelBuilder));
@@ -148,7 +151,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="name"> The name of the sequence. </param>
         /// <param name="schema">The schema of the sequence. </param>
         /// <returns> A builder to further configure the sequence. </returns>
-        public static RelationalSequenceBuilder HasSequence<T>(
+        public static SequenceBuilder HasSequence<T>(
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] string name,
             [CanBeNull] string schema = null)
@@ -160,7 +163,7 @@ namespace Microsoft.EntityFrameworkCore
             var sequence = modelBuilder.Model.Relational().GetOrAddSequence(name, schema);
             sequence.ClrType = typeof(T);
 
-            return new RelationalSequenceBuilder(sequence);
+            return new SequenceBuilder(sequence);
         }
 
         /// <summary>
@@ -174,7 +177,7 @@ namespace Microsoft.EntityFrameworkCore
         public static ModelBuilder HasSequence<T>(
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] string name,
-            [NotNull] Action<RelationalSequenceBuilder> builderAction)
+            [NotNull] Action<SequenceBuilder> builderAction)
             => modelBuilder.HasSequence<T>(name, null, builderAction);
 
         /// <summary>
@@ -190,7 +193,7 @@ namespace Microsoft.EntityFrameworkCore
             [NotNull] this ModelBuilder modelBuilder,
             [NotNull] string name,
             [CanBeNull] string schema,
-            [NotNull] Action<RelationalSequenceBuilder> builderAction)
+            [NotNull] Action<SequenceBuilder> builderAction)
         {
             Check.NotNull(modelBuilder, nameof(modelBuilder));
             Check.NotEmpty(name, nameof(name));
@@ -198,6 +201,68 @@ namespace Microsoft.EntityFrameworkCore
             Check.NotNull(builderAction, nameof(builderAction));
 
             builderAction(HasSequence<T>(modelBuilder, name, schema));
+
+            return modelBuilder;
+        }
+
+        /// <summary>
+        ///     Configures a database function when targeting a relational database.
+        /// </summary>
+        /// <param name="modelBuilder"> The model builder. </param>
+        /// <param name="methodInfo"> The methodInfo this dbFunction uses. </param>
+        /// <returns> The same builder instance so that multiple calls can be chained. </returns>
+        public static DbFunctionBuilder HasDbFunction(
+            [NotNull] this ModelBuilder modelBuilder,
+            [NotNull] MethodInfo methodInfo)
+        {
+            Check.NotNull(modelBuilder, nameof(modelBuilder));
+            Check.NotNull(methodInfo, nameof(methodInfo));
+
+            var dbFunction = modelBuilder.Model.Relational().GetOrAddDbFunction(methodInfo);
+
+            return new DbFunctionBuilder(dbFunction);
+        }
+
+        /// <summary>
+        ///     Configures a database function when targeting a relational database.
+        /// </summary>
+        /// <param name="modelBuilder"> The model builder. </param>
+        /// <param name="expression"> The method this dbFunction uses. </param>
+        /// <returns> The same builder instance so that multiple calls can be chained. </returns>
+        public static DbFunctionBuilder HasDbFunction<TResult>(
+            [NotNull] this ModelBuilder modelBuilder,
+            [NotNull] Expression<Func<TResult>> expression)
+        {
+            Check.NotNull(modelBuilder, nameof(modelBuilder));
+            Check.NotNull(expression, nameof(expression));
+
+            var methodInfo = (expression.Body as MethodCallExpression)?.Method;
+
+            if (methodInfo == null)
+            {
+                throw new ArgumentException(RelationalStrings.DbFunctionExpressionIsNotMethodCall(expression));
+            }
+
+            return modelBuilder.HasDbFunction(methodInfo);
+        }
+
+        /// <summary>
+        ///     Configures a database function when targeting a relational database.
+        /// </summary>
+        /// <param name="modelBuilder"> The model builder. </param>
+        /// <param name="methodInfo"> The methodInfo this dbFunction uses. </param>
+        /// <param name="builderAction"> An action that performs configuration of the sequence. </param>
+        /// <returns> The same builder instance so that multiple calls can be chained. </returns>
+        public static ModelBuilder HasDbFunction(
+            [NotNull] this ModelBuilder modelBuilder,
+            [NotNull] MethodInfo methodInfo,
+            [NotNull] Action<DbFunctionBuilder> builderAction)
+        {
+            Check.NotNull(modelBuilder, nameof(modelBuilder));
+            Check.NotNull(methodInfo, nameof(methodInfo));
+            Check.NotNull(builderAction, nameof(builderAction));
+
+            builderAction(HasDbFunction(modelBuilder, methodInfo));
 
             return modelBuilder;
         }

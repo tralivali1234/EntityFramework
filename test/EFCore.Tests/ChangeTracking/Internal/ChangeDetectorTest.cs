@@ -8,14 +8,13 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
+namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class ChangeDetectorTest
     {
@@ -1438,26 +1437,28 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             var builder = InMemoryTestHelpers.Instance.CreateConventionBuilder();
 
-            builder.Entity<Product>(b =>
-                {
-                    b.HasOne(e => e.Tag).WithOne(e => e.Product)
-                        .HasPrincipalKey<Product>(e => e.TagId)
-                        .HasForeignKey<ProductTag>(e => e.ProductId);
-                    b.Property(e => e.TagId).ValueGeneratedNever();
-                });
+            builder.Entity<Product>(
+                b =>
+                    {
+                        b.HasOne(e => e.Tag).WithOne(e => e.Product)
+                            .HasPrincipalKey<Product>(e => e.TagId)
+                            .HasForeignKey<ProductTag>(e => e.ProductId);
+                        b.Property(e => e.TagId).ValueGeneratedNever();
+                    });
 
-            builder.Entity<Category>(b =>
-                {
-                    b.HasMany(e => e.Products).WithOne(e => e.Category)
-                        .HasForeignKey(e => e.DependentId)
-                        .HasPrincipalKey(e => e.PrincipalId);
-                    b.Property(e => e.PrincipalId).ValueGeneratedNever();
+            builder.Entity<Category>(
+                b =>
+                    {
+                        b.HasMany(e => e.Products).WithOne(e => e.Category)
+                            .HasForeignKey(e => e.DependentId)
+                            .HasPrincipalKey(e => e.PrincipalId);
+                        b.Property(e => e.PrincipalId).ValueGeneratedNever();
 
-                    b.HasOne(e => e.Tag).WithOne(e => e.Category)
-                        .HasForeignKey<CategoryTag>(e => e.CategoryId)
-                        .HasPrincipalKey<Category>(e => e.TagId);
-                    b.Property(e => e.TagId).ValueGeneratedNever();
-                });
+                        b.HasOne(e => e.Tag).WithOne(e => e.Category)
+                            .HasForeignKey<CategoryTag>(e => e.CategoryId)
+                            .HasPrincipalKey<Category>(e => e.TagId);
+                        b.Property(e => e.TagId).ValueGeneratedNever();
+                    });
 
             builder.Entity<Person>()
                 .HasOne(e => e.Husband).WithOne(e => e.Wife)
@@ -1664,26 +1665,28 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
             var builder = InMemoryTestHelpers.Instance.CreateConventionBuilder()
                 .HasChangeTrackingStrategy(ChangeTrackingStrategy.ChangingAndChangedNotifications);
 
-            builder.Entity<NotifyingProduct>(b =>
-                {
-                    b.HasOne(e => e.Tag).WithOne(e => e.Product)
-                        .HasPrincipalKey<NotifyingProduct>(e => e.TagId)
-                        .HasForeignKey<NotifyingProductTag>(e => e.ProductId);
-                    b.Property(e => e.TagId).ValueGeneratedNever();
-                });
+            builder.Entity<NotifyingProduct>(
+                b =>
+                    {
+                        b.HasOne(e => e.Tag).WithOne(e => e.Product)
+                            .HasPrincipalKey<NotifyingProduct>(e => e.TagId)
+                            .HasForeignKey<NotifyingProductTag>(e => e.ProductId);
+                        b.Property(e => e.TagId).ValueGeneratedNever();
+                    });
 
-            builder.Entity<NotifyingCategory>(b =>
-                {
-                    b.HasMany(e => e.Products).WithOne(e => e.Category)
-                        .HasForeignKey(e => e.DependentId)
-                        .HasPrincipalKey(e => e.PrincipalId);
-                    b.Property(e => e.PrincipalId).ValueGeneratedNever();
+            builder.Entity<NotifyingCategory>(
+                b =>
+                    {
+                        b.HasMany(e => e.Products).WithOne(e => e.Category)
+                            .HasForeignKey(e => e.DependentId)
+                            .HasPrincipalKey(e => e.PrincipalId);
+                        b.Property(e => e.PrincipalId).ValueGeneratedNever();
 
-                    b.HasOne(e => e.Tag).WithOne(e => e.Category)
-                        .HasForeignKey<NotifyingCategoryTag>(e => e.CategoryId)
-                        .HasPrincipalKey<NotifyingCategory>(e => e.TagId);
-                    b.Property(e => e.TagId).ValueGeneratedNever();
-                });
+                        b.HasOne(e => e.Tag).WithOne(e => e.Category)
+                            .HasForeignKey<NotifyingCategoryTag>(e => e.CategoryId)
+                            .HasPrincipalKey<NotifyingCategory>(e => e.TagId);
+                        b.Property(e => e.TagId).ValueGeneratedNever();
+                    });
 
             builder.Entity<NotifyingPerson>()
                 .HasOne(e => e.Husband).WithOne(e => e.Wife)
@@ -1754,12 +1757,13 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             public Tuple<InternalEntityEntry, EntityState> Attached { get; set; }
 
-            public void AttachGraph(InternalEntityEntry rootEntry, EntityState entityState) 
+            public void AttachGraph(InternalEntityEntry rootEntry, EntityState entityState, bool forceStateWhenUnknownKey)
                 => Attached = Tuple.Create(rootEntry, entityState);
 
             public Task AttachGraphAsync(
                 InternalEntityEntry rootEntry,
                 EntityState entityState,
+                bool forceStateWhenUnknownKey,
                 CancellationToken cancellationToken = new CancellationToken())
             {
                 throw new NotImplementedException();

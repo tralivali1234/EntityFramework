@@ -5,11 +5,12 @@ using System;
 using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Utilities
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Utilities
 {
     public class IndentedStringBuilderTest
     {
-        private readonly string _nl = Environment.NewLine;
+        private static readonly string EOL = Environment.NewLine;
 
         [Fact]
         public void Append_at_start_with_indent()
@@ -52,7 +53,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
                 indentedStringBuilder.AppendLine();
             }
 
-            Assert.Equal($"Foo{_nl}    Foo{_nl}", indentedStringBuilder.ToString());
+            Assert.Equal($"Foo{EOL}    Foo{EOL}", indentedStringBuilder.ToString());
         }
 
         [Fact]
@@ -65,7 +66,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
                 indentedStringBuilder.AppendLine("Foo");
             }
 
-            Assert.Equal("    Foo" + _nl, indentedStringBuilder.ToString());
+            Assert.Equal("    Foo" + EOL, indentedStringBuilder.ToString());
         }
 
         [Fact]
@@ -80,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
                 indentedStringBuilder.AppendLine("Foo");
             }
 
-            Assert.Equal($"Foo{_nl}    Foo{_nl}", indentedStringBuilder.ToString());
+            Assert.Equal($"Foo{EOL}    Foo{EOL}", indentedStringBuilder.ToString());
         }
 
         [Fact]

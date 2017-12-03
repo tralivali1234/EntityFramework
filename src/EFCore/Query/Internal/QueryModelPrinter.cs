@@ -47,7 +47,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             _queryModelPrintingVisitor.VisitQueryModel(queryModel);
 
             var result = _expressionPrinter.StringBuilder.ToString();
-            if (characterLimit != null && characterLimit.Value > 0)
+            if (characterLimit != null
+                && characterLimit.Value > 0)
             {
                 result = result.Length > characterLimit
                     ? result.Substring(0, characterLimit.Value) + "..."
@@ -66,8 +67,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             protected override Expression VisitExtension(Expression node)
             {
-                var subquery = node as SubQueryExpression;
-                if (subquery != null)
+                if (node is SubQueryExpression subquery)
                 {
                     using (StringBuilder.Indent())
                     {
@@ -219,9 +219,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 base.VisitSelectClause(selectClause, queryModel);
             }
 
-            private string ResultOperatorString(ResultOperatorBase resultOperator)
+            private static string ResultOperatorString(ResultOperatorBase resultOperator)
             {
-                switch(resultOperator)
+                switch (resultOperator)
                 {
                     case CastResultOperator cast:
                         return "Cast<" + cast.CastItemType.ShortDisplayName() + ">()";

@@ -5,7 +5,8 @@ using System;
 using System.Linq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class DiscriminatorTest
     {

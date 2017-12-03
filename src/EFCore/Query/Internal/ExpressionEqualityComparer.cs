@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 
 // ReSharper disable SwitchStatementMissingSomeCases
@@ -158,7 +159,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     {
                         var newExpression = (NewExpression)obj;
 
-                        hashCode += (hashCode * 397) ^ newExpression.Constructor.GetHashCode();
+                        hashCode += (hashCode * 397) ^ (newExpression.Constructor?.GetHashCode() ?? 0);
 
                         if (newExpression.Members != null)
                         {
@@ -256,6 +257,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         if (obj is NullConditionalExpression nullConditionalExpression)
                         {
                             hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalExpression.AccessOperation);
+                        }
+                        else if (obj is NullConditionalEqualExpression nullConditionalEqualExpression)
+                        {
+                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.OuterNullProtection);
+                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.OuterKey);
+                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.InnerKey);
                         }
                         else
                         {
@@ -428,8 +435,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     return false; // EnumerableQueries are opaque
                 }
 
-                if (a.Value is IQueryable
-                    && b.Value is IQueryable
+                if (a.IsEntityQueryable()
+                    && b.IsEntityQueryable()
                     && a.Value.GetType() == b.Value.GetType())
                 {
                     return true;
@@ -442,7 +449,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             {
                 if (_parameterScope != null)
                 {
-                    if (_parameterScope.TryGetValue(a, out ParameterExpression mapped))
+                    if (_parameterScope.TryGetValue(a, out var mapped))
                     {
                         return mapped.Name == b.Name
                                && mapped.Type == b.Type;
@@ -573,6 +580,20 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     return Compare(
                         nullConditionalExpressionA.AccessOperation,
                         nullConditionalExpressionB.AccessOperation);
+                }
+
+                if (a is NullConditionalEqualExpression nullConditionalEqualExpressionA
+                    && b is NullConditionalEqualExpression nullConditionalEqualExpressionB)
+                {
+                    return Compare(
+                               nullConditionalEqualExpressionA.OuterNullProtection,
+                               nullConditionalEqualExpressionB.OuterNullProtection)
+                           && Compare(
+                               nullConditionalEqualExpressionA.OuterKey,
+                               nullConditionalEqualExpressionB.OuterKey)
+                           && Compare(
+                               nullConditionalEqualExpressionA.InnerKey,
+                               nullConditionalEqualExpressionB.InnerKey);
                 }
 
                 return a.Equals(b);
@@ -723,7 +744,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         }
                     }
 
-                    value = default(TValue);
+                    value = default;
 
                     return false;
                 }

@@ -17,40 +17,56 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.EntityFrameworkCore.Design.Internal
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class MigrationsOperations
     {
         private readonly IOperationReporter _reporter;
         private readonly Assembly _assembly;
         private readonly string _projectDir;
         private readonly string _rootNamespace;
+        private readonly string _language;
         private readonly DesignTimeServicesBuilder _servicesBuilder;
         private readonly DbContextOperations _contextOperations;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public MigrationsOperations(
             [NotNull] IOperationReporter reporter,
             [NotNull] Assembly assembly,
             [NotNull] Assembly startupAssembly,
             [NotNull] string projectDir,
-            [NotNull] string rootNamespace)
+            [NotNull] string rootNamespace,
+            [NotNull] string language)
         {
             Check.NotNull(reporter, nameof(reporter));
             Check.NotNull(assembly, nameof(assembly));
             Check.NotNull(startupAssembly, nameof(startupAssembly));
             Check.NotNull(projectDir, nameof(projectDir));
             Check.NotNull(rootNamespace, nameof(rootNamespace));
+            Check.NotNull(language, nameof(language));
 
             _reporter = reporter;
             _assembly = assembly;
             _projectDir = projectDir;
             _rootNamespace = rootNamespace;
+            _language = language;
             _contextOperations = new DbContextOperations(
                 reporter,
                 assembly,
                 startupAssembly);
 
-            _servicesBuilder = new DesignTimeServicesBuilder(startupAssembly);
+            _servicesBuilder = new DesignTimeServicesBuilder(startupAssembly, reporter);
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual MigrationFiles AddMigration(
             [NotNull] string name,
             [CanBeNull] string outputDir,
@@ -68,7 +84,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 EnsureMigrationsAssembly(services);
 
                 var scaffolder = services.GetRequiredService<MigrationsScaffolder>();
-                var migration = scaffolder.ScaffoldMigration(name, _rootNamespace, subNamespace);
+                var migration = scaffolder.ScaffoldMigration(name, _rootNamespace, subNamespace, _language);
                 var files = scaffolder.Save(_projectDir, migration, outputDir);
 
                 return files;
@@ -89,10 +105,18 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             var subPath = outputDir.Substring(_projectDir.Length);
 
             return !string.IsNullOrWhiteSpace(subPath)
-                ? string.Join(".", subPath.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
+                ? string.Join(
+                    ".",
+                    subPath.Split(
+                        new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+                        StringSplitOptions.RemoveEmptyEntries))
                 : null;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual IEnumerable<MigrationInfo> GetMigrations(
             [CanBeNull] string contextType)
         {
@@ -109,6 +133,10 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             }
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual string ScriptMigration(
             [CanBeNull] string fromMigration,
             [CanBeNull] string toMigration,
@@ -126,6 +154,10 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             }
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual void UpdateDatabase(
             [CanBeNull] string targetMigration,
             [CanBeNull] string contextType)
@@ -143,8 +175,12 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             _reporter.WriteInformation(DesignStrings.Done);
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual MigrationFiles RemoveMigration(
-            [CanBeNull] string contextType, bool force)
+            [CanBeNull] string contextType, bool force, bool revert)
         {
             using (var context = _contextOperations.CreateContext(contextType))
             {
@@ -154,7 +190,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
 
                 var scaffolder = services.GetRequiredService<MigrationsScaffolder>();
 
-                var files = scaffolder.RemoveMigration(_projectDir, _rootNamespace, force);
+                var files = scaffolder.RemoveMigration(_projectDir, _rootNamespace, force, revert, _language);
 
                 _reporter.WriteInformation(DesignStrings.Done);
 
@@ -168,7 +204,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             if (migrator == null)
             {
                 var databaseProvider = services.GetService<IDatabaseProvider>();
-                throw new OperationException(DesignStrings.NonRelationalProvider(databaseProvider?.InvariantName ?? "Unknown"));
+                throw new OperationException(DesignStrings.NonRelationalProvider(databaseProvider?.Name ?? "Unknown"));
             }
         }
 

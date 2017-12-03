@@ -2,12 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Reflection;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Xunit;
 
 // ReSharper disable ConvertToAutoProperty
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class BackingFieldConventionTest
     {
@@ -359,6 +358,8 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
                 get { return _onBase; }
                 set { _onBase = value; }
             }
+
+            public new int Unrelated = 1;
         }
 
         private class OfTheMoon
@@ -375,6 +376,8 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
             }
 
             protected int _onBase;
+
+            public int Unrelated = 2;
         }
     }
 }

@@ -24,9 +24,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public static RelationalTypeMapping GetMappingForValue(
             [CanBeNull] this IRelationalTypeMapper typeMapper,
             [CanBeNull] object value)
-            => (value == null)
-               || (value == DBNull.Value)
-               || (typeMapper == null)
+            => value == null
+               || value == DBNull.Value
+               || typeMapper == null
                 ? RelationalTypeMapping.NullMapping
                 : typeMapper.GetMapping(value.GetType());
 
@@ -43,16 +43,19 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Check.NotNull(typeMapper, nameof(typeMapper));
             Check.NotNull(property, nameof(property));
 
-            var mapping = typeMapper.FindMapping(property);
+            var mapping = property.FindRelationalMapping()
+                          ?? typeMapper.FindMapping(property);
+
             if (mapping != null)
             {
                 return mapping;
             }
 
-            throw new InvalidOperationException(RelationalStrings.UnsupportedPropertyType(
-                property.DeclaringEntityType.DisplayName(),
-                property.Name,
-                property.ClrType.ShortDisplayName()));
+            throw new InvalidOperationException(
+                RelationalStrings.UnsupportedPropertyType(
+                    property.DeclaringEntityType.DisplayName(),
+                    property.Name,
+                    property.ClrType.ShortDisplayName()));
         }
 
         /// <summary>
@@ -78,7 +81,12 @@ namespace Microsoft.EntityFrameworkCore.Storage
         }
 
         /// <summary>
-        ///     Gets the mapping that represents the given database type, throwing if no mapping is found.
+        ///     <para>
+        ///         Gets the mapping that represents the given database type, throwing if no mapping is found.
+        ///     </para>
+        ///     <para>
+        ///         Note that sometimes the same store type can have different mappings; this method returns the default.
+        ///     </para>
         /// </summary>
         /// <param name="typeMapper"> The type mapper. </param>
         /// <param name="typeName"> The type to get the mapping for. </param>
@@ -97,22 +105,6 @@ namespace Microsoft.EntityFrameworkCore.Storage
             }
 
             throw new InvalidOperationException(RelationalStrings.UnsupportedType(typeName));
-        }
-
-        /// <summary>
-        ///     Gets a value indicating whether the given .NET type is mapped.
-        /// </summary>
-        /// <param name="typeMapper"> The type mapper. </param>
-        /// <param name="clrType"> The .NET type. </param>
-        /// <returns> True if the type can be mapped; otherwise false. </returns>
-        public static bool IsTypeMapped(
-            [NotNull] this IRelationalTypeMapper typeMapper,
-            [NotNull] Type clrType)
-        {
-            Check.NotNull(typeMapper, nameof(typeMapper));
-            Check.NotNull(clrType, nameof(clrType));
-
-            return typeMapper.FindMapping(clrType) != null;
         }
     }
 }

@@ -3,14 +3,12 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata.Conventions.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class RelationalPropertyMappingValidationConventionTest : PropertyMappingValidationConventionTest
     {
@@ -21,7 +19,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata.Conventions.In
             var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveAsPropertyEntity), ConfigurationSource.Convention);
             entityTypeBuilder.Property("LongProperty", typeof(Tuple<long>), ConfigurationSource.Convention);
 
-            Assert.Equal(CoreStrings.PropertyNotMapped(
+            Assert.Equal(
+                CoreStrings.PropertyNotMapped(
                     typeof(NonPrimitiveAsPropertyEntity).ShortDisplayName(), "LongProperty", typeof(Tuple<long>).ShortDisplayName()),
                 Assert.Throws<InvalidOperationException>(() => CreateConvention().Apply(modelBuilder)).Message);
         }
@@ -33,12 +32,16 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata.Conventions.In
             var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveAsPropertyEntity), ConfigurationSource.Convention);
             entityTypeBuilder.Property("LongProperty", typeof(Tuple<long>), ConfigurationSource.Convention).Relational(ConfigurationSource.Convention).HasColumnType("some_int_mapping");
 
-            Assert.Equal(CoreStrings.PropertyNotMapped(
+            Assert.Equal(
+                CoreStrings.PropertyNotMapped(
                     typeof(NonPrimitiveAsPropertyEntity).ShortDisplayName(), "LongProperty", typeof(Tuple<long>).ShortDisplayName()),
                 Assert.Throws<InvalidOperationException>(() => CreateConvention().Apply(modelBuilder)).Message);
         }
 
         protected override PropertyMappingValidationConvention CreateConvention()
-            => new RelationalPropertyMappingValidationConvention(new TestRelationalTypeMapper(new RelationalTypeMapperDependencies()));
+            => new PropertyMappingValidationConvention(
+                new TestRelationalTypeMapper(
+                    new CoreTypeMapperDependencies(),
+                    new RelationalTypeMapperDependencies()));
     }
 }

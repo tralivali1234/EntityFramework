@@ -3,13 +3,13 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.Metadata;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
+namespace Microsoft.EntityFrameworkCore.Metadata
 {
     public class RelationalBuilderExtensionsTest
     {
@@ -866,13 +866,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .HasSequence<int>("Snook", b =>
-                    {
-                        b.IncrementsBy(11)
-                            .StartsAt(1729)
-                            .HasMin(111)
-                            .HasMax(2222);
-                    });
+                .HasSequence<int>(
+                    "Snook", b =>
+                        {
+                            b.IncrementsBy(11)
+                                .StartsAt(1729)
+                                .HasMin(111)
+                                .HasMax(2222);
+                        });
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook");
 
@@ -885,13 +886,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .HasSequence(typeof(int), "Snook", b =>
-                    {
-                        b.IncrementsBy(11)
-                            .StartsAt(1729)
-                            .HasMin(111)
-                            .HasMax(2222);
-                    });
+                .HasSequence(
+                    typeof(int), "Snook", b =>
+                        {
+                            b.IncrementsBy(11)
+                                .StartsAt(1729)
+                                .HasMin(111)
+                                .HasMax(2222);
+                        });
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook");
 
@@ -967,6 +969,20 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Metadata
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook", "Tasty");
 
             ValidateSchemaNamedSpecificSequence(sequence);
+        }
+
+        [Fact]
+        public void Can_create_dbFunction()
+        {
+            var modelBuilder = CreateConventionModelBuilder();
+            var testMethod = typeof(TestDbFunctions).GetTypeInfo().GetDeclaredMethod(nameof(TestDbFunctions.MethodA));
+            modelBuilder.HasDbFunction(testMethod);
+
+            var dbFunc = modelBuilder.Model.Relational().FindDbFunction(testMethod) as DbFunction;
+
+            Assert.NotNull(dbFunc);
+            Assert.Equal("MethodA", dbFunc.FunctionName);
+            Assert.Null(dbFunc.Schema);
         }
 
         [Fact]

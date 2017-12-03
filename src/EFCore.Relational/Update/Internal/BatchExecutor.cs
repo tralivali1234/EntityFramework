@@ -1,14 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Update.Internal
 {
@@ -47,9 +46,11 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         public virtual int Execute(
             IEnumerable<ModificationCommandBatch> commandBatches,
             IRelationalConnection connection)
-            => GetExecutionStrategy().Execute(Execute, Tuple.Create(commandBatches, connection));
+            => CurrentContext.Context.Database.AutoTransactionsEnabled
+                ? ExecutionStrategyFactory.Create().Execute((commandBatches, connection), Execute, null)
+                : Execute(CurrentContext.Context, (commandBatches, connection));
 
-        private int Execute(Tuple<IEnumerable<ModificationCommandBatch>, IRelationalConnection> parameters)
+        private int Execute(DbContext _, (IEnumerable<ModificationCommandBatch>, IRelationalConnection) parameters)
         {
             var commandBatches = parameters.Item1;
             var connection = parameters.Item2;
@@ -58,6 +59,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             try
             {
                 if (connection.CurrentTransaction == null
+                    && connection.EnlistedTransaction == null
+                    && Transaction.Current == null
                     && CurrentContext.Context.Database.AutoTransactionsEnabled)
                 {
                     startedTransaction = connection.BeginTransaction();
@@ -97,12 +100,15 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         public virtual Task<int> ExecuteAsync(
             IEnumerable<ModificationCommandBatch> commandBatches,
             IRelationalConnection connection,
-            CancellationToken cancellationToken = default(CancellationToken))
-            => GetExecutionStrategy().ExecuteAsync(ExecuteAsync, Tuple.Create(commandBatches, connection), cancellationToken);
+            CancellationToken cancellationToken = default)
+            => CurrentContext.Context.Database.AutoTransactionsEnabled
+                ? ExecutionStrategyFactory.Create().ExecuteAsync((commandBatches, connection), ExecuteAsync, null, cancellationToken)
+                : ExecuteAsync(CurrentContext.Context, (commandBatches, connection), cancellationToken);
 
         private async Task<int> ExecuteAsync(
-            Tuple<IEnumerable<ModificationCommandBatch>, IRelationalConnection> parameters,
-            CancellationToken cancellationToken = default(CancellationToken))
+            DbContext _,
+            (IEnumerable<ModificationCommandBatch>, IRelationalConnection) parameters,
+            CancellationToken cancellationToken = default)
         {
             var commandBatches = parameters.Item1;
             var connection = parameters.Item2;
@@ -111,6 +117,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             try
             {
                 if (connection.CurrentTransaction == null
+                    && connection.EnlistedTransaction == null
+                    && Transaction.Current == null
                     && CurrentContext.Context.Database.AutoTransactionsEnabled)
                 {
                     startedTransaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -142,10 +150,5 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
             return rowsAffected;
         }
-
-        private IExecutionStrategy GetExecutionStrategy()
-            => CurrentContext.Context.Database.AutoTransactionsEnabled
-                ? ExecutionStrategyFactory.Create()
-                : NoopExecutionStrategy.Instance;
     }
 }

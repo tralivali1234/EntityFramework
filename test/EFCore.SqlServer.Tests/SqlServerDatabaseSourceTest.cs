@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerDatabaseSourceTest
     {
@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         {
             Assert.Equal(
                 typeof(SqlServerConnection).GetTypeInfo().Assembly.GetName().Name,
-                new DatabaseProvider<SqlServerOptionsExtension>(new DatabaseProviderDependencies()).InvariantName);
+                new DatabaseProvider<SqlServerOptionsExtension>(new DatabaseProviderDependencies()).Name);
         }
 
         [Fact]

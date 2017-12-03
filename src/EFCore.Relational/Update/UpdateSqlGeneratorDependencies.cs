@@ -17,10 +17,10 @@ namespace Microsoft.EntityFrameworkCore.Update
     ///     </para>
     ///     <para>
     ///         Do not construct instances of this class directly from either provider or application code as the
-    ///         constructor signature may change as new dependencies are added. Instead, use this type in 
-    ///         your constructor so that an instance will be created and injected automatically by the 
-    ///         dependency injection container. To create an instance with some dependent services replaced, 
-    ///         first resolve the object from the dependency injection container, then replace selected 
+    ///         constructor signature may change as new dependencies are added. Instead, use this type in
+    ///         your constructor so that an instance will be created and injected automatically by the
+    ///         dependency injection container. To create an instance with some dependent services replaced,
+    ///         first resolve the object from the dependency injection container, then replace selected
     ///         services using the 'With...' methods. Do not call the constructor at any point in this process.
     ///     </para>
     /// </summary>
@@ -31,11 +31,11 @@ namespace Microsoft.EntityFrameworkCore.Update
         ///         Creates the service dependencies parameter object for a <see cref="UpdateSqlGenerator" />.
         ///     </para>
         ///     <para>
-        ///         Do not call this constructor directly from either provider or application code as it may change 
-        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance 
-        ///         will be created and injected automatically by the dependency injection container. To create 
-        ///         an instance with some dependent services replaced, first resolve the object from the dependency 
-        ///         injection container, then replace selected services using the 'With...' methods. Do not call 
+        ///         Do not call this constructor directly from either provider or application code as it may change
+        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance
+        ///         will be created and injected automatically by the dependency injection container. To create
+        ///         an instance with some dependent services replaced, first resolve the object from the dependency
+        ///         injection container, then replace selected services using the 'With...' methods. Do not call
         ///         the constructor at any point in this process.
         ///     </para>
         ///     <para>
@@ -44,11 +44,16 @@ namespace Microsoft.EntityFrameworkCore.Update
         ///     </para>
         /// </summary>
         /// <param name="sqlGenerationHelper"> Helpers for generating update SQL. </param>
-        public UpdateSqlGeneratorDependencies([NotNull] ISqlGenerationHelper sqlGenerationHelper)
+        /// <param name="relationalTypeMapper"> The relational type mapper. </param>
+        public UpdateSqlGeneratorDependencies(
+            [NotNull] ISqlGenerationHelper sqlGenerationHelper,
+            [NotNull] IRelationalTypeMapper relationalTypeMapper)
         {
             Check.NotNull(sqlGenerationHelper, nameof(sqlGenerationHelper));
+            Check.NotNull(relationalTypeMapper, nameof(relationalTypeMapper));
 
             SqlGenerationHelper = sqlGenerationHelper;
+            RelationalTypeMapper = relationalTypeMapper;
         }
 
         /// <summary>
@@ -57,11 +62,28 @@ namespace Microsoft.EntityFrameworkCore.Update
         public ISqlGenerationHelper SqlGenerationHelper { get; }
 
         /// <summary>
+        ///     The relational type mapper.
+        /// </summary>
+        public IRelationalTypeMapper RelationalTypeMapper { get; }
+
+        /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="sqlGenerationHelper"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
         public UpdateSqlGeneratorDependencies With([NotNull] ISqlGenerationHelper sqlGenerationHelper)
-            => new UpdateSqlGeneratorDependencies(sqlGenerationHelper);
+            => new UpdateSqlGeneratorDependencies(
+                sqlGenerationHelper,
+                RelationalTypeMapper);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="relationalTypeMapper"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public UpdateSqlGeneratorDependencies With([NotNull] IRelationalTypeMapper relationalTypeMapper)
+            => new UpdateSqlGeneratorDependencies(
+                SqlGenerationHelper,
+                relationalTypeMapper);
     }
 }

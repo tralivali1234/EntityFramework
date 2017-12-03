@@ -3,9 +3,9 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Internal;
-using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Internal
 {
@@ -18,36 +18,33 @@ namespace Microsoft.EntityFrameworkCore.Internal
     ///         directly from your code. This type may change or be removed in future releases.
     ///     </para>
     /// </summary>
-    public sealed class DbContextDependencies
+    public sealed class DbContextDependencies : IDbContextDependencies
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public DbContextDependencies(
+            [NotNull] ICurrentDbContext currentContext,
             [NotNull] IChangeDetector changeDetector,
-            [NotNull] IDbSetInitializer dbSetInitializer,
+            [NotNull] IDbSetSource setSource,
             [NotNull] IEntityFinderSource entityFinderSource,
             [NotNull] IEntityGraphAttacher entityGraphAttacher,
             [NotNull] IModel model,
             [NotNull] IAsyncQueryProvider queryProvider,
-            [NotNull] IStateManager stateManager)
+            [NotNull] IStateManager stateManager,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Update> updateLogger,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Infrastructure> infrastuctureLogger)
         {
-            Check.NotNull(changeDetector, nameof(changeDetector));
-            Check.NotNull(dbSetInitializer, nameof(dbSetInitializer));
-            Check.NotNull(entityFinderSource, nameof(entityFinderSource));
-            Check.NotNull(entityGraphAttacher, nameof(entityGraphAttacher));
-            Check.NotNull(model, nameof(model));
-            Check.NotNull(queryProvider, nameof(queryProvider));
-            Check.NotNull(stateManager, nameof(stateManager));
-
             ChangeDetector = changeDetector;
-            DbSetInitializer = dbSetInitializer;
-            EntityFinderSource = entityFinderSource;
+            SetSource = setSource;
             EntityGraphAttacher = entityGraphAttacher;
             Model = model;
             QueryProvider = queryProvider;
             StateManager = stateManager;
+            UpdateLogger = updateLogger;
+            InfrastructureLogger = infrastuctureLogger;
+            EntityFinderFactory = new EntityFinderFactory(entityFinderSource, stateManager, setSource, currentContext.Context);
         }
 
         /// <summary>
@@ -60,13 +57,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public IDbSetInitializer DbSetInitializer { get; }
+        public IDbSetSource SetSource { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public IEntityFinderSource EntityFinderSource { get; }
+        public IEntityFinderFactory EntityFinderFactory { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -91,5 +88,17 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public IEntityGraphAttacher EntityGraphAttacher { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public IDiagnosticsLogger<DbLoggerCategory.Update> UpdateLogger { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public IDiagnosticsLogger<DbLoggerCategory.Infrastructure> InfrastructureLogger { get; }
     }
 }

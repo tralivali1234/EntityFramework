@@ -34,14 +34,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             QueryModel queryModel, ICollection<IQueryAnnotation> queryAnnotations)
         {
             queryModel
-                .TransformExpressions(e =>
-                    ExtractQueryAnnotations(e, queryAnnotations));
+                .TransformExpressions(
+                    e =>
+                        ExtractQueryAnnotations(e, queryAnnotations));
 
             foreach (var resultOperator in queryModel.ResultOperators.ToList())
             {
-                var queryAnnotation = resultOperator as IQueryAnnotation;
-
-                if (queryAnnotation != null)
+                if (resultOperator is IQueryAnnotation queryAnnotation)
                 {
                     queryAnnotations.Add(queryAnnotation);
 
@@ -70,9 +69,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             private readonly ICollection<IQueryAnnotation> _queryAnnotations;
 
             public QueryAnnotationExtractingVisitor(ICollection<IQueryAnnotation> queryAnnotations)
-            {
-                _queryAnnotations = queryAnnotations;
-            }
+                => _queryAnnotations = queryAnnotations;
 
             protected override Expression VisitSubQuery(SubQueryExpression expression)
             {

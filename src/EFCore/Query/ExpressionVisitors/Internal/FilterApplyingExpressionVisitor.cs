@@ -4,6 +4,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Remotion.Linq;
@@ -11,7 +12,6 @@ using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Parsing;
 using Remotion.Linq.Parsing.ExpressionVisitors;
-using JetBrains.Annotations;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 {
@@ -48,7 +48,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var type = ((IQueryable)constantExpression.Value).ElementType;
                 var entityType = _queryCompilationContext.Model.FindEntityType(type)?.RootType();
 
-                if (entityType?.Filter != null)
+                if (entityType?.QueryFilter != null)
                 {
                     var visitor
                         = new ParameterExtractingExpressionVisitor(
@@ -59,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                             generateContextAccessors: true);
 
                     var parameterizedFilter
-                        = (LambdaExpression)visitor.ExtractParameters(entityType.Filter);
+                        = (LambdaExpression)visitor.ExtractParameters(entityType.QueryFilter);
 
                     var mainFromClause
                         = new MainFromClause(
@@ -106,6 +106,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 _parameterValues.Remove(name);
 
                 return value;
+            }
+
+            public void SetParameter(string name, object value)
+            {
+                _parameterValues[name] = value;
             }
         }
 

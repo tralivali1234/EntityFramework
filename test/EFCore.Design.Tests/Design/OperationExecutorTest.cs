@@ -3,10 +3,9 @@
 
 using System;
 using System.Collections.Generic;
-using Moq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Design.Tests.Design
+namespace Microsoft.EntityFrameworkCore.Design
 {
     public class OperationExecutorTest
     {
@@ -14,10 +13,10 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Design
         public void Ctor_validates_arguments()
         {
             var ex = Assert.Throws<ArgumentNullException>(() => new OperationExecutor(null, null));
-            Assert.Equal(ex.ParamName, "reportHandler");
+            Assert.Equal("reportHandler", ex.ParamName);
 
-            ex = Assert.Throws<ArgumentNullException>(() => new OperationExecutor(Mock.Of<IOperationReportHandler>(), null));
-            Assert.Equal(ex.ParamName, "args");
+            ex = Assert.Throws<ArgumentNullException>(() => new OperationExecutor(new OperationReportHandler(), null));
+            Assert.Equal("args", ex.ParamName);
         }
 
         public class OperationBaseTests
@@ -26,10 +25,10 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Design
             public void Execute_catches_exceptions()
             {
                 var handler = new OperationResultHandler();
-                var operation = new Mock<OperationExecutor.OperationBase>(handler) { CallBase = true };
+                var operation = new MockOperation(handler);
                 var error = new ArgumentOutOfRangeException("Needs to be about 20% more cool.");
 
-                operation.Object.Execute(() => { throw error; });
+                operation.Execute(() => { throw error; });
 
                 Assert.Equal(error.GetType().FullName, handler.ErrorType);
                 Assert.Equal(error.Message, handler.ErrorMessage);
@@ -40,10 +39,10 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Design
             public void Execute_sets_results()
             {
                 var handler = new OperationResultHandler();
-                var operation = new Mock<OperationExecutor.OperationBase>(handler) { CallBase = true };
+                var operation = new MockOperation(handler);
                 var result = "Twilight Sparkle";
 
-                operation.Object.Execute(() => result);
+                operation.Execute(() => result);
 
                 Assert.Equal(result, handler.Result);
             }
@@ -52,9 +51,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Design
             public void Execute_enumerates_results()
             {
                 var handler = new OperationResultHandler();
-                var operation = new Mock<OperationExecutor.OperationBase>(handler) { CallBase = true };
+                var operation = new MockOperation(handler);
 
-                operation.Object.Execute(() => YieldResults());
+                operation.Execute(() => YieldResults());
 
                 Assert.IsType<string[]>(handler.Result);
                 Assert.Equal(new[] { "Twilight Sparkle", "Princess Celestia" }, handler.Result);
@@ -64,6 +63,14 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Design
             {
                 yield return "Twilight Sparkle";
                 yield return "Princess Celestia";
+            }
+
+            private class MockOperation : OperationExecutor.OperationBase
+            {
+                public MockOperation(object resultHandler)
+                    : base(resultHandler)
+                {
+                }
             }
         }
     }

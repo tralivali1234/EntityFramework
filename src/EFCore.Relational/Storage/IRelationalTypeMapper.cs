@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Data.Common;
+using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata;
 
@@ -16,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
     ///         not used in application code.
     ///     </para>
     /// </summary>
-    public interface IRelationalTypeMapper
+    public interface IRelationalTypeMapper : ITypeMapper
     {
         /// <summary>
         ///     Gets the relational database type for the given property.
@@ -35,8 +37,13 @@ namespace Microsoft.EntityFrameworkCore.Storage
         RelationalTypeMapping FindMapping([NotNull] Type clrType);
 
         /// <summary>
-        ///     Gets the mapping that represents the given database type.
-        ///     Returns null if no mapping is found.
+        ///     <para>
+        ///         Gets the mapping that represents the given database type.
+        ///         Returns null if no mapping is found.
+        ///     </para>
+        ///     <para>
+        ///         Note that sometimes the same store type can have different mappings; this method returns the default.
+        ///     </para>
         /// </summary>
         /// <param name="storeType"> The type to get the mapping for. </param>
         /// <returns> The type mapping to be used. </returns>
@@ -58,5 +65,13 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     Gets the mapper to be used for string properties.
         /// </summary>
         IStringRelationalTypeMapper StringMapper { get; }
+
+        /// <summary>
+        ///     The method to use when reading values of the given type. The method must be defined
+        ///     on <see cref="DbDataReader" /> or one of its subclasses.
+        /// </summary>
+        /// <param name="type"> The type of the value to be read. </param>
+        /// <returns> The method to use to read the value. </returns>
+        MethodInfo GetDataReaderMethod([NotNull] Type type);
     }
 }

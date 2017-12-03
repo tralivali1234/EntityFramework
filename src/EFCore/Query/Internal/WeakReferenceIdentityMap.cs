@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -53,7 +54,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual WeakReference<object> TryGetEntity(
-            ValueBuffer valueBuffer, 
+            ValueBuffer valueBuffer,
             bool throwOnNullKey,
             out bool hasNullKey)
         {
@@ -81,8 +82,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
 
             hasNullKey = false;
-            WeakReference<object> entity;
-            return _identityMap.TryGetValue((TKey)key, out entity) ? entity : null;
+            return _identityMap.TryGetValue((TKey)key, out var entity) ? entity : null;
         }
 
         /// <summary>
@@ -93,16 +93,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             if (++_identityMapGarbageCollectionIterations == IdentityMapGarbageCollectionThreshold)
             {
-                var deadEntries = new List<TKey>();
-
-                foreach (var entry in _identityMap)
-                {
-                    object _;
-                    if (!entry.Value.TryGetTarget(out _))
-                    {
-                        deadEntries.Add(entry.Key);
-                    }
-                }
+                var deadEntries
+                    = (from entry in _identityMap
+                       where !entry.Value.TryGetTarget(out _)
+                       select entry.Key)
+                    .ToList();
 
                 foreach (var keyValue in deadEntries)
                 {
@@ -128,8 +123,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             if (navigation.IsDependentToPrincipal())
             {
-                TKey keyValue;
-                return navigation.ForeignKey.GetDependentKeyValueFactory<TKey>().TryCreateFromBuffer(valueBuffer, out keyValue)
+                return navigation.ForeignKey.GetDependentKeyValueFactory<TKey>().TryCreateFromBuffer(valueBuffer, out var keyValue)
                     ? (IIncludeKeyComparer)new DependentToPrincipalIncludeComparer<TKey>(keyValue, PrincipalKeyValueFactory)
                     : new NullIncludeComparer();
             }
@@ -148,8 +142,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             if (navigation.IsDependentToPrincipal())
             {
-                TKey keyValue;
-                return navigation.ForeignKey.GetDependentKeyValueFactory<TKey>().TryCreateFromCurrentValues(entry, out keyValue)
+                return navigation.ForeignKey.GetDependentKeyValueFactory<TKey>().TryCreateFromCurrentValues(entry, out var keyValue)
                     ? new DependentToPrincipalIncludeComparer<TKey>(keyValue, PrincipalKeyValueFactory)
                     : (IIncludeKeyComparer)new NullIncludeComparer();
             }

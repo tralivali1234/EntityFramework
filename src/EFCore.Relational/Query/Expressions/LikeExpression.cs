@@ -33,7 +33,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </summary>
         /// <param name="match"> The expression to match. </param>
         /// <param name="pattern"> The pattern to match. </param>
-        /// <param name="escapeChar"> The escape character to use in <paramref name="pattern"/>. </param>
+        /// <param name="escapeChar"> The escape character to use in <paramref name="pattern" />. </param>
         public LikeExpression([NotNull] Expression match, [NotNull] Expression pattern, [CanBeNull] Expression escapeChar)
         {
             Check.NotNull(match, nameof(match));
@@ -61,7 +61,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         public virtual Expression Pattern { get; }
 
         /// <summary>
-        ///     Gets the escape character to use in <see cref="Pattern"/>.
+        ///     Gets the escape character to use in <see cref="Pattern" />.
         /// </summary>
         /// <value>
         ///     The escape character to use. If null, no escape character is used.
@@ -88,15 +88,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlExpressionVisitor specificVisitor
                 ? specificVisitor.VisitLike(this)
                 : base.Accept(visitor);
         }
 
         /// <summary>
-        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(System.Linq.Expressions.Expression)" /> method passing the
+        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(Expression)" /> method passing the
         ///     reduced expression.
         ///     Throws an exception if the node isn't reducible.
         /// </summary>
@@ -130,7 +128,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </returns>
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

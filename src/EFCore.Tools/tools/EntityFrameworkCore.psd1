@@ -3,7 +3,7 @@
     ModuleToProcess = 'EntityFrameworkCore.psm1'
 
     # Version number of this module.
-    ModuleVersion = '2.0.0'
+    ModuleVersion = '2.1.0'
 
     # ID used to uniquely identify this module
     GUID = 'c126fb40-c0f1-43ae-8dd0-06bb50512eb2'
@@ -61,6 +61,7 @@
         'Add-Migration',
         'Drop-Database',
         'Enable-Migrations',
+        'Get-DbContext',
         'Remove-Migration',
         'Scaffold-DbContext',
         'Script-Migration',

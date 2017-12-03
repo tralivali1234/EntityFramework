@@ -7,125 +7,158 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.EntityFrameworkCore.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerModelValidatorTest : RelationalModelValidatorTest
     {
         public override void Detects_duplicate_column_names()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
-            modelBuilder.Entity<Animal>().Property(b => b.Id).ForSqlServerHasColumnName("Name");
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
 
-            VerifyError(RelationalStrings.DuplicateColumnNameDataTypeMismatch(nameof(Animal), nameof(Animal.Id),
+            GenerateMapping(modelBuilder.Entity<Animal>().Property(b => b.Id).HasColumnName("Name").Metadata);
+            GenerateMapping(modelBuilder.Entity<Animal>().Property(d => d.Name).HasColumnName("Name").Metadata);
+
+            VerifyError(
+                RelationalStrings.DuplicateColumnNameDataTypeMismatch(
+                    nameof(Animal), nameof(Animal.Id),
                     nameof(Animal), nameof(Animal.Name), "Name", nameof(Animal), "int", "nvarchar(max)"),
                 modelBuilder.Model);
         }
 
         public override void Detects_duplicate_columns_in_derived_types_with_different_types()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>();
-            modelBuilder.Entity<Cat>().Property(c => c.Type);
-            modelBuilder.Entity<Dog>().Property(c => c.Type);
 
-            VerifyError(RelationalStrings.DuplicateColumnNameDataTypeMismatch(
-                typeof(Cat).Name, "Type", typeof(Dog).Name, "Type", "Type", nameof(Animal), "nvarchar(max)", "int"), modelBuilder.Model);
+            GenerateMapping(modelBuilder.Entity<Cat>().Property(c => c.Type).HasColumnName("Type").Metadata);
+            GenerateMapping(modelBuilder.Entity<Dog>().Property(c => c.Type).HasColumnName("Type").Metadata);
+
+            VerifyError(
+                RelationalStrings.DuplicateColumnNameDataTypeMismatch(
+                    typeof(Cat).Name, "Type", typeof(Dog).Name, "Type", "Type", nameof(Animal), "nvarchar(max)", "int"), modelBuilder.Model);
         }
 
         public override void Detects_incompatible_shared_columns_with_shared_table()
         {
-            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder().CreateConventionSet());
+            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
 
             modelBuilder.Entity<A>().HasOne<B>().WithOne().IsRequired().HasForeignKey<A>(a => a.Id).HasPrincipalKey<B>(b => b.Id);
             modelBuilder.Entity<A>().Property(a => a.P0).HasColumnType("someInt");
             modelBuilder.Entity<A>().ToTable("Table");
             modelBuilder.Entity<B>().ToTable("Table");
 
-            VerifyError(RelationalStrings.DuplicateColumnNameDataTypeMismatch(
-                nameof(A), nameof(A.P0), nameof(B), nameof(B.P0), nameof(B.P0), "Table", "someInt", "int"), modelBuilder.Model);
+            GenerateMapping(modelBuilder.Entity<A>().Property(b => b.P0).Metadata);
+            GenerateMapping(modelBuilder.Entity<B>().Property(d => d.P0).Metadata);
+
+            VerifyError(
+                RelationalStrings.DuplicateColumnNameDataTypeMismatch(
+                    nameof(A), nameof(A.P0), nameof(B), nameof(B.P0), nameof(B.P0), "Table", "someInt", "int"), modelBuilder.Model);
         }
 
         public override void Detects_duplicate_column_names_within_hierarchy_with_different_MaxLength()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>();
-            modelBuilder.Entity<Cat>().Ignore(e => e.Type).Property(c => c.Breed).HasMaxLength(30);
-            modelBuilder.Entity<Dog>().Ignore(e => e.Type).Property(d => d.Breed).HasMaxLength(15);
+            GenerateMapping(modelBuilder.Entity<Cat>().Property(c => c.Breed).HasColumnName("Breed").HasMaxLength(30).Metadata);
+            GenerateMapping(modelBuilder.Entity<Dog>().Property(d => d.Breed).HasColumnName("Breed").HasMaxLength(15).Metadata);
 
-            VerifyError(RelationalStrings.DuplicateColumnNameDataTypeMismatch(
-                nameof(Cat), nameof(Cat.Breed), nameof(Dog), nameof(Dog.Breed), nameof(Cat.Breed), nameof(Animal), "nvarchar(30)", "nvarchar(15)"), modelBuilder.Model);
+            VerifyError(
+                RelationalStrings.DuplicateColumnNameDataTypeMismatch(
+                    nameof(Cat), nameof(Cat.Breed), nameof(Dog), nameof(Dog.Breed), nameof(Cat.Breed), nameof(Animal), "nvarchar(30)", "nvarchar(15)"), modelBuilder.Model);
         }
 
         [Fact]
         public virtual void Detects_duplicate_column_names_within_hierarchy_with_different_unicode()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>();
-            modelBuilder.Entity<Cat>().Ignore(e => e.Type).Property(c => c.Breed).IsUnicode(false);
-            modelBuilder.Entity<Dog>().Ignore(e => e.Type).Property(d => d.Breed).IsUnicode();
 
-            VerifyError(RelationalStrings.DuplicateColumnNameDataTypeMismatch(
-                nameof(Cat), nameof(Cat.Breed), nameof(Dog), nameof(Dog.Breed), nameof(Cat.Breed), nameof(Animal), "varchar(max)", "nvarchar(max)"), modelBuilder.Model);
+            GenerateMapping(modelBuilder.Entity<Cat>().Property(c => c.Breed).HasColumnName("Breed").IsUnicode(false).Metadata);
+            GenerateMapping(modelBuilder.Entity<Dog>().Property(d => d.Breed).HasColumnName("Breed").IsUnicode().Metadata);
+
+            VerifyError(
+                RelationalStrings.DuplicateColumnNameDataTypeMismatch(
+                    nameof(Cat), nameof(Cat.Breed), nameof(Dog), nameof(Dog.Breed), nameof(Cat.Breed), nameof(Animal), "varchar(max)", "nvarchar(max)"), modelBuilder.Model);
+        }
+
+        [Fact]
+        public virtual void Detects_duplicate_column_names_within_hierarchy_with_different_value_generation_strategy()
+        {
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
+            modelBuilder.Entity<Animal>();
+            modelBuilder.Entity<Cat>(cb =>
+                {
+                    cb.Property(c => c.Identity).UseSqlServerIdentityColumn();
+                    cb.Property(c => c.Identity).HasColumnName(nameof(Cat.Identity));
+                });
+            modelBuilder.Entity<Dog>(db =>
+                {
+                    db.Property(d => d.Identity).ValueGeneratedNever();
+                    db.Property(c => c.Identity).HasColumnName(nameof(Dog.Identity));
+                });
+
+            VerifyError(
+                SqlServerStrings.DuplicateColumnNameValueGenerationStrategyMismatch(
+                    nameof(Cat), nameof(Cat.Identity), nameof(Dog), nameof(Dog.Identity), nameof(Cat.Identity), nameof(Animal)), modelBuilder.Model);
         }
 
         [Fact]
         public virtual void Passes_for_incompatible_foreignKeys_within_hierarchy_when_one_name_configured_explicitly_for_sqlServer()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>();
             var fk1 = modelBuilder.Entity<Cat>().HasOne<Person>().WithMany().HasForeignKey(c => c.Name).HasPrincipalKey(p => p.Name)
-                .OnDelete(DeleteBehavior.Cascade).ForSqlServerHasConstraintName("FK_Animal_Person_Name").Metadata;
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_Animal_Person_Name").Metadata;
             var fk2 = modelBuilder.Entity<Dog>().HasOne<Person>().WithMany().HasForeignKey(d => d.Name).HasPrincipalKey(p => p.Name)
                 .OnDelete(DeleteBehavior.SetNull).Metadata;
 
             Validate(modelBuilder.Model);
 
             Assert.Equal("FK_Animal_Person_Name", fk1.Relational().Name);
-            Assert.Equal("FK_Animal_Person_Name", fk1.SqlServer().Name);
-            Assert.Equal("FK_Animal_Person_Name", fk2.Relational().Name);
-            Assert.Equal("FK_Animal_Person_Name0", fk2.SqlServer().Name);
+            Assert.Equal("FK_Animal_Person_Name1", fk2.Relational().Name);
         }
 
         [Fact]
         public virtual void Passes_for_incompatible_indexes_within_hierarchy_when_one_name_configured_explicitly_for_sqlServer()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>();
-            var index1 = modelBuilder.Entity<Cat>().HasIndex(c => c.Name).IsUnique().ForSqlServerHasName("IX_Animal_Name").Metadata;
+            var index1 = modelBuilder.Entity<Cat>().HasIndex(c => c.Name).IsUnique().HasName("IX_Animal_Name").Metadata;
             var index2 = modelBuilder.Entity<Dog>().HasIndex(d => d.Name).IsUnique(false).Metadata;
 
             Validate(modelBuilder.Model);
 
             Assert.Equal("IX_Animal_Name", index1.Relational().Name);
             Assert.Equal("IX_Animal_Name", index1.SqlServer().Name);
-            Assert.Equal("IX_Animal_Name", index2.Relational().Name);
-            Assert.Equal("IX_Animal_Name0", index2.SqlServer().Name);
+            Assert.Equal("IX_Animal_Name1", index2.Relational().Name);
+            Assert.Equal("IX_Animal_Name1", index2.SqlServer().Name);
         }
 
         [Fact]
         public virtual void Detects_incompatible_momory_optimized_shared_table()
         {
-            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder().CreateConventionSet());
+            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
 
             modelBuilder.Entity<A>().HasOne<B>().WithOne().IsRequired().HasForeignKey<A>(a => a.Id).HasPrincipalKey<B>(b => b.Id);
             modelBuilder.Entity<A>().ToTable("Table").ForSqlServerIsMemoryOptimized();
             modelBuilder.Entity<B>().ToTable("Table");
 
-            VerifyError(SqlServerStrings.IncompatibleTableMemoryOptimizedMismatch("Table", nameof(B), nameof(A), nameof(A), nameof(B)),
+            VerifyError(
+                SqlServerStrings.IncompatibleTableMemoryOptimizedMismatch("Table", nameof(A), nameof(B), nameof(A), nameof(B)),
                 modelBuilder.Model);
         }
 
         [Fact]
         public virtual void Throws_for_unsupported_data_types()
         {
-            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder().CreateConventionSet());
+            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
             modelBuilder.Entity<Cheese>().Property(e => e.Name).HasColumnType("nvarchar");
 
             Assert.Equal(
@@ -136,52 +169,62 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         [Fact]
         public virtual void Detects_default_decimal_mapping()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>().Property<decimal>("Price");
 
-            VerifyWarning(SqlServerStrings.DefaultDecimalTypeColumn("Price", nameof(Animal)), modelBuilder.Model);
+            VerifyWarning(SqlServerStrings.LogDefaultDecimalTypeColumn.GenerateMessage("Price", nameof(Animal)), modelBuilder.Model);
         }
 
         [Fact]
         public virtual void Detects_default_nullable_decimal_mapping()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Animal>().Property<decimal?>("Price");
 
-            VerifyWarning(SqlServerStrings.DefaultDecimalTypeColumn("Price", nameof(Animal)), modelBuilder.Model);
+            VerifyWarning(SqlServerStrings.LogDefaultDecimalTypeColumn.GenerateMessage("Price", nameof(Animal)), modelBuilder.Model);
         }
 
         [Fact]
         public void Detects_byte_identity_column()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Dog>().Property<byte>("Bite").UseSqlServerIdentityColumn();
 
-            VerifyError(SqlServerStrings.NonKeyValueGeneration("Bite", nameof(Dog)), modelBuilder.Model);
+            VerifyWarning(SqlServerStrings.LogByteIdentityColumn.GenerateMessage("Bite", nameof(Dog)), modelBuilder.Model);
         }
 
         [Fact]
         public void Detects_nullable_byte_identity_column()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Dog>().Property<byte?>("Bite").UseSqlServerIdentityColumn();
 
-            VerifyError(SqlServerStrings.NonKeyValueGeneration("Bite", nameof(Dog)), modelBuilder.Model);
+            VerifyWarning(SqlServerStrings.LogByteIdentityColumn.GenerateMessage("Bite", nameof(Dog)), modelBuilder.Model);
         }
 
         [Fact]
-        public void Throws_for_non_key_identity()
+        public void Passes_for_non_key_identity()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Dog>().Property(c => c.Type).UseSqlServerIdentityColumn();
 
-            VerifyError(SqlServerStrings.NonKeyValueGeneration(nameof(Dog.Type), nameof(Dog)), modelBuilder.Model);
+            Validate(modelBuilder.Model);
+        }
+
+        [Fact]
+        public void Throws_for_multiple_identity_properties()
+        {
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
+            modelBuilder.Entity<Dog>().Property(c => c.Type).UseSqlServerIdentityColumn();
+            modelBuilder.Entity<Dog>().Property<int?>("Tag").UseSqlServerIdentityColumn();
+
+            VerifyError(SqlServerStrings.MultipleIdentityColumns("'Dog.Tag', 'Dog.Type'", nameof(Dog)), modelBuilder.Model);
         }
 
         [Fact]
         public void Throws_for_non_key_SequenceHiLo()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.Entity<Dog>().Property(c => c.Type).ForSqlServerUseSequenceHiLo();
 
             VerifyError(SqlServerStrings.NonKeyValueGeneration(nameof(Dog.Type), nameof(Dog)), modelBuilder.Model);
@@ -190,8 +233,9 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         [Fact]
         public void Passes_for_non_key_identity_on_model()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.ForSqlServerUseIdentityColumns();
+            modelBuilder.Entity<Dog>().Property(c => c.Id).ValueGeneratedNever();
             modelBuilder.Entity<Dog>().Property(c => c.Type).ValueGeneratedOnAdd();
 
             Validate(modelBuilder.Model);
@@ -200,12 +244,17 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         [Fact]
         public void Passes_for_non_key_SequenceHiLo_on_model()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = new ModelBuilder(CreateConventionSet());
             modelBuilder.ForSqlServerUseSequenceHiLo();
             modelBuilder.Entity<Dog>().Property(c => c.Type).ValueGeneratedOnAdd();
 
             Validate(modelBuilder.Model);
         }
+
+        private static void GenerateMapping(IMutableProperty property)
+            => property[CoreAnnotationNames.TypeMapping] = new SqlServerTypeMapper(
+                new CoreTypeMapperDependencies(),
+                new RelationalTypeMapperDependencies()).GetMapping(property);
 
         private class Cheese
         {
@@ -214,16 +263,16 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
             public string Name { get; set; }
         }
 
-        protected override ModelValidator CreateModelValidator()
+        protected override IModelValidator CreateModelValidator()
             => new SqlServerModelValidator(
                 new ModelValidatorDependencies(
-                    new DiagnosticsLogger<LoggerCategory.Model.Validation>(
-                        new InterceptingLogger<LoggerCategory.Model.Validation>(
-                            new ListLoggerFactory(Log, l => l == LoggerCategory.Model.Validation.Name),
-                            new LoggingOptions()),
+                    new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
+                        new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
+                        new LoggingOptions(),
                         new DiagnosticListener("Fake"))),
                 new RelationalModelValidatorDependencies(
-                    new TestSqlServerAnnotationProvider(),
-                    new SqlServerTypeMapper(new RelationalTypeMapperDependencies())));
+                    new SqlServerTypeMapper(
+                        new CoreTypeMapperDependencies(),
+                        new RelationalTypeMapperDependencies())));
     }
 }

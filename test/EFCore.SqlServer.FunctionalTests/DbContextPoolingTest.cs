@@ -7,31 +7,36 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
+// ReSharper disable InconsistentNaming
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 // ReSharper disable UnusedMember.Local
 // ReSharper disable ClassNeverInstantiated.Local
 // ReSharper disable VirtualMemberCallInConstructor
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class DbContextPoolingTest
     {
         private static IServiceProvider BuildServiceProvider<TContext>(int poolSize = 32)
             where TContext : DbContext
-        => new ServiceCollection()
-            .AddEntityFrameworkSqlServer()
-            .AddDbContextPool<TContext>(
-                ob => ob.UseSqlServer(SqlServerTestStore.NorthwindConnectionString),
-                poolSize)
-            .BuildServiceProvider();
+            => new ServiceCollection()
+                .AddEntityFrameworkSqlServer()
+                .AddDbContextPool<TContext>(
+                    ob => ob.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString),
+                    poolSize)
+                .AddDbContextPool<SecondContext>(
+                    ob => ob.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString),
+                    poolSize)
+                .BuildServiceProvider();
 
         private class PooledContext : DbContext
         {
+            public static int DisposedCount;
             public static int InstanceCount;
 
             public static bool ModifyOptions;
@@ -56,7 +61,14 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             public DbSet<Customer> Customers { get; set; }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<Customer>().ForSqlServerToTable("Customers");
+                => modelBuilder.Entity<Customer>().ToTable("Customers");
+
+            public override void Dispose()
+            {
+                base.Dispose();
+
+                Interlocked.Increment(ref DisposedCount);
+            }
 
             public class Customer
             {
@@ -65,14 +77,22 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             }
         }
 
+        private class SecondContext : DbContext
+        {
+            public SecondContext(DbContextOptions options)
+                : base(options)
+            {
+            }
+        }
+
         [Fact]
         public void Invalid_pool_size()
         {
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => BuildServiceProvider<PooledContext>(0));
+                () => BuildServiceProvider<PooledContext>(poolSize: 0));
 
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => BuildServiceProvider<PooledContext>(-1));
+                () => BuildServiceProvider<PooledContext>(poolSize: -1));
         }
 
         [Fact]
@@ -104,12 +124,14 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             var serviceCollection = new ServiceCollection();
 
-            Assert.Equal(CoreStrings.DbContextMissingConstructor(nameof(BadCtorContext)),
+            Assert.Equal(
+                CoreStrings.DbContextMissingConstructor(nameof(BadCtorContext)),
                 Assert.Throws<ArgumentException>(
                     () => serviceCollection.AddDbContextPool<BadCtorContext>(
                         _ => { })).Message);
 
-            Assert.Equal(CoreStrings.DbContextMissingConstructor(nameof(BadCtorContext)),
+            Assert.Equal(
+                CoreStrings.DbContextMissingConstructor(nameof(BadCtorContext)),
                 Assert.Throws<ArgumentException>(
                     () => serviceCollection.AddDbContextPool<BadCtorContext>(
                         (_, __) => { })).Message);
@@ -154,12 +176,15 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             var serviceScope1 = serviceProvider.CreateScope();
 
             var context1 = serviceScope1.ServiceProvider.GetService<PooledContext>();
+            var secondContext1 = serviceScope1.ServiceProvider.GetService<SecondContext>();
 
             var serviceScope2 = serviceProvider.CreateScope();
 
             var context2 = serviceScope2.ServiceProvider.GetService<PooledContext>();
+            var secondContext2 = serviceScope2.ServiceProvider.GetService<SecondContext>();
 
             Assert.NotSame(context1, context2);
+            Assert.NotSame(secondContext1, secondContext2);
 
             serviceScope1.Dispose();
             serviceScope2.Dispose();
@@ -167,14 +192,18 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             var serviceScope3 = serviceProvider.CreateScope();
 
             var context3 = serviceScope3.ServiceProvider.GetService<PooledContext>();
+            var secondContext3 = serviceScope3.ServiceProvider.GetService<SecondContext>();
 
             Assert.Same(context1, context3);
+            Assert.Same(secondContext1, secondContext3);
 
             var serviceScope4 = serviceProvider.CreateScope();
 
             var context4 = serviceScope4.ServiceProvider.GetService<PooledContext>();
+            var secondContext4 = serviceScope4.ServiceProvider.GetService<SecondContext>();
 
             Assert.Same(context2, context4);
+            Assert.Same(secondContext2, secondContext4);
         }
 
         [Fact]
@@ -203,33 +232,40 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Assert.False(context2.Database.AutoTransactionsEnabled);
         }
 
-        [ConditionalFact]
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
+        [Fact]
         public void State_manager_is_reset()
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var weakRef = Scoper(
+                () =>
+                    {
+                        var serviceProvider = BuildServiceProvider<PooledContext>();
 
-            var serviceScope = serviceProvider.CreateScope();
+                        var serviceScope = serviceProvider.CreateScope();
 
-            var context1 = serviceScope.ServiceProvider.GetService<PooledContext>();
+                        var context1 = serviceScope.ServiceProvider.GetService<PooledContext>();
 
-            var weakRef = new WeakReference(context1.Customers.First(c => c.CustomerId == "ALFKI"));
+                        var entity = context1.Customers.First(c => c.CustomerId == "ALFKI");
 
-            Assert.Equal(1, context1.ChangeTracker.Entries().Count());
+                        Assert.Equal(expected: 1, actual: context1.ChangeTracker.Entries().Count());
 
-            serviceScope.Dispose();
+                        serviceScope.Dispose();
 
-            serviceScope = serviceProvider.CreateScope();
+                        serviceScope = serviceProvider.CreateScope();
 
-            var context2 = serviceScope.ServiceProvider.GetService<PooledContext>();
+                        var context2 = serviceScope.ServiceProvider.GetService<PooledContext>();
 
-            Assert.Same(context1, context2);
-            Assert.Empty(context2.ChangeTracker.Entries());
+                        Assert.Same(context1, context2);
+                        Assert.Empty(context2.ChangeTracker.Entries());
+
+                        return new WeakReference(entity);
+                    });
 
             GC.Collect();
 
             Assert.False(weakRef.IsAlive);
         }
+
+        private static T Scoper<T>(Func<T> getter) => getter();
 
         [Fact]
         public void Pool_disposes_context_when_context_not_pooled()
@@ -281,6 +317,24 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         }
 
         [Fact]
+        public void Double_dispose_does_not_enter_pool_twice()
+        {
+            var serviceProvider = BuildServiceProvider<PooledContext>();
+
+            var contextPool = serviceProvider.GetService<DbContextPool<PooledContext>>();
+
+            var context = contextPool.Rent();
+
+            context.Dispose();
+            context.Dispose();
+
+            var context1 = contextPool.Rent();
+            var context2 = contextPool.Rent();
+
+            Assert.NotSame(context1, context2);
+        }
+
+        [Fact]
         public void Provider_services_are_reset()
         {
             var serviceProvider = BuildServiceProvider<PooledContext>();
@@ -317,42 +371,63 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         }
 
         [ConditionalFact]
+        public void Double_dispose_concurrency_test()
+        {
+            var serviceProvider = BuildServiceProvider<PooledContext>();
+
+            Parallel.For(
+                fromInclusive: 0, toExclusive: 100, body: s =>
+                    {
+                        using (var scope = serviceProvider.CreateScope())
+                        {
+                            var context = scope.ServiceProvider.GetService<PooledContext>();
+                            var _ = context.Customers.ToList();
+
+                            context.Dispose();
+                        }
+                    });
+        }
+
+        [ConditionalFact]
         public async Task Concurrency_test()
         {
-            // This test is for measuring different pooling approaches.
+            PooledContext.InstanceCount = 0;
+            PooledContext.DisposedCount = 0;
 
-            WriteResults();
+            var results = WriteResults();
 
             var serviceProvider = BuildServiceProvider<PooledContext>();
 
-            Func<Task> work = async () =>
+            async Task ProcessRequest()
+            {
+                while (_stopwatch.IsRunning)
                 {
-                    while (_stopwatch.IsRunning)
+                    using (var serviceScope = serviceProvider.CreateScope())
                     {
-                        using (var serviceScope = serviceProvider.CreateScope())
-                        {
-                            var context = serviceScope.ServiceProvider.GetService<PooledContext>();
+                        var context = serviceScope.ServiceProvider.GetService<PooledContext>();
 
-                            await context.Customers.AsNoTracking().FirstAsync(c => c.CustomerId == "ALFKI");
+                        await context.Customers.AsNoTracking().FirstAsync(c => c.CustomerId == "ALFKI");
 
-                            Interlocked.Increment(ref _requests);
-                        }
+                        Interlocked.Increment(ref _requests);
                     }
-                };
+                }
+            }
 
             var tasks = new Task[32];
 
             for (var i = 0; i < 32; i++)
             {
-                tasks[i] = work();
+                tasks[i] = ProcessRequest();
             }
 
             await Task.WhenAll(tasks);
+            await results;
 
-            Assert.InRange(PooledContext.InstanceCount, 30, 50);
+            Assert.Equal(_requests, PooledContext.DisposedCount);
+            Assert.InRange(PooledContext.InstanceCount, low: 32, high: 64);
         }
 
-        private readonly TimeSpan _duration = TimeSpan.FromSeconds(10);
+        private readonly TimeSpan _duration = TimeSpan.FromSeconds(value: 10);
 
         private int _stopwatchStarted;
 
@@ -360,9 +435,9 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         private long _requests;
 
-        private async void WriteResults()
+        private async Task WriteResults()
         {
-            if (Interlocked.Exchange(ref _stopwatchStarted, 1) == 0)
+            if (Interlocked.Exchange(ref _stopwatchStarted, value: 1) == 0)
             {
                 _stopwatch.Start();
             }
@@ -370,9 +445,9 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             var lastRequests = (long)0;
             var lastElapsed = TimeSpan.Zero;
 
-            while (true)
+            while (_stopwatch.IsRunning)
             {
-                await Task.Delay(TimeSpan.FromSeconds(1));
+                await Task.Delay(TimeSpan.FromSeconds(value: 1));
 
                 var currentRequests = _requests - lastRequests;
                 lastRequests = _requests;
@@ -388,13 +463,12 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
                 if (elapsed > _duration)
                 {
-                    _testOutputHelper?.WriteLine("");
+                    _testOutputHelper?.WriteLine(message: "");
                     _testOutputHelper?.WriteLine($"Average RPS: {Math.Round(_requests / elapsed.TotalSeconds)}");
 
                     _stopwatch.Stop();
                 }
             }
-            // ReSharper disable once FunctionNeverReturns
         }
 
         private readonly ITestOutputHelper _testOutputHelper = null;

@@ -60,9 +60,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlExpressionVisitor specificVisitor
                 ? specificVisitor.VisitFromSql(this)
                 : base.Accept(visitor);
         }
@@ -76,7 +74,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </returns>
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

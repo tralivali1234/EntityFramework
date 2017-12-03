@@ -4,71 +4,76 @@
 using System;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.EntityFrameworkCore.Relational.Specification.Tests;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqliteMigrationSqlGeneratorTest : MigrationSqlGeneratorTestBase
     {
-        private const string FileLineEnding = @"
-";
-
         [Fact]
         public virtual void It_lifts_foreign_key_additions()
         {
-            Generate(new CreateTableOperation
-            {
-                Name = "Pie",
-                Columns =
+            Generate(
+                new CreateTableOperation
                 {
-                    new AddColumnOperation
+                    Name = "Pie",
+                    Columns =
                     {
-                        ClrType = typeof(int),
-                        Name = "FlavorId",
-                        ColumnType = "INT"
+                        new AddColumnOperation
+                        {
+                            ClrType = typeof(int),
+                            Name = "FlavorId",
+                            ColumnType = "INT"
+                        }
                     }
-                }
-            }, new AddForeignKeyOperation
-            {
-                Table = "Pie",
-                PrincipalTable = "Flavor",
-                Columns = new[] { "FlavorId" },
-                PrincipalColumns = new[] { "Id" }
-            });
+                }, new AddForeignKeyOperation
+                {
+                    Table = "Pie",
+                    PrincipalTable = "Flavor",
+                    Columns = new[] { "FlavorId" },
+                    PrincipalColumns = new[] { "Id" }
+                });
 
-            Assert.Equal(@"CREATE TABLE ""Pie"" (
+            Assert.Equal(
+                @"CREATE TABLE ""Pie"" (
     ""FlavorId"" INT NOT NULL,
     FOREIGN KEY (""FlavorId"") REFERENCES ""Flavor"" (""Id"")
 );
 ",
-                Sql.Replace(Environment.NewLine, FileLineEnding));
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         [Fact]
         public virtual void DefaultValue_formats_literal_correctly()
         {
-            Generate(new CreateTableOperation
-            {
-                Name = "History",
-                Columns =
+            Generate(
+                new CreateTableOperation
                 {
-                    new AddColumnOperation
+                    Name = "History",
+                    Columns =
                     {
-                        Name = "Event",
-                        ClrType = typeof(string),
-                        ColumnType = "TEXT",
-                        DefaultValue = new DateTime(2015, 4, 12, 17, 5, 0)
+                        new AddColumnOperation
+                        {
+                            Name = "Event",
+                            ClrType = typeof(string),
+                            ColumnType = "TEXT",
+                            DefaultValue = new DateTime(2015, 4, 12, 17, 5, 0)
+                        }
                     }
-                }
-            });
+                });
 
-            Assert.Equal(@"CREATE TABLE ""History"" (
+            Assert.Equal(
+                @"CREATE TABLE ""History"" (
     ""Event"" TEXT NOT NULL DEFAULT '2015-04-12 17:05:00'
 );
 ",
-                Sql.Replace(Environment.NewLine, FileLineEnding));
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         [Theory]
@@ -85,7 +90,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
             };
             if (autoincrement)
             {
-                addIdColumn.AddAnnotation(SqliteFullAnnotationNames.Instance.Autoincrement, true);
+                addIdColumn.AddAnnotation(SqliteAnnotationNames.Autoincrement, true);
             }
 
             Generate(
@@ -231,7 +236,6 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
                 Sql);
         }
 
-        [Fact]
         public override void AddColumnOperation_with_computed_column_SQL()
         {
             base.AddColumnOperation_with_computed_column_SQL();
@@ -320,6 +324,46 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
         {
             var ex = Assert.Throws<NotSupportedException>(() => base.AlterSequenceOperation_without_minValue_and_maxValue());
             Assert.Equal(SqliteStrings.SequencesNotSupported, ex.Message);
+        }
+
+        [Fact]
+        public virtual void RenameIndexOperation()
+        {
+            Generate(
+                modelBuilder => modelBuilder.Entity(
+                    "Person",
+                    x =>
+                    {
+                        x.Property<string>("FullName");
+                        x.HasIndex("FullName").IsUnique().HasFilter(@"""Id"" > 2");
+                    }),
+                new RenameIndexOperation
+                {
+                    Table = "Person",
+                    Name = "IX_Person_Name",
+                    NewName = "IX_Person_FullName"
+                });
+
+            Assert.Equal(
+                @"DROP INDEX ""IX_Person_Name"";" + EOL +
+                @"CREATE UNIQUE INDEX ""IX_Person_FullName"" ON ""Person"" (""FullName"") WHERE ""Id"" > 2;" + EOL,
+                Sql);
+        }
+
+        [Fact]
+        public virtual void RenameIndexOperations_throws_when_no_model()
+        {
+            var migrationBuilder = new MigrationBuilder("Sqlite");
+
+            migrationBuilder.RenameIndex(
+                table: "Person",
+                name: "IX_Person_Name",
+                newName: "IX_Person_FullName");
+
+            var ex = Assert.Throws<NotSupportedException>(
+                () => Generate(migrationBuilder.Operations.ToArray()));
+
+            Assert.Equal(SqliteStrings.InvalidMigrationOperation("RenameIndexOperation"), ex.Message);
         }
 
         public override void RenameTableOperation_within_schema()

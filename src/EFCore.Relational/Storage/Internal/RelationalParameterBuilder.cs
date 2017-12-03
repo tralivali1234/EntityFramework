@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -83,7 +85,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 new TypeMappedRelationalParameter(
                     invariantName,
                     name,
-                    TypeMapper.GetMapping(property),
+                    property.FindRelationalMapping(),
                     property.IsNullable));
         }
 
@@ -96,18 +98,25 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             Check.NotEmpty(invariantName, nameof(invariantName));
             Check.NotNull(buildAction, nameof(buildAction));
 
-            var innerList = new RelationalParameterBuilder(TypeMapper);
+            var parameterBuilder = Create();
 
-            buildAction(innerList);
+            buildAction(parameterBuilder);
 
-            if (innerList.Parameters.Count > 0)
+            if (parameterBuilder.Parameters.Count > 0)
             {
                 _parameters.Add(
                     new CompositeRelationalParameter(
                         invariantName,
-                        innerList.Parameters));
+                        parameterBuilder.Parameters));
             }
         }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual RelationalParameterBuilder Create()
+            => new RelationalParameterBuilder(TypeMapper);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -123,8 +132,20 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 new TypeMappedPropertyRelationalParameter(
                     invariantName,
                     name,
-                    TypeMapper.GetMapping(property),
+                    property.FindRelationalMapping(),
                     property));
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual void AddRawParameter(string invariantName, DbParameter dbParameter)
+        {
+            Check.NotEmpty(invariantName, nameof(invariantName));
+            Check.NotNull(dbParameter, nameof(dbParameter));
+
+            _parameters.Add(new RawRelationalParameter(invariantName, dbParameter));
         }
     }
 }

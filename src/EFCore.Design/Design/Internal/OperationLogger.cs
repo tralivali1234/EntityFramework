@@ -4,7 +4,7 @@
 using System;
 using System.Text;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.EntityFrameworkCore.Design.Internal
@@ -54,7 +54,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             Func<TState, Exception, string> formatter)
         {
             // Only show SQL when verbose
-            if (_categoryName == LoggerCategory.Database.Sql.Name
+            if (_categoryName == DbLoggerCategory.Database.Command.Name
                 && eventId.Id == RelationalEventId.CommandExecuted.Id)
             {
                 logLevel = LogLevel.Debug;

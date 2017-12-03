@@ -1,11 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
+#if NET461
 
 using System;
-using Microsoft.EntityFrameworkCore.Design.TestUtilities;
-using Microsoft.EntityFrameworkCore.Relational.Design.Specification.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
 // ReSharper disable once CheckNamespace
@@ -26,7 +25,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 var source = new BuildSource
                 {
                     TargetDir = directory.Path,
-                    Sources = { @"
+                    Sources =
+                    {
+                        @"
                         using System;
                         namespace Microsoft.EntityFrameworkCore.Design.Internal
                         {
@@ -42,7 +43,8 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                                     get { return 7; }
                                 }
                             }
-                        }" }
+                        }"
+                    }
                 };
                 var build = source.Build();
 
@@ -68,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         }
     }
 }
-#elif NETCOREAPP2_0
+#elif NETCOREAPP2_0 || NETCOREAPP2_1
 #else
 #error target frameworks need to be updated.
 #endif

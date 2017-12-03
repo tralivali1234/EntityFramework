@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
@@ -100,7 +99,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
             if (sqlFunctionExpression.FunctionName == "COUNT"
                 && sqlFunctionExpression.Type == typeof(long))
             {
-                GenerateFunctionCall("COUNT_BIG", sqlFunctionExpression.Arguments);
+                Visit(new SqlFunctionExpression("COUNT_BIG", typeof(long), sqlFunctionExpression.Arguments));
 
                 return sqlFunctionExpression;
             }
@@ -108,26 +107,28 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
             return base.VisitSqlFunction(sqlFunctionExpression);
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         protected override void GenerateProjection(Expression projection)
         {
             var aliasedProjection = projection as AliasExpression;
             var expressionToProcess = aliasedProjection?.Expression ?? projection;
-            var updatedExperssion = ExplicitCastToBool(expressionToProcess);
+            var updatedExpression = ExplicitCastToBool(expressionToProcess);
 
             expressionToProcess = aliasedProjection != null
-                ? new AliasExpression(aliasedProjection.Alias, updatedExperssion)
-                : updatedExperssion;
+                ? new AliasExpression(aliasedProjection.Alias, updatedExpression)
+                : updatedExpression;
 
             base.GenerateProjection(expressionToProcess);
         }
 
         private Expression ExplicitCastToBool(Expression expression)
-        {
-            return (expression as BinaryExpression)?.NodeType == ExpressionType.Coalesce
-                   && expression.Type.UnwrapNullableType() == typeof(bool)
+            => (expression as BinaryExpression)?.NodeType == ExpressionType.Coalesce
+            && expression.Type.UnwrapNullableType() == typeof(bool)
                 ? new ExplicitCastExpression(expression, expression.Type)
                 : expression;
-        }
 
         private class RowNumberPagingExpressionVisitor : ExpressionVisitorBase
         {
@@ -174,7 +175,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
 
                 var innerRowNumberExpression = new AliasExpression(
                     RowNumberColumnName + (_counter != 0 ? $"{_counter}" : ""),
-                    new RowNumberExpression(subQuery.OrderBy));
+                    new RowNumberExpression(
+                        subQuery.OrderBy
+                            .Select(
+                                o => new Ordering(
+                                    o.Expression is AliasExpression ae ? ae.Expression : o.Expression,
+                                    o.OrderingDirection))
+                            .ToList()));
 
                 _counter++;
 
@@ -187,8 +194,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
 
                 if (subQuery.Offset != null)
                 {
-                    selectExpression.AddToPredicate
-                        (Expression.GreaterThan(rowNumberReferenceExpression, offset));
+                    selectExpression.AddToPredicate(
+                        Expression.GreaterThan(
+                            rowNumberReferenceExpression,
+                            ApplyConversion(offset, rowNumberReferenceExpression.Type)));
 
                     subQuery.Offset = null;
                 }
@@ -205,12 +214,19 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
                             : Expression.Add(offset, subQuery.Limit);
 
                     selectExpression.AddToPredicate(
-                        Expression.LessThanOrEqual(rowNumberReferenceExpression, limitExpression));
+                        Expression.LessThanOrEqual(
+                            rowNumberReferenceExpression,
+                            ApplyConversion(limitExpression, rowNumberReferenceExpression.Type)));
 
                     subQuery.Limit = null;
                 }
 
                 return selectExpression;
+            }
+
+            private static Expression ApplyConversion(Expression expression, Type type)
+            {
+                return expression.Type != type ? Expression.Convert(expression, type) : expression;
             }
 
             private Expression VisitExistExpression(ExistsExpression existsExpression)

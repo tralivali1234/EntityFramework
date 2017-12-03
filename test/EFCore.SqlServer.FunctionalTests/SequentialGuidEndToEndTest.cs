@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SequentialGuidEndToEndTest : IDisposable
     {
@@ -104,7 +104,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         public SequentialGuidEndToEndTest()
         {
-            TestStore = SqlServerTestStore.Create("SequentialGuidEndToEndTest");
+            TestStore = SqlServerTestStore.CreateInitialized("SequentialGuidEndToEndTest");
         }
 
         protected SqlServerTestStore TestStore { get; }

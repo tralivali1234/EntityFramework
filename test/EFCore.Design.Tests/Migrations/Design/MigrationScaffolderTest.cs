@@ -2,24 +2,26 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Microsoft.EntityFrameworkCore.Design.Internal;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Design;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
+using Microsoft.EntityFrameworkCore.Update.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Design.Tests.Migrations.Design
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Migrations.Design
 {
-    public class MigrationScaffolderTest
+    public class MigrationsScaffolderTest
     {
         [Fact]
         public void ScaffoldMigration_reuses_model_snapshot()
@@ -48,27 +50,57 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Migrations.Design
             var currentContext = new CurrentDbContext(new TContext());
             var idGenerator = new MigrationsIdGenerator();
             var code = new CSharpHelper();
-
-            return new MigrationsScaffolder(
-                currentContext,
-                new Model(),
-                new MigrationsAssembly(
+            var reporter = new TestOperationReporter();
+            var migrationAssembly
+                = new MigrationsAssembly(
                     currentContext,
                     new DbContextOptions<TContext>().WithExtension(new FakeRelationalOptionsExtension()),
-                    idGenerator),
-                new MigrationsModelDiffer(
-                    new TestRelationalTypeMapper(new RelationalTypeMapperDependencies()),
-                    new TestAnnotationProvider(),
-                    new MigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies())),
-                idGenerator,
-                new CSharpMigrationsGenerator(code, new CSharpMigrationOperationGenerator(code), new CSharpSnapshotGenerator(code)),
-                new MockHistoryRepository(),
-                new DiagnosticsLogger<LoggerCategory.Migrations>(
-                    new InterceptingLogger<LoggerCategory.Migrations>(new LoggerFactory(), new LoggingOptions()),
-                    new DiagnosticListener("Fake")),
-                new MockProvider());
+                    idGenerator);
+            var historyRepository = new MockHistoryRepository();
+
+            var services = RelationalTestHelpers.Instance.CreateContextServices();
+
+            return new MigrationsScaffolder(
+                new MigrationsScaffolderDependencies(
+                    currentContext,
+                    new Model(),
+                    migrationAssembly,
+                    new MigrationsModelDiffer(
+                        new TestRelationalTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()),
+                        new MigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies()),
+                        services.GetRequiredService<IChangeDetector>(),
+                        services.GetRequiredService<StateManagerDependencies>(),
+                        services.GetRequiredService<CommandBatchPreparerDependencies>()),
+                    idGenerator,
+                    new MigrationsCodeGeneratorSelector(
+                        new[]
+                        {
+                            new CSharpMigrationsGenerator(
+                                new MigrationsCodeGeneratorDependencies(),
+                                new CSharpMigrationsGeneratorDependencies(
+                                    code,
+                                    new CSharpMigrationOperationGenerator(
+                                        new CSharpMigrationOperationGeneratorDependencies(code)),
+                                    new CSharpSnapshotGenerator(new CSharpSnapshotGeneratorDependencies(code))))
+                        }),
+                    historyRepository,
+                    reporter,
+                    new MockProvider(),
+                    new SnapshotModelProcessor(reporter),
+                    new Migrator(
+                        migrationAssembly,
+                        historyRepository,
+                        services.GetRequiredService<IDatabaseCreator>(),
+                        services.GetRequiredService<IMigrationsSqlGenerator>(),
+                        services.GetRequiredService<IRawSqlCommandBuilder>(),
+                        services.GetRequiredService<IMigrationCommandExecutor>(),
+                        services.GetRequiredService<IRelationalConnection>(),
+                        services.GetRequiredService<ISqlGenerationHelper>(),
+                        services.GetRequiredService<IDiagnosticsLogger<DbLoggerCategory.Migrations>>(),
+                        services.GetRequiredService<IDatabaseProvider>())));
         }
 
+        // ReSharper disable once UnusedTypeParameter
         private class GenericContext<T> : DbContext
         {
         }
@@ -105,7 +137,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Tests.Migrations.Design
 
         private class MockProvider : IDatabaseProvider
         {
-            public string InvariantName => "Mock.Provider";
+            public string Name => "Mock.Provider";
             public bool IsConfigured(IDbContextOptions options) => true;
         }
     }

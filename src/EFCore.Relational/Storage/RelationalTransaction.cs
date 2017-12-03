@@ -5,6 +5,7 @@ using System;
 using System.Data.Common;
 using System.Diagnostics;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -24,7 +25,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
     {
         private readonly IRelationalConnection _relationalConnection;
         private readonly DbTransaction _dbTransaction;
-        private readonly IDiagnosticsLogger<LoggerCategory.Database.Transaction> _logger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> _logger;
         private readonly bool _transactionOwned;
 
         private bool _connectionClosed;
@@ -42,7 +43,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public RelationalTransaction(
             [NotNull] IRelationalConnection connection,
             [NotNull] DbTransaction transaction,
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Database.Transaction> logger,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> logger,
             bool transactionOwned)
         {
             Check.NotNull(connection, nameof(connection));
@@ -61,6 +62,10 @@ namespace Microsoft.EntityFrameworkCore.Storage
             _transactionOwned = transactionOwned;
         }
 
+        /// <summary>
+        ///     A correlation ID that allows this transaction to be identified and
+        ///     correlated across multiple database calls.
+        /// </summary>
         public virtual Guid TransactionId { get; } = Guid.NewGuid();
 
         /// <summary>
@@ -68,33 +73,30 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </summary>
         public virtual void Commit()
         {
-            var startTimestamp = Stopwatch.GetTimestamp();
+            var startTime = DateTimeOffset.UtcNow;
+            var stopwatch = Stopwatch.StartNew();
 
             try
             {
                 _dbTransaction.Commit();
 
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
                 _logger.TransactionCommitted(
                     _relationalConnection,
                     _dbTransaction,
                     TransactionId,
-                    startTimestamp,
-                    currentTimestamp);
+                    startTime,
+                    stopwatch.Elapsed);
             }
             catch (Exception e)
             {
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
                 _logger.TransactionError(
                     _relationalConnection,
                     _dbTransaction,
                     TransactionId,
                     "Commit",
                     e,
-                    startTimestamp,
-                    currentTimestamp);
+                    startTime,
+                    stopwatch.Elapsed);
                 throw;
             }
 
@@ -106,33 +108,30 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </summary>
         public virtual void Rollback()
         {
-            var startTimestamp = Stopwatch.GetTimestamp();
+            var startTime = DateTimeOffset.UtcNow;
+            var stopwatch = Stopwatch.StartNew();
 
             try
             {
                 _dbTransaction.Rollback();
 
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
                 _logger.TransactionRolledBack(
                     _relationalConnection,
                     _dbTransaction,
                     TransactionId,
-                    startTimestamp,
-                    currentTimestamp);
+                    startTime,
+                    stopwatch.Elapsed);
             }
             catch (Exception e)
             {
-                var currentTimestamp = Stopwatch.GetTimestamp();
-
                 _logger.TransactionError(
                     _relationalConnection,
                     _dbTransaction,
                     TransactionId,
                     "Rollback",
                     e,
-                    startTimestamp,
-                    currentTimestamp);
+                    startTime,
+                    stopwatch.Elapsed);
                 throw;
             }
 
@@ -156,7 +155,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
                         _relationalConnection,
                         _dbTransaction,
                         TransactionId,
-                        Stopwatch.GetTimestamp());
+                        DateTimeOffset.UtcNow);
                 }
 
                 ClearTransaction();
@@ -165,7 +164,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
 
         private void ClearTransaction()
         {
-            Debug.Assert((_relationalConnection.CurrentTransaction == null) || (_relationalConnection.CurrentTransaction == this));
+            Debug.Assert(_relationalConnection.CurrentTransaction == null || _relationalConnection.CurrentTransaction == this);
 
             _relationalConnection.UseTransaction(null);
 

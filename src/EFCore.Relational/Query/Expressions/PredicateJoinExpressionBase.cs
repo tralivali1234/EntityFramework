@@ -15,7 +15,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         private Expression _predicate;
 
         /// <summary>
-        ///     Specialised constructor for use only by derived class.
+        ///     Specialized constructor for use only by derived class.
         /// </summary>
         /// <param name="tableExpression"> The target table expression. </param>
         protected PredicateJoinExpressionBase([NotNull] TableExpressionBase tableExpression)
@@ -42,7 +42,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         }
 
         /// <summary>
-        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(System.Linq.Expressions.Expression)" /> method passing the
+        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(Expression)" /> method passing the
         ///     reduced expression.
         ///     Throws an exception if the node isn't reducible.
         /// </summary>

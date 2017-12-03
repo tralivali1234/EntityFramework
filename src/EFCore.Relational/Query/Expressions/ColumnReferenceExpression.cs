@@ -26,9 +26,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             [NotNull] AliasExpression aliasExpression,
             [NotNull] TableExpressionBase tableExpression)
             : this(
-                  Check.NotNull(aliasExpression, nameof(aliasExpression)).Alias,
-                  aliasExpression,
-                  Check.NotNull(tableExpression, nameof(tableExpression)))
+                Check.NotNull(aliasExpression, nameof(aliasExpression)).Alias,
+                aliasExpression,
+                Check.NotNull(tableExpression, nameof(tableExpression)))
         {
         }
 
@@ -41,9 +41,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             [NotNull] ColumnExpression columnExpression,
             [NotNull] TableExpressionBase tableExpression)
             : this(
-                  Check.NotNull(columnExpression, nameof(columnExpression)).Name,
-                  columnExpression,
-                  Check.NotNull(tableExpression, nameof(tableExpression)))
+                Check.NotNull(columnExpression, nameof(columnExpression)).Name,
+                columnExpression,
+                Check.NotNull(tableExpression, nameof(tableExpression)))
         {
         }
 
@@ -56,9 +56,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             [NotNull] ColumnReferenceExpression columnReferenceExpression,
             [NotNull] TableExpressionBase tableExpression)
             : this(
-                  Check.NotNull(columnReferenceExpression, nameof(columnReferenceExpression)).Name,
-                  columnReferenceExpression,
-                  Check.NotNull(tableExpression, nameof(tableExpression)))
+                Check.NotNull(columnReferenceExpression, nameof(columnReferenceExpression)).Name,
+                columnReferenceExpression,
+                Check.NotNull(tableExpression, nameof(tableExpression)))
         {
         }
 
@@ -106,9 +106,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlExpressionVisitor specificVisitor
                 ? specificVisitor.VisitColumnReference(this)
                 : base.Accept(visitor);
         }
@@ -137,7 +135,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </returns>
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }
@@ -172,9 +170,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         }
 
         /// <summary>
-        ///     Creates a <see cref="String" /> representation of the Expression.
+        ///     Creates a <see cref="string" /> representation of the Expression.
         /// </summary>
-        /// <returns>A <see cref="String" /> representation of the Expression.</returns>
+        /// <returns>A <see cref="string" /> representation of the Expression.</returns>
         public override string ToString() => _tableExpression.Alias + "." + Name;
     }
 }

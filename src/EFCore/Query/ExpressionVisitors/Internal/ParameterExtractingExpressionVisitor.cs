@@ -6,7 +6,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Remotion.Linq.Parsing.ExpressionVisitors.TreeEvaluation;
@@ -20,10 +20,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
     public class ParameterExtractingExpressionVisitor : ExpressionVisitor
     {
         private static readonly TypeInfo _queryableTypeInfo = typeof(IQueryable).GetTypeInfo();
+        private static ContextParameterReplacingExpressionVisitor _contextParameterReplacingExpressionVisitor;
+        private static readonly string QueryFilterPrefix = "ef_filter";
 
         private readonly IEvaluatableExpressionFilter _evaluatableExpressionFilter;
         private readonly IParameterValues _parameterValues;
-        private readonly IDiagnosticsLogger<LoggerCategory.Query> _logger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
 
         private readonly bool _parameterize;
         private readonly bool _generateContextAccessors;
@@ -39,7 +41,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         public ParameterExtractingExpressionVisitor(
             [NotNull] IEvaluatableExpressionFilter evaluatableExpressionFilter,
             [NotNull] IParameterValues parameterValues,
-            [NotNull] IDiagnosticsLogger<LoggerCategory.Query> logger,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Query> logger,
             bool parameterize,
             bool generateContextAccessors = false)
         {
@@ -48,6 +50,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             _logger = logger;
             _parameterize = parameterize;
             _generateContextAccessors = generateContextAccessors;
+
+            if (_generateContextAccessors)
+            {
+                _contextParameterReplacingExpressionVisitor = new ContextParameterReplacingExpressionVisitor();
+            }
         }
 
         /// <summary>
@@ -95,13 +102,20 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (returnTypeInfo.IsGenericType
                 && returnTypeInfo.GetGenericTypeDefinition() == typeof(DbSet<>))
             {
-                var queryable = (IQueryable)Evaluate(methodCallExpression, out var _);
+                var queryable = (IQueryable)Evaluate(methodCallExpression, out _);
 
                 return ExtractParameters(queryable.Expression);
             }
 
             if (_partialEvaluationInfo.IsEvaluatableExpression(methodCallExpression))
             {
+                if (_queryableTypeInfo.IsAssignableFrom(methodCallExpression.Type))
+                {
+                    var queryable = (IQueryable)Evaluate(methodCallExpression, out _);
+
+                    return ExtractParameters(queryable.Expression);
+                }
+
                 return TryExtractParameter(methodCallExpression);
             }
 
@@ -137,7 +151,40 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     {
                         if (newArgument.RemoveConvert() is ParameterExpression parameter)
                         {
-                            newArgument = Expression.Constant(_parameterValues.RemoveParameter(parameter.Name));
+                            var parameterValue = _parameterValues.RemoveParameter(parameter.Name);
+
+                            if (parameter.Type == typeof(FormattableString))
+                            {
+                                if (Evaluate(methodCallExpression, out _) is IQueryable queryable)
+                                {
+                                    var oldInLambda = _inLambda;
+
+                                    _inLambda = false;
+
+                                    try
+                                    {
+                                        return ExtractParameters(queryable.Expression);
+                                    }
+                                    finally
+                                    {
+                                        _inLambda = oldInLambda;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                var constantParameterValue = Expression.Constant(parameterValue);
+
+                                if (newArgument is UnaryExpression unaryExpression
+                                    && unaryExpression.NodeType == ExpressionType.Convert)
+                                {
+                                    newArgument = unaryExpression.Update(constantParameterValue);
+                                }
+                                else
+                                {
+                                    newArgument = constantParameterValue;
+                                }
+                            }
                         }
                     }
 
@@ -173,7 +220,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return TryExtractParameter(memberExpression);
             }
 
-            var queryable = (IQueryable)Evaluate(memberExpression, out var _);
+            var queryable = (IQueryable)Evaluate(memberExpression, out _);
 
             return ExtractParameters(queryable.Expression);
         }
@@ -260,6 +307,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         /// </summary>
         protected override Expression VisitBinary(BinaryExpression binaryExpression)
         {
+            if (binaryExpression.NodeType == ExpressionType.ArrayIndex
+                && _partialEvaluationInfo.IsEvaluatableExpression(binaryExpression))
+            {
+                return TryExtractParameter(binaryExpression);
+            }
+
             if (!binaryExpression.IsLogicalOperation())
             {
                 return base.VisitBinary(binaryExpression);
@@ -297,7 +350,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (_partialEvaluationInfo.IsEvaluatableExpression(expression)
                 && !_queryableTypeInfo.IsAssignableFrom(expression.Type.GetTypeInfo()))
             {
-                var value = Evaluate(expression, out var _);
+                var value = Evaluate(expression, out _);
 
                 if (value is bool)
                 {
@@ -312,30 +365,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             var parameterValue = Evaluate(expression, out var parameterName);
 
-            if (parameterValue is Expression parameterExpression)
+            if (parameterName == null || !parameterName.StartsWith(QueryFilterPrefix))
             {
-                return parameterExpression;
-            }
-
-            if (!_parameterize)
-            {
-                if (_generateContextAccessors
-                    && expression is MemberExpression memberExpression
-                    && memberExpression.Expression != null
-                    && typeof(DbContext).GetTypeInfo()
-                        .IsAssignableFrom(memberExpression.Expression.Type.GetTypeInfo()))
+                if (parameterValue is Expression valueExpression)
                 {
-                    var contextParameterExpression
-                        = Expression.Parameter(memberExpression.Expression.Type, "context");
-
-                    parameterValue
-                        = Expression.Lambda(
-                            memberExpression.Update(contextParameterExpression),
-                            contextParameterExpression);
+                    return ExtractParameters(valueExpression);
                 }
-                else
+
+                if (!_parameterize)
                 {
-                    return Expression.Constant(parameterValue);
+                    return Expression.Constant(parameterValue, expression.Type);
                 }
             }
 
@@ -363,11 +402,27 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return Expression.Parameter(expression.Type, parameterName);
         }
 
+        private sealed class ContextParameterReplacingExpressionVisitor : ExpressionVisitor
+        {
+            public ParameterExpression ContextParameterExpression;
+
+            protected override Expression VisitConstant(ConstantExpression constantExpression)
+            {
+                if (typeof(DbContext).GetTypeInfo()
+                    .IsAssignableFrom(constantExpression.Type.GetTypeInfo()))
+                {
+                    return ContextParameterExpression ?? (ContextParameterExpression = Expression.Parameter(constantExpression.Type, "context"));
+                }
+
+                return constantExpression;
+            }
+        }
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual object Evaluate([CanBeNull] Expression expression, [CanBeNull] out string parameterName)
+        public virtual object Evaluate([CanBeNull] Expression expression, out string parameterName)
         {
             parameterName = null;
 
@@ -376,58 +431,74 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return null;
             }
 
+            if (_generateContextAccessors)
+            {
+                var newExpression = _contextParameterReplacingExpressionVisitor.Visit(expression);
+
+                if (newExpression != expression)
+                {
+                    parameterName = QueryFilterPrefix + "__" + (expression is MemberExpression memberExpression
+                                        ? memberExpression.Member.Name
+                                        : QueryFilterPrefix);
+
+                    return Expression.Lambda(
+                        newExpression,
+                        _contextParameterReplacingExpressionVisitor.ContextParameterExpression);
+                }
+            }
+
             // ReSharper disable once SwitchStatementMissingSomeCases
             switch (expression.NodeType)
             {
                 case ExpressionType.MemberAccess:
-                {
-                    var memberExpression = (MemberExpression)expression;
-                    var @object = Evaluate(memberExpression.Expression, out parameterName);
-
-                    if (memberExpression.Member is FieldInfo fieldInfo)
                     {
-                        parameterName = parameterName != null
-                            ? parameterName + "_" + fieldInfo.Name
-                            : fieldInfo.Name;
+                        var memberExpression = (MemberExpression)expression;
+                        var @object = Evaluate(memberExpression.Expression, out parameterName);
 
-                        try
+                        if (memberExpression.Member is FieldInfo fieldInfo)
                         {
-                            return fieldInfo.GetValue(@object);
+                            parameterName = parameterName != null
+                                ? parameterName + "_" + fieldInfo.Name
+                                : fieldInfo.Name;
+
+                            try
+                            {
+                                return fieldInfo.GetValue(@object);
+                            }
+                            catch
+                            {
+                                // Try again when we compile the delegate
+                            }
                         }
-                        catch
+
+                        if (memberExpression.Member is PropertyInfo propertyInfo)
                         {
-                            // Try again when we compile the delegate
+                            parameterName = parameterName != null
+                                ? parameterName + "_" + propertyInfo.Name
+                                : propertyInfo.Name;
+
+                            try
+                            {
+                                return propertyInfo.GetValue(@object);
+                            }
+                            catch
+                            {
+                                // Try again when we compile the delegate
+                            }
                         }
+
+                        break;
                     }
-
-                    if (memberExpression.Member is PropertyInfo propertyInfo)
-                    {
-                        parameterName = parameterName != null
-                            ? parameterName + "_" + propertyInfo.Name
-                            : propertyInfo.Name;
-
-                        try
-                        {
-                            return propertyInfo.GetValue(@object);
-                        }
-                        catch
-                        {
-                            // Try again when we compile the delegate
-                        }
-                    }
-
-                    break;
-                }
                 case ExpressionType.Constant:
-                {
-                    return ((ConstantExpression)expression).Value;
-                }
+                    {
+                        return ((ConstantExpression)expression).Value;
+                    }
                 case ExpressionType.Call:
-                {
-                    parameterName = ((MethodCallExpression)expression).Method.Name;
+                    {
+                        parameterName = ((MethodCallExpression)expression).Method.Name;
 
-                    break;
-                }
+                        break;
+                    }
             }
 
             try
@@ -440,7 +511,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             catch (Exception exception)
             {
                 throw new InvalidOperationException(
-                    _logger.Logger.ShouldLogSensitiveData(_logger)
+                    _logger.ShouldLogSensitiveData()
                         ? CoreStrings.ExpressionParameterizationExceptionSensitive(expression)
                         : CoreStrings.ExpressionParameterizationException,
                     exception);

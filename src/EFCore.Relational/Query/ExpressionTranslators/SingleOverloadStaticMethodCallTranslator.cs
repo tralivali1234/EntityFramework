@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
@@ -19,7 +20,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators
         private readonly string _sqlFunctionName;
 
         /// <summary>
-        ///     Specialised constructor for use only by derived class.
+        ///     Specialized constructor for use only by derived class.
         /// </summary>
         /// <param name="declaringType"> The declaring type of the method. </param>
         /// <param name="clrMethodName"> Name of the method. </param>
@@ -29,7 +30,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators
             [NotNull] string clrMethodName,
             [NotNull] string sqlFunctionName)
         {
-            _methodInfo = declaringType.GetRuntimeMethod(clrMethodName, new Type[] { });
+            _methodInfo = declaringType.GetTypeInfo().GetDeclaredMethods(clrMethodName).Single();
 
             _sqlFunctionName = sqlFunctionName;
         }
@@ -41,9 +42,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators
         /// <returns>
         ///     A SQL expression representing the translated MethodCallExpression.
         /// </returns>
-        public virtual Expression Translate(MethodCallExpression methodCallExpression) 
+        public virtual Expression Translate(MethodCallExpression methodCallExpression)
             => _methodInfo.Equals(methodCallExpression.Method)
-            ? new SqlFunctionExpression(_sqlFunctionName, methodCallExpression.Type, methodCallExpression.Arguments)
-            : null;
+                ? new SqlFunctionExpression(_sqlFunctionName, methodCallExpression.Type, methodCallExpression.Arguments)
+                : null;
     }
 }

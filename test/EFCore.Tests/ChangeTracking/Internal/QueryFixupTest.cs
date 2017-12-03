@@ -6,7 +6,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class QueryFixupTest
     {
@@ -922,10 +923,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
 
                 AssertFixup(
                     context,
-                    () =>
-                    {
-                        Assert.Equal(principal.Id, foreignKeyValue);
-                    });
+                    () => { Assert.Equal(principal.Id, foreignKeyValue); });
             }
         }
 
@@ -942,10 +940,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
 
                 AssertFixup(
                     context,
-                    () =>
-                    {
-                        Assert.Equal(principal.Id, foreignKeyValue);
-                    });
+                    () => { Assert.Equal(principal.Id, foreignKeyValue); });
             }
         }
 
@@ -962,11 +957,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
                 AssertFixup(
                     context,
                     () =>
-                    {
-                        var dependentEntry = context.Entry(owned);
-                        Assert.Equal(principal.Id, dependentEntry.Property("OrderId").CurrentValue);
-                        Assert.Equal(nameof(Order.OrderDetails), dependentEntry.Metadata.DefiningNavigationName);
-                    });
+                        {
+                            var dependentEntry = context.Entry(owned);
+                            Assert.Equal(principal.Id, dependentEntry.Property("OrderId").CurrentValue);
+                            Assert.Equal(nameof(Order.OrderDetails), dependentEntry.Metadata.DefiningNavigationName);
+                        });
             }
         }
 
@@ -1043,9 +1038,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
                     new ChildDN { Id = 78, ParentId = 77 },
                     new Order
                     {
-                        Id = 77, OrderDetails = new OrderDetails
+                        Id = 77,
+                        OrderDetails = new OrderDetails
                         {
-                            BillingAddress = new Address { Street = "BillMe" }, ShippingAddress = new Address { Street = "ShipMe" }
+                            BillingAddress = new Address { Street = "BillMe" },
+                            ShippingAddress = new Address { Street = "ShipMe" }
                         }
                     });
 
@@ -1304,29 +1301,33 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
                     .WithOne()
                     .HasForeignKey<Blog>(e => e.TopPostId);
 
-                modelBuilder.Entity<Order>(pb =>
-                    {
-                        pb.Property(p => p.Id).ValueGeneratedNever();
-                        pb.OwnsOne(p => p.OrderDetails, cb =>
-                            {
-                                cb.Property<int?>("OrderId");
-                                cb.HasForeignKey("OrderId");
-                                cb.HasOne(c => c.Order)
-                                    .WithOne(p => p.OrderDetails);
-                                cb.OwnsOne(c => c.BillingAddress, scb =>
+                modelBuilder.Entity<Order>(
+                    pb =>
+                        {
+                            pb.Property(p => p.Id).ValueGeneratedNever();
+                            pb.OwnsOne(
+                                p => p.OrderDetails, cb =>
                                     {
-                                        scb.HasForeignKey("OrderDetailsId");
-                                        scb.HasOne(sc => sc.OrderDetails)
-                                            .WithOne(c => c.BillingAddress);
+                                        cb.Property<int?>("OrderId");
+                                        cb.HasForeignKey("OrderId");
+                                        cb.HasOne(c => c.Order)
+                                            .WithOne(p => p.OrderDetails);
+                                        cb.OwnsOne(
+                                            c => c.BillingAddress, scb =>
+                                                {
+                                                    scb.HasForeignKey("OrderDetailsId");
+                                                    scb.HasOne(sc => sc.OrderDetails)
+                                                        .WithOne(c => c.BillingAddress);
+                                                });
+                                        cb.OwnsOne(
+                                            c => c.ShippingAddress, scb =>
+                                                {
+                                                    scb.HasForeignKey("OrderDetailsId");
+                                                    scb.HasOne(sc => sc.OrderDetails)
+                                                        .WithOne(c => c.ShippingAddress);
+                                                });
                                     });
-                                cb.OwnsOne(c => c.ShippingAddress, scb =>
-                                    {
-                                        scb.HasForeignKey("OrderDetailsId");
-                                        scb.HasOne(sc => sc.OrderDetails)
-                                            .WithOne(c => c.ShippingAddress);
-                                    });
-                            });
-                    });
+                        });
             }
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

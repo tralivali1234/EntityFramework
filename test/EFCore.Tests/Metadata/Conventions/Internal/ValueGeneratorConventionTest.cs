@@ -3,13 +3,11 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class ValueGeneratorConventionTest
     {
@@ -438,14 +436,14 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions.Internal
         {
             var conventions = new ConventionSet();
 
-            conventions.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention());
+            conventions.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())));
             conventions.EntityTypeAddedConventions.Add(new KeyDiscoveryConvention());
 
             var keyConvention = new ValueGeneratorConvention();
 
             conventions.ForeignKeyAddedConventions.Add(keyConvention);
             conventions.ForeignKeyRemovedConventions.Add(keyConvention);
-            conventions.PrimaryKeySetConventions.Add(keyConvention);
+            conventions.PrimaryKeyChangedConventions.Add(keyConvention);
 
             return new InternalModelBuilder(new Model(conventions));
         }

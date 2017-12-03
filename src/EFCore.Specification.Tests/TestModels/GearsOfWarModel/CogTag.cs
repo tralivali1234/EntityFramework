@@ -3,12 +3,13 @@
 
 using System;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.GearsOfWarModel
+namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
 {
     public class CogTag
     {
         // auto generated key (identity for now)
         public Guid Id { get; set; }
+
         public string Note { get; set; }
 
         public string GearNickName { get; set; }

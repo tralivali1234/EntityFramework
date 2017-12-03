@@ -2,6 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
@@ -69,7 +72,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     A task that represents the asynchronous save operation. The task result contains true if the database is created,
         ///     false if it already existed.
         /// </returns>
-        public virtual Task<bool> EnsureCreatedAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<bool> EnsureCreatedAsync(CancellationToken cancellationToken = default)
             => DatabaseCreator.EnsureCreatedAsync(cancellationToken);
 
         /// <summary>
@@ -100,7 +103,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     A task that represents the asynchronous save operation. The task result contains true if the database is deleted,
         ///     false if it did not exist.
         /// </returns>
-        public virtual Task<bool> EnsureDeletedAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<bool> EnsureDeletedAsync(CancellationToken cancellationToken = default)
             => DatabaseCreator.EnsureDeletedAsync(cancellationToken);
 
         /// <summary>
@@ -120,7 +123,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     A task that represents the asynchronous transaction initialization. The task result contains a <see cref="IDbContextTransaction" />
         ///     that represents the started transaction.
         /// </returns>
-        public virtual Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
             => TransactionManager.BeginTransactionAsync(cancellationToken);
 
         /// <summary>
@@ -184,6 +187,25 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
         /// <summary>
         ///     <para>
+        ///         Returns the name of the database provider currently in use.
+        ///         The name is typically the name of the provider assembly.
+        ///         It is usually easier to use a sugar method such as 'IsSqlServer()' instead of
+        ///         calling this method directly.
+        ///     </para>
+        ///     <para>
+        ///         This method can only be used after the <see cref="DbContext" /> has been configured because
+        ///         it is only then that the provider is known. This means that this method cannot be used
+        ///         in <see cref="DbContext.OnConfiguring" /> because this is where application code sets the
+        ///         provider to use as part of configuring the context.
+        ///     </para>
+        /// </summary>
+        public virtual string ProviderName
+            => _context.GetService<IEnumerable<IDatabaseProvider>>()
+                ?.Select(p => p.Name)
+                .FirstOrDefault();
+
+        /// <summary>
+        ///     <para>
         ///         Gets the scoped <see cref="IServiceProvider" /> being used to resolve services.
         ///     </para>
         ///     <para>
@@ -201,5 +223,31 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
         private IExecutionStrategyFactory ExecutionStrategyFactory
             => _executionStrategyFactory ?? (_executionStrategyFactory = this.GetService<IExecutionStrategyFactory>());
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

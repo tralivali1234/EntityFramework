@@ -8,14 +8,50 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class DbSetTest
     {
+        [Fact]
+        public void DbSets_are_cached()
+        {
+            DbSet<Category> set;
+
+            using (var context = new EarlyLearningCenter())
+            {
+                set = context.Categories;
+                Assert.Same(set, context.Set<Category>());
+            }
+
+            using (var context = new EarlyLearningCenter())
+            {
+                Assert.NotSame(set, context.Categories);
+                Assert.NotSame(set, context.Set<Category>());
+            }
+        }
+
+        [Fact]
+        public void Use_of_LocalView_throws_if_context_is_disposed()
+        {
+            LocalView<Category> view;
+
+            using (var context = new EarlyLearningCenter())
+            {
+                view = context.Categories.Local;
+            }
+
+            Assert.Throws<ObjectDisposedException>(() => view.Add(new Category()));
+            Assert.Throws<ObjectDisposedException>(() => view.Remove(new Category()));
+            Assert.Throws<ObjectDisposedException>(() => view.Contains(new Category()));
+            Assert.Throws<ObjectDisposedException>(() => view.CopyTo(new Category[0], 0));
+            Assert.Throws<ObjectDisposedException>(() => view.Clear());
+            Assert.Throws<ObjectDisposedException>(() => view.GetEnumerator());
+        }
+
         [Fact]
         public void Using_ignored_entity_that_has_DbSet_on_context_throws_appropriately()
         {
@@ -32,7 +68,7 @@ namespace Microsoft.EntityFrameworkCore.Tests
             public DbSet<IgnoredEntity> Ignored { get; set; }
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                => optionsBuilder.UseTransientInMemoryDatabase();
+                => optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
 
             protected internal override void OnModelCreating(ModelBuilder modelBuilder)
                 => modelBuilder.Ignore<IgnoredEntity>();
@@ -449,11 +485,12 @@ namespace Microsoft.EntityFrameworkCore.Tests
             Action<EarlyLearningCenter, Category> action,
             EntityState initialState,
             EntityState expectedState)
-            => ChangeStateWithMethod((c, e) =>
-                {
-                    action(c, e);
-                    return Task.FromResult(0);
-                },
+            => ChangeStateWithMethod(
+                (c, e) =>
+                    {
+                        action(c, e);
+                        return Task.FromResult(0);
+                    },
                 initialState,
                 expectedState);
 
@@ -496,8 +533,8 @@ namespace Microsoft.EntityFrameworkCore.Tests
                     Assert.Same(gu2, context.Gus.Add(gu2).Entity);
                 }
 
-                Assert.NotEqual(default(Guid), gu1.Id);
-                Assert.NotEqual(default(Guid), gu2.Id);
+                Assert.NotEqual(default, gu1.Id);
+                Assert.NotEqual(default, gu2.Id);
                 Assert.NotEqual(gu1.Id, gu2.Id);
 
                 var categoryEntry = context.Entry(gu1);
@@ -521,20 +558,38 @@ namespace Microsoft.EntityFrameworkCore.Tests
             }
         }
 
-#if NET46
         [Fact]
         public void Throws_when_using_with_IListSource()
         {
             using (var context = new EarlyLearningCenter())
             {
-                Assert.Equal(CoreStrings.DataBindingWithIListSource,
+                Assert.Equal(
+                    CoreStrings.DataBindingWithIListSource,
                     Assert.Throws<NotSupportedException>(() => ((IListSource)context.Gus).GetList()).Message);
             }
         }
-#elif NETCOREAPP2_0
-#else
-#error target frameworks need to be updated.
-#endif
+
+        [Fact]
+        public void Throws_when_using_query_with_IListSource()
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                Assert.Equal(
+                    CoreStrings.DataBindingWithIListSource,
+                    Assert.Throws<NotSupportedException>(() => ((IListSource)context.Gus.Distinct()).GetList()).Message);
+            }
+        }
+
+        [Fact]
+        public void Throws_when_using_Local_with_IListSource()
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                Assert.Equal(
+                    CoreStrings.DataBindingWithIListSource,
+                    Assert.Throws<NotSupportedException>(() => ((IListSource)context.Gus.Local).GetList()).Message);
+            }
+        }
 
         private class Category
         {
@@ -563,7 +618,7 @@ namespace Microsoft.EntityFrameworkCore.Tests
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder
-                    .UseTransientInMemoryDatabase()
+                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
                     .UseInternalServiceProvider(InMemoryTestHelpers.Instance.CreateServiceProvider());
         }
     }

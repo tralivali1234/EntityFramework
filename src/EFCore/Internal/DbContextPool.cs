@@ -35,7 +35,47 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        // ReSharper disable once SuggestBaseTypeForParameter
+        public sealed class Lease : IDisposable
+        {
+            private DbContextPool<TContext> _contextPool;
+
+            /// <summary>
+            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+            ///     directly from your code. This API may change or be removed in future releases.
+            /// </summary>
+            public Lease([NotNull] DbContextPool<TContext> contextPool)
+            {
+                _contextPool = contextPool;
+
+                Context = _contextPool.Rent();
+            }
+
+            /// <summary>
+            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+            ///     directly from your code. This API may change or be removed in future releases.
+            /// </summary>
+            public TContext Context { get; private set; }
+
+            void IDisposable.Dispose()
+            {
+                if (_contextPool != null)
+                {
+                    if (!_contextPool.Return(Context))
+                    {
+                        ((IDbContextPoolable)Context).SetPool(null);
+                        Context.Dispose();
+                    }
+
+                    _contextPool = null;
+                    Context = null;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public DbContextPool([NotNull] DbContextOptions options)
         {
             _maxSize = options.FindExtension<CoreOptionsExtension>()?.MaxPoolSize ?? DefaultPoolSize;
@@ -53,7 +93,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
         private static Func<TContext> CreateActivator(DbContextOptions options)
         {
-            var ctors 
+            var ctors
                 = typeof(TContext).GetTypeInfo().DeclaredConstructors
                     .Where(c => !c.IsStatic && c.IsPublic)
                     .ToArray();
@@ -63,7 +103,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 var parameters = ctors[0].GetParameters();
 
                 if (parameters.Length == 1
-                    && (parameters[0].ParameterType == typeof(DbContextOptions) 
+                    && (parameters[0].ParameterType == typeof(DbContextOptions)
                         || parameters[0].ParameterType == typeof(DbContextOptions<TContext>)))
                 {
                     return
@@ -82,9 +122,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public virtual TContext Rent()
         {
-            TContext context;
-
-            if (_pool.TryDequeue(out context))
+            if (_pool.TryDequeue(out var context))
             {
                 Interlocked.Decrement(ref _count);
 
@@ -142,9 +180,9 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             _maxSize = 0;
 
-            TContext context;
-            while (_pool.TryDequeue(out context))
+            while (_pool.TryDequeue(out var context))
             {
+                ((IDbContextPoolable)context).SetPool(null);
                 context.Dispose();
             }
         }

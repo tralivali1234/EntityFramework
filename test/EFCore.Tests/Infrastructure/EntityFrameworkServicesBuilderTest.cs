@@ -7,12 +7,11 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
+namespace Microsoft.EntityFrameworkCore.Infrastructure
 {
     public class EntityFrameworkServicesBuilderTest
     {
@@ -330,15 +329,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
             {
             }
 
-            public DbSet<TEntity> CreateSet<TEntity>(DbContext context) where TEntity : class
-            {
-                throw new NotImplementedException();
-            }
+            public DbSet<TEntity> CreateSet<TEntity>(DbContext context)
+                where TEntity : class => throw new NotImplementedException();
 
-            public object CreateSet(DbContext context, Type type)
-            {
-                throw new NotImplementedException();
-            }
+            public object CreateSet(DbContext context, Type type) => throw new NotImplementedException();
         }
 
         private class FakeEntityStateListener : IEntityStateListener
@@ -353,9 +347,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
         }
 
         private static DbContext CreateContext(IServiceProvider serviceProvider)
-            => new DbContext(new DbContextOptionsBuilder()
-                .UseInternalServiceProvider(serviceProvider)
-                .UseTransientInMemoryDatabase()
-                .Options);
+            => new DbContext(
+                new DbContextOptionsBuilder()
+                    .UseInternalServiceProvider(serviceProvider)
+                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                    .Options);
     }
 }

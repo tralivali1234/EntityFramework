@@ -1,8 +1,9 @@
-﻿﻿// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -46,16 +48,17 @@ namespace Microsoft.EntityFrameworkCore
     public class DbContext :
         IDisposable,
         IInfrastructure<IServiceProvider>,
-        IInfrastructure<DbContextDependencies>,
+        IDbContextDependencies,
+        IDbSetCache,
         IDbContextPoolable
     {
+        private readonly IDictionary<Type, object> _sets = new Dictionary<Type, object>();
         private readonly DbContextOptions _options;
 
         private IDbContextServices _contextServices;
-        private DbContextDependencies _dbContextDependencies;
+        private IDbContextDependencies _dbContextDependencies;
         private DatabaseFacade _database;
         private ChangeTracker _changeTracker;
-        private IDiagnosticsLogger<LoggerCategory.Update> _updateLogger;
 
         private IServiceScope _serviceScope;
         private IDbContextPool _dbContextPool;
@@ -132,16 +135,78 @@ namespace Microsoft.EntityFrameworkCore
         public virtual IModel Model => DbContextDependencies.Model;
 
         /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IDbSetSource IDbContextDependencies.SetSource => DbContextDependencies.SetSource;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IEntityFinderFactory IDbContextDependencies.EntityFinderFactory => DbContextDependencies.EntityFinderFactory;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IAsyncQueryProvider IDbContextDependencies.QueryProvider => DbContextDependencies.QueryProvider;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IStateManager IDbContextDependencies.StateManager => DbContextDependencies.StateManager;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IChangeDetector IDbContextDependencies.ChangeDetector => DbContextDependencies.ChangeDetector;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IEntityGraphAttacher IDbContextDependencies.EntityGraphAttacher => DbContextDependencies.EntityGraphAttacher;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IDiagnosticsLogger<DbLoggerCategory.Update> IDbContextDependencies.UpdateLogger => DbContextDependencies.UpdateLogger;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IDiagnosticsLogger<DbLoggerCategory.Infrastructure> IDbContextDependencies.InfrastructureLogger => DbContextDependencies.InfrastructureLogger;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        object IDbSetCache.GetOrAddSet(IDbSetSource source, Type type)
+        {
+            CheckDisposed();
+
+            if (!_sets.TryGetValue(type, out var set))
+            {
+                set = source.Create(this, type);
+                _sets[type] = set;
+            }
+
+            return set;
+        }
+
+        /// <summary>
         ///     Creates a <see cref="DbSet{TEntity}" /> that can be used to query and save instances of <typeparamref name="TEntity" />.
         /// </summary>
         /// <typeparam name="TEntity"> The type of entity for which a set should be returned. </typeparam>
         /// <returns> A set for the given entity type. </returns>
-        public virtual DbSet<TEntity> Set<TEntity>() where TEntity : class
-        {
-            CheckDisposed();
-
-            return DbContextDependencies.DbSetInitializer.CreateSet<TEntity>(this);
-        }
+        public virtual DbSet<TEntity> Set<TEntity>()
+            where TEntity : class
+            => (DbSet<TEntity>)((IDbSetCache)this).GetOrAddSet(DbContextDependencies.SetSource, typeof(TEntity));
 
         private IEntityFinder Finder(Type type)
         {
@@ -151,7 +216,7 @@ namespace Microsoft.EntityFrameworkCore
                 throw new InvalidOperationException(CoreStrings.InvalidSetType(type.ShortDisplayName()));
             }
 
-            return DbContextDependencies.EntityFinderSource.Create(this, entityType);
+            return DbContextDependencies.EntityFinderFactory.Create(entityType);
         }
 
         private IServiceProvider InternalServiceProvider
@@ -160,17 +225,59 @@ namespace Microsoft.EntityFrameworkCore
             {
                 CheckDisposed();
 
-                return (_contextServices ?? (_contextServices = InitializeServices())).InternalServiceProvider;
+                if (_contextServices != null)
+                {
+                    return _contextServices.InternalServiceProvider;
+                }
+
+                if (_initializing)
+                {
+                    throw new InvalidOperationException(CoreStrings.RecursiveOnConfiguring);
+                }
+
+                try
+                {
+                    _initializing = true;
+
+                    var optionsBuilder = new DbContextOptionsBuilder(_options);
+
+                    OnConfiguring(optionsBuilder);
+
+                    if (_options.IsFrozen
+                        && !ReferenceEquals(_options, optionsBuilder.Options))
+                    {
+                        throw new InvalidOperationException(CoreStrings.PoolingOptionsModified);
+                    }
+
+                    var options = optionsBuilder.Options;
+
+                    _serviceScope = ServiceProviderCache.Instance.GetOrAdd(options, providerRequired: true)
+                        .GetRequiredService<IServiceScopeFactory>()
+                        .CreateScope();
+
+                    var scopedServiceProvider = _serviceScope.ServiceProvider;
+
+                    var contextServices = scopedServiceProvider.GetService<IDbContextServices>();
+
+                    contextServices.Initialize(scopedServiceProvider, options, this);
+
+                    _contextServices = contextServices;
+
+                    DbContextDependencies.InfrastructureLogger.ContextInitialized(this, options);
+                }
+                finally
+                {
+                    _initializing = false;
+                }
+
+                return _contextServices.InternalServiceProvider;
             }
         }
 
-        private DbContextDependencies DbContextDependencies
-            => _dbContextDependencies ?? (_dbContextDependencies = InternalServiceProvider.GetRequiredService<DbContextDependencies>());
+        private IDbContextDependencies DbContextDependencies
+            => _dbContextDependencies ?? (_dbContextDependencies = InternalServiceProvider.GetRequiredService<IDbContextDependencies>());
 
-        private IEntityGraphAttacher GraphAttacher => DbContextDependencies.EntityGraphAttacher;
-
-        private IStateManager StateManager => DbContextDependencies.StateManager;
-
+        [DebuggerStepThrough]
         internal void CheckDisposed()
         {
             if (_disposed)
@@ -179,53 +286,11 @@ namespace Microsoft.EntityFrameworkCore
             }
         }
 
-        private IDbContextServices InitializeServices()
-        {
-            if (_initializing)
-            {
-                throw new InvalidOperationException(CoreStrings.RecursiveOnConfiguring);
-            }
-
-            try
-            {
-                _initializing = true;
-
-                var optionsBuilder = new DbContextOptionsBuilder(_options);
-
-                OnConfiguring(optionsBuilder);
-
-                if (_options.IsFrozen
-                    && !ReferenceEquals(_options, optionsBuilder.Options))
-                {
-                    throw new InvalidOperationException(CoreStrings.PoolingOptionsModified);
-                }
-
-                var options = optionsBuilder.Options;
-
-                _serviceScope = ServiceProviderCache.Instance.GetOrAdd(options, providerRequired: true)
-                    .GetRequiredService<IServiceScopeFactory>()
-                    .CreateScope();
-
-                var scopedServiceProvider = _serviceScope.ServiceProvider;
-
-                var contextServices = scopedServiceProvider.GetService<IDbContextServices>();
-
-                contextServices.Initialize(scopedServiceProvider, options, this);
-
-                _updateLogger = scopedServiceProvider.GetRequiredService<IDiagnosticsLogger<LoggerCategory.Update>>();
-
-                return contextServices;
-            }
-            finally
-            {
-                _initializing = false;
-            }
-        }
-
         /// <summary>
         ///     <para>
         ///         Override this method to configure the database (and other options) to be used for this context.
         ///         This method is called for each instance of the context that is created.
+        ///         The base implementation does nothing.
         ///     </para>
         ///     <para>
         ///         In situations where an instance of <see cref="DbContextOptions" /> may or may not have been passed
@@ -271,6 +336,14 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns>
         ///     The number of state entries written to the database.
         /// </returns>
+        /// <exception cref="DbUpdateException">
+        ///     An error is encountered while saving to the database.
+        /// </exception>
+        /// <exception cref="DbUpdateConcurrencyException">
+        ///     A concurrency violation is encountered while saving to the database.
+        ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
+        ///     This is usually because the data in the database has been modified since it was loaded into memory.
+        /// </exception>
         [DebuggerStepThrough]
         public virtual int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
@@ -289,6 +362,14 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns>
         ///     The number of state entries written to the database.
         /// </returns>
+        /// <exception cref="DbUpdateException">
+        ///     An error is encountered while saving to the database.
+        /// </exception>
+        /// <exception cref="DbUpdateConcurrencyException">
+        ///     A concurrency violation is encountered while saving to the database.
+        ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
+        ///     This is usually because the data in the database has been modified since it was loaded into memory.
+        /// </exception>
         [DebuggerStepThrough]
         public virtual int SaveChanges(bool acceptAllChangesOnSuccess)
         {
@@ -298,11 +379,11 @@ namespace Microsoft.EntityFrameworkCore
 
             try
             {
-                return StateManager.SaveChanges(acceptAllChangesOnSuccess);
+                return DbContextDependencies.StateManager.SaveChanges(acceptAllChangesOnSuccess);
             }
             catch (Exception exception)
             {
-                _updateLogger.SaveChangesFailed(GetType(), exception);
+                DbContextDependencies.UpdateLogger.SaveChangesFailed(this, exception);
 
                 throw;
             }
@@ -335,7 +416,15 @@ namespace Microsoft.EntityFrameworkCore
         ///     A task that represents the asynchronous save operation. The task result contains the
         ///     number of state entries written to the database.
         /// </returns>
-        public virtual Task<int> SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        /// <exception cref="DbUpdateException">
+        ///     An error is encountered while saving to the database.
+        /// </exception>
+        /// <exception cref="DbUpdateConcurrencyException">
+        ///     A concurrency violation is encountered while saving to the database.
+        ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
+        ///     This is usually because the data in the database has been modified since it was loaded into memory.
+        /// </exception>
+        public virtual Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
             => SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken: cancellationToken);
 
         /// <summary>
@@ -361,8 +450,17 @@ namespace Microsoft.EntityFrameworkCore
         ///     A task that represents the asynchronous save operation. The task result contains the
         ///     number of state entries written to the database.
         /// </returns>
-        public virtual async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
-            CancellationToken cancellationToken = default(CancellationToken))
+        /// <exception cref="DbUpdateException">
+        ///     An error is encountered while saving to the database.
+        /// </exception>
+        /// <exception cref="DbUpdateConcurrencyException">
+        ///     A concurrency violation is encountered while saving to the database.
+        ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
+        ///     This is usually because the data in the database has been modified since it was loaded into memory.
+        /// </exception>
+        public virtual async Task<int> SaveChangesAsync(
+            bool acceptAllChangesOnSuccess,
+            CancellationToken cancellationToken = default)
         {
             CheckDisposed();
 
@@ -370,21 +468,19 @@ namespace Microsoft.EntityFrameworkCore
 
             try
             {
-                return await StateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+                return await DbContextDependencies.StateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
             }
             catch (Exception exception)
             {
-                _updateLogger.SaveChangesFailed(GetType(), exception);
+                DbContextDependencies.UpdateLogger.SaveChangesFailed(this, exception);
 
                 throw;
             }
         }
 
-        void IDbContextPoolable.SetPool(IDbContextPool dbContextPool)
+        void IDbContextPoolable.SetPool(IDbContextPool contextPool)
         {
-            Check.NotNull(dbContextPool, nameof(dbContextPool));
-
-            _dbContextPool = dbContextPool;
+            _dbContextPool = contextPool;
         }
 
         DbContextPoolConfigurationSnapshot IDbContextPoolable.SnapshotConfiguration()
@@ -415,12 +511,15 @@ namespace Microsoft.EntityFrameworkCore
 
         void IDbContextPoolable.ResetState()
         {
-            var resettableServices = _contextServices?.InternalServiceProvider?.GetService<IEnumerable<IResettableService>>()?.ToList();
+            var resettableServices
+                = _contextServices?.InternalServiceProvider?
+                    .GetService<IEnumerable<IResettableService>>()?.ToList();
+
             if (resettableServices != null)
             {
                 foreach (var service in resettableServices)
                 {
-                    service.Reset();
+                    service.ResetState();
                 }
             }
 
@@ -433,20 +532,16 @@ namespace Microsoft.EntityFrameworkCore
         public virtual void Dispose()
         {
             if (_dbContextPool == null
-                || !_dbContextPool.Return(this))
+                && !_disposed)
             {
-                if (!_disposed)
-                {
-                    _disposed = true;
+                _disposed = true;
 
-                    _dbContextDependencies?.StateManager.Unsubscribe();
+                _dbContextDependencies?.StateManager.Unsubscribe();
 
-                    _serviceScope?.Dispose();
-                    _dbContextDependencies = null;
-                    _changeTracker = null;
-                    _database = null;
-                    _dbContextPool = null;
-                }
+                _serviceScope?.Dispose();
+                _dbContextDependencies = null;
+                _changeTracker = null;
+                _database = null;
             }
         }
 
@@ -457,7 +552,8 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to get the entry for. </param>
         /// <returns> The entry for the given entity. </returns>
-        public virtual EntityEntry<TEntity> Entry<TEntity>([NotNull] TEntity entity) where TEntity : class
+        public virtual EntityEntry<TEntity> Entry<TEntity>([NotNull] TEntity entity)
+            where TEntity : class
         {
             Check.NotNull(entity, nameof(entity));
             CheckDisposed();
@@ -467,8 +563,9 @@ namespace Microsoft.EntityFrameworkCore
             return EntryWithoutDetectChanges(entity);
         }
 
-        private EntityEntry<TEntity> EntryWithoutDetectChanges<TEntity>(TEntity entity) where TEntity : class
-            => new EntityEntry<TEntity>(StateManager.GetOrCreateEntry(entity));
+        private EntityEntry<TEntity> EntryWithoutDetectChanges<TEntity>(TEntity entity)
+            where TEntity : class
+            => new EntityEntry<TEntity>(DbContextDependencies.StateManager.GetOrCreateEntry(entity));
 
         /// <summary>
         ///     <para>
@@ -494,17 +591,20 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         private EntityEntry EntryWithoutDetectChanges(object entity)
-            => new EntityEntry(StateManager.GetOrCreateEntry(entity));
+            => new EntityEntry(DbContextDependencies.StateManager.GetOrCreateEntry(entity));
 
         private void SetEntityState(InternalEntityEntry entry, EntityState entityState)
         {
             if (entry.EntityState == EntityState.Detached)
             {
-                GraphAttacher.AttachGraph(entry, entityState);
+                DbContextDependencies.EntityGraphAttacher.AttachGraph(entry, entityState, forceStateWhenUnknownKey: true);
             }
             else
             {
-                entry.SetEntityState(entityState, acceptChanges: true);
+                entry.SetEntityState(
+                    entityState,
+                    acceptChanges: true,
+                    forceStateWhenUnknownKey: true);
             }
         }
 
@@ -515,11 +615,19 @@ namespace Microsoft.EntityFrameworkCore
         {
             if (entry.EntityState == EntityState.Detached)
             {
-                await GraphAttacher.AttachGraphAsync(entry, entityState, cancellationToken);
+                await DbContextDependencies.EntityGraphAttacher.AttachGraphAsync(
+                    entry,
+                    entityState,
+                    forceStateWhenUnknownKey: true,
+                    cancellationToken: cancellationToken);
             }
             else
             {
-                await entry.SetEntityStateAsync(entityState, acceptChanges: true, cancellationToken: cancellationToken);
+                await entry.SetEntityStateAsync(
+                    entityState,
+                    acceptChanges: true,
+                    forceStateWhenUnknownKey: true,
+                    cancellationToken: cancellationToken);
             }
         }
 
@@ -534,7 +642,8 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Add<TEntity>([NotNull] TEntity entity) where TEntity : class
+        public virtual EntityEntry<TEntity> Add<TEntity>([NotNull] TEntity entity)
+            where TEntity : class
         {
             CheckDisposed();
 
@@ -563,7 +672,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual async Task<EntityEntry<TEntity>> AddAsync<TEntity>(
             [NotNull] TEntity entity,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             where TEntity : class
         {
             CheckDisposed();
@@ -597,7 +706,8 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Attach<TEntity>([NotNull] TEntity entity) where TEntity : class
+        public virtual EntityEntry<TEntity> Attach<TEntity>([NotNull] TEntity entity)
+            where TEntity : class
         {
             CheckDisposed();
 
@@ -630,7 +740,8 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Update<TEntity>([NotNull] TEntity entity) where TEntity : class
+        public virtual EntityEntry<TEntity> Update<TEntity>([NotNull] TEntity entity)
+            where TEntity : class
         {
             CheckDisposed();
 
@@ -659,7 +770,8 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Remove<TEntity>([NotNull] TEntity entity) where TEntity : class
+        public virtual EntityEntry<TEntity> Remove<TEntity>([NotNull] TEntity entity)
+            where TEntity : class
         {
             Check.NotNull(entity, nameof(entity));
             CheckDisposed();
@@ -684,7 +796,8 @@ namespace Microsoft.EntityFrameworkCore
 
         private EntityEntry<TEntity> SetEntityState<TEntity>(
             TEntity entity,
-            EntityState entityState) where TEntity : class
+            EntityState entityState)
+            where TEntity : class
         {
             var entry = EntryWithoutDetectChanges(entity);
 
@@ -731,7 +844,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual async Task<EntityEntry> AddAsync(
             [NotNull] object entity,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             CheckDisposed();
 
@@ -967,7 +1080,7 @@ namespace Microsoft.EntityFrameworkCore
 
         private void SetEntityStates(IEnumerable<object> entities, EntityState entityState)
         {
-            var stateManager = StateManager;
+            var stateManager = DbContextDependencies.StateManager;
 
             foreach (var entity in entities)
             {
@@ -1007,11 +1120,11 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual async Task AddRangeAsync(
             [NotNull] IEnumerable<object> entities,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             CheckDisposed();
 
-            var stateManager = StateManager;
+            var stateManager = DbContextDependencies.StateManager;
 
             foreach (var entity in entities)
             {
@@ -1096,7 +1209,7 @@ namespace Microsoft.EntityFrameworkCore
             Check.NotNull(entities, nameof(entities));
             CheckDisposed();
 
-            var stateManager = StateManager;
+            var stateManager = DbContextDependencies.StateManager;
 
             // An Added entity does not yet exist in the database. If it is then marked as deleted there is
             // nothing to delete because it was not yet inserted, so just make sure it doesn't get inserted.
@@ -1110,9 +1223,10 @@ namespace Microsoft.EntityFrameworkCore
                     SetEntityState(entry, EntityState.Unchanged);
                 }
 
-                entry.SetEntityState(initialState == EntityState.Added
-                    ? EntityState.Detached
-                    : EntityState.Deleted);
+                entry.SetEntityState(
+                    initialState == EntityState.Added
+                        ? EntityState.Detached
+                        : EntityState.Deleted);
             }
         }
 
@@ -1178,7 +1292,8 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="TEntity"> The type of entity to find. </typeparam>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual TEntity Find<TEntity>([NotNull] params object[] keyValues) where TEntity : class
+        public virtual TEntity Find<TEntity>([NotNull] params object[] keyValues)
+            where TEntity : class
         {
             CheckDisposed();
 
@@ -1195,7 +1310,8 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="TEntity"> The type of entity to find. </typeparam>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<TEntity> FindAsync<TEntity>([NotNull] params object[] keyValues) where TEntity : class
+        public virtual Task<TEntity> FindAsync<TEntity>([NotNull] params object[] keyValues)
+            where TEntity : class
         {
             CheckDisposed();
 
@@ -1213,7 +1329,8 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<TEntity> FindAsync<TEntity>([NotNull] object[] keyValues, CancellationToken cancellationToken) where TEntity : class
+        public virtual Task<TEntity> FindAsync<TEntity>([NotNull] object[] keyValues, CancellationToken cancellationToken)
+            where TEntity : class
         {
             CheckDisposed();
 
@@ -1231,10 +1348,30 @@ namespace Microsoft.EntityFrameworkCore
         /// </summary>
         IServiceProvider IInfrastructure<IServiceProvider>.Instance => InternalServiceProvider;
 
+        #region Hidden System.Object members
+
         /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
+        ///     Returns a string that represents the current object.
         /// </summary>
-        DbContextDependencies IInfrastructure<DbContextDependencies>.Instance => DbContextDependencies;
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

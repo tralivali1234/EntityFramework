@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- New Framework must be added and not replaced. -->
+    <!-- Old frameworks are here for benchmark runs of older versions. -->
+    <TargetFrameworks>net461;netcoreapp1.1;netcoreapp2.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">netcoreapp1.1;netcoreapp2.0</TargetFrameworks>
+    <AssemblyName>Microsoft.EntityFrameworkCore.Benchmarks</AssemblyName>
+    <RootNamespace>Microsoft.EntityFrameworkCore.Benchmarks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="$(BenchmarkDotNetPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp1.1'">
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="$(Benchmarks_11_MicrosoftExtensionsConfigurationPackageVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="$(Benchmarks_11_MicrosoftExtensionsConfigurationPackageVersion)" />
+    <PackageReference Include="System.Data.SqlClient" Version="$(Benchmarks_11_SystemDataSqlClientPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'netcoreapp1.1'">
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="$(Benchmarks_20_MicrosoftExtensionsConfigurationPackageVersion)" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="$(Benchmarks_20_MicrosoftExtensionsConfigurationPackageVersion)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netcoreapp2.0'">
+    <PackageReference Include="System.Data.SqlClient" Version="$(SystemDataSqlClientPackageVersion)" />
+  </ItemGroup>
+
+</Project>

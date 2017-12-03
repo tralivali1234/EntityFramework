@@ -11,11 +11,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         /// <summary>
         ///     Gets the entity type that this property belongs to.
         /// </summary>
-        new IEntityType DeclaringEntityType { get; }
+        IEntityType DeclaringEntityType { get; }
 
         /// <summary>
         ///     Gets the foreign key that defines the relationship this navigation property will navigate.
         /// </summary>
         IForeignKey ForeignKey { get; }
+
+        /// <summary>
+        ///     Determines whether this navigation should be eager loaded by default.
+        /// </summary>
+        bool IsEagerLoaded { get; }
     }
 }

@@ -15,20 +15,23 @@ namespace Microsoft.EntityFrameworkCore.Tools
         private readonly string _file;
         private readonly string _framework;
         private readonly string _configuration;
+        private readonly string _runtime;
 
-        public Project(string file, string framework, string configuration)
+        public Project(string file, string framework, string configuration, string runtime)
         {
             Debug.Assert(!string.IsNullOrEmpty(file), "file is null or empty.");
 
             _file = file;
             _framework = framework;
             _configuration = configuration;
+            _runtime = runtime;
             ProjectName = Path.GetFileName(file);
         }
 
         public string ProjectName { get; }
 
         public string AssemblyName { get; set; }
+        public string Language { get; set; }
         public string OutputPath { get; set; }
         public string PlatformTarget { get; set; }
         public string ProjectAssetsFile { get; set; }
@@ -42,7 +45,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
             string file,
             string buildExtensionsDir,
             string framework = null,
-            string configuration = null)
+            string configuration = null,
+            string runtime = null)
         {
             Debug.Assert(!string.IsNullOrEmpty(file), "file is null or empty.");
 
@@ -50,6 +54,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
             {
                 buildExtensionsDir = Path.Combine(Path.GetDirectoryName(file), "obj");
             }
+
+            Directory.CreateDirectory(buildExtensionsDir);
 
             var efTargetsPath = Path.Combine(
                 buildExtensionsDir,
@@ -68,13 +74,17 @@ namespace Microsoft.EntityFrameworkCore.Tools
             try
             {
                 var propertyArg = "/property:EFProjectMetadataFile=" + metadataFile;
-                if (configuration != null)
+                if (framework != null)
                 {
                     propertyArg += ";TargetFramework=" + framework;
                 }
                 if (configuration != null)
                 {
                     propertyArg += ";Configuration=" + configuration;
+                }
+                if (runtime != null)
+                {
+                    propertyArg += ";RuntimeIdentifier=" + runtime;
                 }
 
                 var args = new List<string>
@@ -111,9 +121,10 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 platformTarget = metadata["Platform"];
             }
 
-            return new Project(file, framework, configuration)
+            return new Project(file, framework, configuration, runtime)
             {
                 AssemblyName = metadata["AssemblyName"],
+                Language = metadata["Language"],
                 OutputPath = metadata["OutputPath"],
                 PlatformTarget = platformTarget,
                 ProjectAssetsFile = metadata["ProjectAssetsFile"],
@@ -127,9 +138,10 @@ namespace Microsoft.EntityFrameworkCore.Tools
 
         public void Build()
         {
-            var args = new List<string>();
-
-            args.Add("build");
+            var args = new List<string>
+            {
+                "build"
+            };
 
             if (_file != null)
             {
@@ -149,11 +161,18 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 args.Add(_configuration);
             }
 
+            if (_runtime != null)
+            {
+                args.Add("--runtime");
+                args.Add(_runtime);
+            }
+
+            args.Add("/p:GenerateRuntimeConfigurationFiles=True");
             args.Add("/verbosity:quiet");
             args.Add("/nologo");
 
 
-            var exitCode = Exe.Run("dotnet", args);
+            var exitCode = Exe.Run("dotnet", args, interceptOutput: true);
             if (exitCode != 0)
             {
                 throw new CommandException(Resources.BuildFailed);

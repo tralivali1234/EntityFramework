@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
-using Microsoft.EntityFrameworkCore.Utilities;
 using JetBrains.Annotations;
 
 namespace Microsoft.EntityFrameworkCore
@@ -19,8 +18,16 @@ namespace Microsoft.EntityFrameworkCore
     public static class DbFunctionsExtensions
     {
         /// <summary>
-        ///     An implementation of the SQL LIKE operation. On relational databases this is usually directly
-        ///     translated to SQL.
+        ///     <para>
+        ///         An implementation of the SQL LIKE operation. On relational databases this is usually directly
+        ///         translated to SQL.
+        ///     </para>
+        ///     <para>
+        ///         Note that if this function is translated into SQL, then the semantics of the comparison will
+        ///         depend on the database configuration. In particular, it may be either case-sensitive or
+        ///         case-insensitive. If this function is evaluated on the client, then it will always use
+        ///         a case-insensitive comparison.
+        ///     </para>
         /// </summary>
         /// <param name="_">The DbFunctions instance.</param>
         /// <param name="matchExpression">The string that is to be matched.</param>
@@ -28,27 +35,35 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns>true if there is a match.</returns>
         public static bool Like(
             [CanBeNull] this DbFunctions _,
-            [CanBeNull] string matchExpression, 
+            [CanBeNull] string matchExpression,
             [CanBeNull] string pattern)
             => LikeCore(matchExpression, pattern, escapeCharacter: null);
 
         /// <summary>
-        ///     An implementation of the SQL LIKE operation. On relational databases this is usually directly
-        ///     translated to SQL.
+        ///     <para>
+        ///         An implementation of the SQL LIKE operation. On relational databases this is usually directly
+        ///         translated to SQL.
+        ///     </para>
+        ///     <para>
+        ///         Note that if this function is translated into SQL, then the semantics of the comparison will
+        ///         depend on the database configuration. In particular, it may be either case-sensitive or
+        ///         case-insensitive. If this function is evaluated on the client, then it will always use
+        ///         a case-insensitive comparison.
+        ///     </para>
         /// </summary>
         /// <param name="_">The DbFunctions instance.</param>
         /// <param name="matchExpression">The string that is to be matched.</param>
         /// <param name="pattern">The pattern which may involve wildcards %,_,[,],^.</param>
         /// <param name="escapeCharacter">
-        ///     The escape character to use in front of %,_,[,],^ if they
-        ///     are not used as wildcards.
+        ///     The escape character (as a single character string) to use in front of %,_,[,],^
+        ///     if they are not used as wildcards.
         /// </param>
         /// <returns>true if there is a match.</returns>
         public static bool Like(
             [CanBeNull] this DbFunctions _,
             [CanBeNull] string matchExpression,
             [CanBeNull] string pattern,
-            char escapeCharacter) 
+            [CanBeNull] string escapeCharacter)
             => LikeCore(matchExpression, pattern, escapeCharacter);
 
         // Regex special chars defined here:
@@ -67,8 +82,17 @@ namespace Microsoft.EntityFrameworkCore
             return string.Join("|", regexSpecialChars.Select(c => @"\" + c));
         }
 
-        private static bool LikeCore(string matchExpression, string pattern, char? escapeCharacter)
+        private static bool LikeCore(string matchExpression, string pattern, string escapeCharacter)
         {
+            //TODO: this fixes https://github.com/aspnet/EntityFramework/issues/8656 by insisting that
+            // the "escape character" is a string but just using the first character of that string,
+            // but we may later want to allow the complete string as the "escape character"
+            // in which case we need to change the way we construct the regex below.
+            var singleEscapeCharacter =
+                (escapeCharacter == null || escapeCharacter.Length == 0)
+                    ? (char?)null
+                    : escapeCharacter.First();
+
             if (matchExpression == null
                 || pattern == null)
             {
@@ -87,16 +111,16 @@ namespace Microsoft.EntityFrameworkCore
             }
 
             var escapeRegexCharsPattern
-                = escapeCharacter == null
+                = singleEscapeCharacter == null
                     ? _defaultEscapeRegexCharsPattern
-                    : BuildEscapeRegexCharsPattern(_regexSpecialChars.Where(c => c != escapeCharacter));
+                    : BuildEscapeRegexCharsPattern(_regexSpecialChars.Where(c => c != singleEscapeCharacter));
 
             var regexPattern
                 = Regex.Replace(
                     pattern,
                     escapeRegexCharsPattern,
                     c => @"\" + c,
-                    default(RegexOptions),
+                    default,
                     _regexTimeout);
 
             var stringBuilder = new StringBuilder();
@@ -104,7 +128,7 @@ namespace Microsoft.EntityFrameworkCore
             for (var i = 0; i < regexPattern.Length; i++)
             {
                 var c = regexPattern[i];
-                var escaped = i > 0 && regexPattern[i - 1] == escapeCharacter;
+                var escaped = i > 0 && regexPattern[i - 1] == singleEscapeCharacter;
 
                 switch (c)
                 {
@@ -120,7 +144,7 @@ namespace Microsoft.EntityFrameworkCore
                     }
                     default:
                     {
-                        if (c != escapeCharacter)
+                        if (c != singleEscapeCharacter)
                         {
                             stringBuilder.Append(c);
                         }

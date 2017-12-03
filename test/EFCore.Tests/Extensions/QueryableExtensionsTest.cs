@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -10,12 +11,11 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Northwind;
-using Moq;
+using Microsoft.EntityFrameworkCore.TestModels.Northwind;
 using Xunit;
 
 // ReSharper disable RedundantArgumentDefaultValue
-namespace Microsoft.EntityFrameworkCore.Tests.Extensions
+namespace Microsoft.EntityFrameworkCore.Extensions
 {
     public class QueryableExtensionsTest
     {
@@ -54,9 +54,9 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             var cancellationTokenSource = new CancellationTokenSource();
 
             VerifyProducedExpression<int, bool>(value => value.AllAsync(e => true, cancellationTokenSource.Token));
-            VerifyProducedExpression<int, bool>(value => value.AnyAsync(default(CancellationToken)));
+            VerifyProducedExpression<int, bool>(value => value.AnyAsync(default));
             VerifyProducedExpression<int, bool>(value => value.AnyAsync(cancellationTokenSource.Token));
-            VerifyProducedExpression<int, bool>(value => value.AnyAsync(e => true, default(CancellationToken)));
+            VerifyProducedExpression<int, bool>(value => value.AnyAsync(e => true, default));
             VerifyProducedExpression<int, bool>(value => value.AnyAsync(e => true, cancellationTokenSource.Token));
             VerifyProducedExpression<int, double>(value => value.AverageAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<int, double>(value => value.AverageAsync(e => e, cancellationTokenSource.Token));
@@ -79,7 +79,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             VerifyProducedExpression<decimal?, decimal?>(value => value.AverageAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<decimal?, decimal?>(value => value.AverageAsync(e => e, cancellationTokenSource.Token));
             VerifyProducedExpression<int, bool>(value => value.ContainsAsync(0, cancellationTokenSource.Token));
-            VerifyProducedExpression<int, int>(value => value.CountAsync(default(CancellationToken)));
+            VerifyProducedExpression<int, int>(value => value.CountAsync(default));
             VerifyProducedExpression<int, int>(value => value.CountAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<int, int>(value => value.CountAsync(e => true, cancellationTokenSource.Token));
             VerifyProducedExpression<int, int>(value => value.FirstAsync(cancellationTokenSource.Token));
@@ -92,15 +92,15 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             VerifyProducedExpression<int, int>(value => value.MaxAsync(e => e, cancellationTokenSource.Token));
             VerifyProducedExpression<int, int>(value => value.MinAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<int, int>(value => value.MinAsync(e => e, cancellationTokenSource.Token));
-            VerifyProducedExpression<int, int>(value => value.SingleAsync(default(CancellationToken)));
+            VerifyProducedExpression<int, int>(value => value.SingleAsync(default));
             VerifyProducedExpression<int, int>(value => value.SingleAsync(cancellationTokenSource.Token));
-            VerifyProducedExpression<int, int>(value => value.SingleAsync(e => true, default(CancellationToken)));
+            VerifyProducedExpression<int, int>(value => value.SingleAsync(e => true, default));
             VerifyProducedExpression<int, int>(value => value.SingleAsync(e => true, cancellationTokenSource.Token));
-            VerifyProducedExpression<int, int>(value => value.SingleOrDefaultAsync(default(CancellationToken)));
+            VerifyProducedExpression<int, int>(value => value.SingleOrDefaultAsync(default));
             VerifyProducedExpression<int, int>(value => value.SingleOrDefaultAsync(cancellationTokenSource.Token));
-            VerifyProducedExpression<int, int>(value => value.SingleOrDefaultAsync(e => true, default(CancellationToken)));
+            VerifyProducedExpression<int, int>(value => value.SingleOrDefaultAsync(e => true, default));
             VerifyProducedExpression<int, int>(value => value.SingleOrDefaultAsync(e => true, cancellationTokenSource.Token));
-            VerifyProducedExpression<int, int>(value => value.SumAsync(default(CancellationToken)));
+            VerifyProducedExpression<int, int>(value => value.SumAsync(default));
             VerifyProducedExpression<int, int>(value => value.SumAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<int, int>(value => value.SumAsync(e => e, cancellationTokenSource.Token));
             VerifyProducedExpression<int?, int?>(value => value.SumAsync(cancellationTokenSource.Token));
@@ -117,7 +117,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             VerifyProducedExpression<double, double>(value => value.SumAsync(e => e, cancellationTokenSource.Token));
             VerifyProducedExpression<double?, double?>(value => value.SumAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<double?, double?>(value => value.SumAsync(e => e, cancellationTokenSource.Token));
-            VerifyProducedExpression<decimal, decimal>(value => value.SumAsync(default(CancellationToken)));
+            VerifyProducedExpression<decimal, decimal>(value => value.SumAsync(default));
             VerifyProducedExpression<decimal, decimal>(value => value.SumAsync(cancellationTokenSource.Token));
             VerifyProducedExpression<decimal, decimal>(value => value.SumAsync(e => e, cancellationTokenSource.Token));
             VerifyProducedExpression<decimal?, decimal?>(value => value.SumAsync(cancellationTokenSource.Token));
@@ -127,56 +127,76 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
         private static void VerifyProducedExpression<TElement, TResult>(
             Expression<Func<IQueryable<TElement>, Task<TResult>>> testExpression)
         {
-            var queryableMock = new Mock<IQueryable<TElement>>();
-            var providerMock = new Mock<IAsyncQueryProvider>();
+            var provider = new FakeAsyncQueryProvider((MethodCallExpression)testExpression.Body);
+            var queryable = new FakeQueryable<TElement>(provider);
+            queryable.Expression = Expression.Constant(queryable, typeof(IQueryable<TElement>));
 
-            providerMock
-                .Setup(m => m.ExecuteAsync<TResult>(It.IsAny<Expression>(), It.IsAny<CancellationToken>()))
-                .Returns<Expression, CancellationToken>(
-                    (e, ct) =>
-                        {
-                            var expectedMethodCall = (MethodCallExpression)testExpression.Body;
-                            var actualMethodCall = (MethodCallExpression)e;
+            testExpression.Compile()(queryable);
+        }
 
-                            Assert.Equal(
-                                expectedMethodCall.Method.Name,
-                                actualMethodCall.Method.Name + "Async");
+        private class FakeAsyncQueryProvider : IAsyncQueryProvider
+        {
+            private readonly MethodCallExpression _expectedMethodCall;
 
-                            var lastArgument =
-                                expectedMethodCall.Arguments[expectedMethodCall.Arguments.Count - 1] as MemberExpression;
+            public FakeAsyncQueryProvider(MethodCallExpression expectedMethodCall)
+            {
+                _expectedMethodCall = expectedMethodCall;
+            }
 
-                            var cancellationTokenPresent
-                                = (lastArgument != null) && (lastArgument.Type == typeof(CancellationToken));
+            public Task<TResult> ExecuteAsync<TResult>(Expression expression, CancellationToken cancellationToken)
+            {
+                var actualMethodCall = (MethodCallExpression)expression;
 
-                            if (cancellationTokenPresent)
-                            {
-                                Assert.NotEqual(ct, CancellationToken.None);
-                            }
-                            else
-                            {
-                                Assert.Equal(ct, CancellationToken.None);
-                            }
+                Assert.Equal(
+                    _expectedMethodCall.Method.Name,
+                    actualMethodCall.Method.Name + "Async");
 
-                            for (var i = 1; i < expectedMethodCall.Arguments.Count - 1; i++)
-                            {
-                                var expectedArgument = expectedMethodCall.Arguments[i];
-                                var actualArgument = actualMethodCall.Arguments[i];
+                var cancellationTokenPresent
+                    = (_expectedMethodCall.Arguments[_expectedMethodCall.Arguments.Count - 1] is MemberExpression lastArgument)
+                    && (lastArgument.Type == typeof(CancellationToken));
 
-                                Assert.Equal(expectedArgument.ToString(), actualArgument.ToString());
-                            }
+                if (cancellationTokenPresent)
+                {
+                    Assert.NotEqual(cancellationToken, CancellationToken.None);
+                }
+                else
+                {
+                    Assert.Equal(cancellationToken, CancellationToken.None);
+                }
 
-                            return Task.FromResult(default(TResult));
-                        });
+                for (var i = 1; i < _expectedMethodCall.Arguments.Count - 1; i++)
+                {
+                    var expectedArgument = _expectedMethodCall.Arguments[i];
+                    var actualArgument = actualMethodCall.Arguments[i];
 
-            queryableMock
-                .Setup(m => m.Provider)
-                .Returns(providerMock.Object);
+                    Assert.Equal(expectedArgument.ToString(), actualArgument.ToString());
+                }
 
-            queryableMock
-                .Setup(m => m.Expression)
-                .Returns(Expression.Constant(queryableMock.Object, typeof(IQueryable<TElement>)));
+                return Task.FromResult(default(TResult));
+            }
 
-            testExpression.Compile()(queryableMock.Object);
+            public IQueryable CreateQuery(Expression expression) => throw new NotImplementedException();
+            public IQueryable<TElement> CreateQuery<TElement>(Expression expression) => throw new NotImplementedException();
+            public object Execute(Expression expression) => throw new NotImplementedException();
+            public TResult Execute<TResult>(Expression expression) => throw new NotImplementedException();
+            public IAsyncEnumerable<TResult> ExecuteAsync<TResult>(Expression expression) => throw new NotImplementedException();
+        }
+
+        private class FakeQueryable<TElement> : IQueryable<TElement>
+        {
+            public FakeQueryable(IQueryProvider provider = null)
+            {
+                Provider = provider;
+            }
+
+            public Type ElementType => typeof(TElement);
+
+            public Expression Expression { get; set; }
+
+            public IQueryProvider Provider { get; }
+
+            public IEnumerator<TElement> GetEnumerator() => throw new NotImplementedException();
+            IEnumerator IEnumerable.GetEnumerator() => throw new NotImplementedException();
         }
 
         [Fact]
@@ -280,10 +300,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             await SourceNonAsyncQueryableTest(() => Source<decimal?>().SumAsync(e => e));
             await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e));
             await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, e => e));
-            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, new Mock<IEqualityComparer<int>>().Object));
-            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, new Mock<IEqualityComparer<int>>().Object, new CancellationToken()));
-            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, e => e, new Mock<IEqualityComparer<int>>().Object));
-            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, e => e, new Mock<IEqualityComparer<int>>().Object, new CancellationToken()));
+            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, ReferenceEqualityComparer.Instance));
+            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, ReferenceEqualityComparer.Instance));
+            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, e => e, ReferenceEqualityComparer.Instance));
+            await SourceNonAsyncEnumerableTest<int>(() => Source().ToDictionaryAsync(e => e, e => e, ReferenceEqualityComparer.Instance, new CancellationToken()));
             await SourceNonAsyncEnumerableTest<int>(() => Source().ToListAsync());
 
             Assert.Equal(
@@ -291,7 +311,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
                 Assert.Throws<InvalidOperationException>(() => Source().AsAsyncEnumerable()).Message);
         }
 
-        private static IQueryable<T> Source<T>() => new Mock<IQueryable<T>>().Object;
+        private static IQueryable<T> Source<T>() => new FakeQueryable<T>();
 
         private static IQueryable<int> Source() => Source<int>();
 
@@ -382,16 +402,16 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             await ArgumentNullTest("source", () => ((IQueryable<decimal>)null).SumAsync(i => 0, new CancellationToken()));
             await ArgumentNullTest("source", () => ((IQueryable<decimal?>)null).SumAsync(i => 0));
             await ArgumentNullTest("source", () => ((IQueryable<decimal?>)null).SumAsync(i => 0, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<int>().SumAsync((Expression<Func<int, int>>)null));
-            await ArgumentNullTest("selector", () => Source<int?>().SumAsync((Expression<Func<int?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<long>().SumAsync((Expression<Func<long, int>>)null));
-            await ArgumentNullTest("selector", () => Source<long?>().SumAsync((Expression<Func<long?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<float>().SumAsync((Expression<Func<float, int>>)null));
-            await ArgumentNullTest("selector", () => Source<float?>().SumAsync((Expression<Func<float?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<double>().SumAsync((Expression<Func<double, int>>)null));
-            await ArgumentNullTest("selector", () => Source<double?>().SumAsync((Expression<Func<double?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<decimal>().SumAsync((Expression<Func<decimal, int>>)null));
-            await ArgumentNullTest("selector", () => Source<decimal?>().SumAsync((Expression<Func<decimal?, int>>)null));
+            await ArgumentNullTest("selector", () => Source<int>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<int?>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<long>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<long?>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<float>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<float?>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<double>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<double?>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<decimal>().SumAsync(null));
+            await ArgumentNullTest("selector", () => Source<decimal?>().SumAsync(null));
             await ArgumentNullTest("source", () => ((IQueryable<int>)null).AverageAsync());
             await ArgumentNullTest("source", () => ((IQueryable<int>)null).AverageAsync(new CancellationToken()));
             await ArgumentNullTest("source", () => ((IQueryable<int?>)null).AverageAsync());
@@ -432,26 +452,26 @@ namespace Microsoft.EntityFrameworkCore.Tests.Extensions
             await ArgumentNullTest("source", () => ((IQueryable<decimal>)null).AverageAsync(i => 0, new CancellationToken()));
             await ArgumentNullTest("source", () => ((IQueryable<decimal?>)null).AverageAsync(i => 0));
             await ArgumentNullTest("source", () => ((IQueryable<decimal?>)null).AverageAsync(i => 0, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<int>().AverageAsync((Expression<Func<int, int>>)null));
-            await ArgumentNullTest("selector", () => Source<int>().AverageAsync((Expression<Func<int, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<int?>().AverageAsync((Expression<Func<int?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<int?>().AverageAsync((Expression<Func<int?, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<long>().AverageAsync((Expression<Func<long, int>>)null));
-            await ArgumentNullTest("selector", () => Source<long>().AverageAsync((Expression<Func<long, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<long?>().AverageAsync((Expression<Func<long?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<long?>().AverageAsync((Expression<Func<long?, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<float>().AverageAsync((Expression<Func<float, int>>)null));
-            await ArgumentNullTest("selector", () => Source<float>().AverageAsync((Expression<Func<float, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<float?>().AverageAsync((Expression<Func<float?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<float?>().AverageAsync((Expression<Func<float?, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<double>().AverageAsync((Expression<Func<double, int>>)null));
-            await ArgumentNullTest("selector", () => Source<double>().AverageAsync((Expression<Func<double, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<double?>().AverageAsync((Expression<Func<double?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<double?>().AverageAsync((Expression<Func<double?, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<decimal>().AverageAsync((Expression<Func<decimal, int>>)null));
-            await ArgumentNullTest("selector", () => Source<decimal>().AverageAsync((Expression<Func<decimal, int>>)null, new CancellationToken()));
-            await ArgumentNullTest("selector", () => Source<decimal?>().AverageAsync((Expression<Func<decimal?, int>>)null));
-            await ArgumentNullTest("selector", () => Source<decimal?>().AverageAsync((Expression<Func<decimal?, int>>)null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<int>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<int>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<int?>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<int?>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<long>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<long>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<long?>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<long?>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<float>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<float>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<float?>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<float?>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<double>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<double>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<double?>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<double?>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<decimal>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<decimal>().AverageAsync(null, new CancellationToken()));
+            await ArgumentNullTest("selector", () => Source<decimal?>().AverageAsync(null));
+            await ArgumentNullTest("selector", () => Source<decimal?>().AverageAsync(null, new CancellationToken()));
 
             // ReSharper restore AssignNullToNotNullAttribute
         }

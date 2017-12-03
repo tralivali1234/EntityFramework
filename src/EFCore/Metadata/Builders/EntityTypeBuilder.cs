@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
@@ -94,11 +95,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             => new KeyBuilder(Builder.PrimaryKey(Check.NotEmpty(propertyNames, nameof(propertyNames)), ConfigurationSource.Explicit));
 
         /// <summary>
-        ///     Creates a new unique constraint for this entity type if one does not already exist over the specified
-        ///     properties.
+        ///     Creates an alternate key in the model for this entity type if one does not already exist over the specified
+        ///     properties. This will force the properties to be read-only. Use <see cref="HasIndex" /> to specify uniqueness
+        ///     in the model that does not force properties to be read-only.
         /// </summary>
-        /// <param name="propertyNames"> The names of the properties that make up the unique constraint. </param>
-        /// <returns> An object that can be used to configure the unique constraint. </returns>
+        /// <param name="propertyNames"> The names of the properties that make up the key. </param>
+        /// <returns> An object that can be used to configure the key. </returns>
         public virtual KeyBuilder HasAlternateKey([NotNull] params string[] propertyNames)
             => new KeyBuilder(Builder.HasKey(Check.NotEmpty(propertyNames, nameof(propertyNames)), ConfigurationSource.Explicit));
 
@@ -119,10 +121,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyName"> The name of the property to be configured. </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder<TProperty> Property<TProperty>([NotNull] string propertyName)
-            => new PropertyBuilder<TProperty>(Builder.Property(
-                Check.NotEmpty(propertyName, nameof(propertyName)),
-                typeof(TProperty),
-                ConfigurationSource.Explicit));
+            => new PropertyBuilder<TProperty>(
+                Builder.Property(
+                    Check.NotEmpty(propertyName, nameof(propertyName)),
+                    typeof(TProperty),
+                    ConfigurationSource.Explicit));
 
         /// <summary>
         ///     <para>
@@ -141,10 +144,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyName"> The name of the property to be configured. </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder Property([NotNull] Type propertyType, [NotNull] string propertyName)
-            => new PropertyBuilder(Builder.Property(
-                Check.NotEmpty(propertyName, nameof(propertyName)),
-                Check.NotNull(propertyType, nameof(propertyType)),
-                ConfigurationSource.Explicit));
+            => new PropertyBuilder(
+                Builder.Property(
+                    Check.NotEmpty(propertyName, nameof(propertyName)),
+                    Check.NotNull(propertyType, nameof(propertyType)),
+                    ConfigurationSource.Explicit));
 
         /// <summary>
         ///     <para>
@@ -160,9 +164,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="propertyName"> The name of the property to be configured. </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder Property([NotNull] string propertyName)
-            => new PropertyBuilder(Builder.Property(
-                Check.NotEmpty(propertyName, nameof(propertyName)),
-                ConfigurationSource.Explicit));
+            => new PropertyBuilder(
+                Builder.Property(
+                    Check.NotEmpty(propertyName, nameof(propertyName)),
+                    ConfigurationSource.Explicit));
 
         /// <summary>
         ///     Excludes the given property from the entity type. This method is typically used to remove properties
@@ -183,7 +188,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     this entity type.
         /// </summary>
         /// <param name="filter">The LINQ predicate expression.</param>
-        /// <returns></returns>
+        /// <returns> An object that can be used to configure the entity type. </returns>
         public virtual EntityTypeBuilder HasQueryFilter([CanBeNull] LambdaExpression filter)
         {
             Builder.HasQueryFilter(filter);
@@ -359,7 +364,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 Builder.Metadata,
                 relatedEntityType,
                 navigationName,
-                Builder.Navigation(relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
+                Builder.Navigation(
+                    relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
                     setTargetAsPrincipal: Builder.Metadata == relatedEntityType));
         }
 
@@ -397,7 +403,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 Builder.Metadata,
                 relatedEntityType,
                 navigationName,
-                Builder.Navigation(relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
+                Builder.Navigation(
+                    relatedEntityType.Builder, navigationName, ConfigurationSource.Explicit,
                     setTargetAsPrincipal: Builder.Metadata == relatedEntityType));
         }
 
@@ -513,11 +520,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties of this entity type as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for all properties of this entity type any access mode that was
+        ///         Calling this method overrides for all properties of this entity type any access mode that was
         ///         set on the model.
         ///     </para>
         /// </summary>
@@ -529,5 +536,46 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
 
             return this;
         }
+
+        /// <summary>
+        ///     Configures this entity to have seed data. It is used to generate data motion migrations.
+        /// </summary>
+        /// <param name="data">
+        ///     An array of seed data of the same type as the entity we're building.
+        /// </param>
+        public virtual EntityTypeBuilder SeedData([NotNull] params object[] data)
+        {
+            Check.NotNull(data, nameof(data));
+
+            Metadata.AddSeedData(data);
+
+            return this;
+        }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

@@ -1,15 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
-    public abstract class FindInMemoryTest
-        : FindTestBase<InMemoryTestStore, FindInMemoryTest.FindInMemoryFixture>
+    public abstract class FindInMemoryTest : FindTestBase<FindInMemoryTest.FindInMemoryFixture>
     {
         protected FindInMemoryTest(FindInMemoryFixture fixture)
             : base(fixture)
@@ -60,36 +57,7 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
 
         public class FindInMemoryFixture : FindFixtureBase
         {
-            private readonly DbContextOptions _options;
-            private readonly IServiceProvider _serviceProvider;
-
-            public FindInMemoryFixture()
-            {
-                _serviceProvider = new ServiceCollection()
-                    .AddEntityFrameworkInMemoryDatabase()
-                    .AddSingleton(TestModelSource.GetFactory(OnModelCreating))
-                    .BuildServiceProvider();
-
-                _options = new DbContextOptionsBuilder()
-                    .UseInMemoryDatabase(nameof(FindInMemoryFixture))
-                    .UseInternalServiceProvider(_serviceProvider)
-                    .Options;
-            }
-
-            public override InMemoryTestStore CreateTestStore()
-                => InMemoryTestStore.CreateScratch(
-                    _serviceProvider,
-                    nameof(FindInMemoryFixture),
-                    () =>
-                        {
-                            using (var context = new FindContext(_options))
-                            {
-                                Seed(context);
-                            }
-                        });
-
-            public override DbContext CreateContext(InMemoryTestStore testStore)
-                => new FindContext(_options);
+            protected override ITestStoreFactory TestStoreFactory => InMemoryTestStoreFactory.Instance;
         }
     }
 }

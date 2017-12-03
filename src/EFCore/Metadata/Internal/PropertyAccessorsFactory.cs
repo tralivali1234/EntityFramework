@@ -47,7 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             var entityClrType = propertyBase.DeclaringType.ClrType;
             var entryParameter = Expression.Parameter(typeof(InternalEntityEntry), "entry");
 
-            var shadowIndex = (propertyBase as IProperty)?.GetShadowIndex() ?? -1;
+            var shadowIndex = propertyBase.GetShadowIndex();
             Expression currentValueExpression;
             if (shadowIndex >= 0)
             {
@@ -97,10 +97,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                             Expression.Constant(property),
                             Expression.Constant(originalValuesIndex))
                         : Expression.Block(
-                            Expression.Throw(Expression.Constant(
-                                new InvalidOperationException(
-                                    CoreStrings.OriginalValueNotTracked(property.Name, property.DeclaringEntityType.DisplayName())))),
+                            Expression.Throw(
+                                Expression.Constant(
+                                    new InvalidOperationException(
+                                        CoreStrings.OriginalValueNotTracked(property.Name, property.DeclaringEntityType.DisplayName())))),
+#pragma warning disable IDE0034 // Simplify 'default' expression - default infer to default(object) instead of default(TProperty)
                             Expression.Constant(default(TProperty), typeof(TProperty))),
+#pragma warning restore IDE0034 // Simplify 'default' expression
                     entryParameter)
                 .Compile();
         }

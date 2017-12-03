@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -44,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             var internalServiceProvider = options.FindExtension<CoreOptionsExtension>()?.InternalServiceProvider;
             if (internalServiceProvider != null)
             {
-                var optionsInitialzer = internalServiceProvider.GetService<ISingletonOptionsInitialzer>();
+                var optionsInitialzer = internalServiceProvider.GetService<ISingletonOptionsInitializer>();
                 if (optionsInitialzer == null)
                 {
                     throw new InvalidOperationException(CoreStrings.NoEfServices);
@@ -75,8 +76,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                             var updatedServices = new ServiceCollection();
                             foreach (var descriptor in services)
                             {
-                                Type replacementType;
-                                if (replacedServices.TryGetValue(descriptor.ServiceType, out replacementType))
+                                if (replacedServices.TryGetValue(descriptor.ServiceType, out var replacementType))
                                 {
                                     ((IList<ServiceDescriptor>)updatedServices).Add(
                                         new ServiceDescriptor(descriptor.ServiceType, replacementType, descriptor.Lifetime));
@@ -92,11 +92,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
                         if (hasProvider)
                         {
                             serviceProvider
-                                .GetRequiredService<ISingletonOptionsInitialzer>()
+                                .GetRequiredService<ISingletonOptionsInitializer>()
                                 .EnsureInitialized(serviceProvider, options);
                         }
 
-                        var logger = serviceProvider.GetRequiredService<IDiagnosticsLogger<LoggerCategory.Infrastructure>>();
+                        var logger = serviceProvider.GetRequiredService<IDiagnosticsLogger<DbLoggerCategory.Infrastructure>>();
 
                         logger.ServiceProviderCreated(serviceProvider);
 

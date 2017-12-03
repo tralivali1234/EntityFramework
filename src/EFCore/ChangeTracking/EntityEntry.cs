@@ -1,8 +1,9 @@
-﻿﻿// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -26,7 +27,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
     ///         not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
-    [DebuggerDisplay("{InternalEntry,nq}")]
+    [DebuggerDisplay("{" + nameof(InternalEntry) + ",nq}")]
     public class EntityEntry : IInfrastructure<InternalEntityEntry>
     {
         private static readonly int _maxEntityState = Enum.GetValues(typeof(EntityState)).Cast<int>().Max();
@@ -35,7 +36,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual InternalEntityEntry InternalEntry { get; }
+        protected virtual InternalEntityEntry InternalEntry { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -66,7 +67,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         public virtual EntityState State
         {
-            get { return InternalEntry.EntityState; }
+            get => InternalEntry.EntityState;
             set
             {
                 if (value < 0
@@ -151,7 +152,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             if (InternalEntry.EntityType.FindProperty(propertyName) != null)
             {
                 throw new InvalidOperationException(
-                    CoreStrings.NavigationIsProperty(propertyName, InternalEntry.EntityType.DisplayName(),
+                    CoreStrings.NavigationIsProperty(
+                        propertyName, InternalEntry.EntityType.DisplayName(),
                         nameof(Reference), nameof(Collection), nameof(Property)));
             }
 
@@ -164,9 +166,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     navigation properties of this entity.
         /// </summary>
         public virtual IEnumerable<NavigationEntry> Navigations
-            => InternalEntry.EntityType.GetNavigations().Select(navigation => navigation.IsCollection()
-                ? (NavigationEntry)new CollectionEntry(InternalEntry, navigation)
-                : new ReferenceEntry(InternalEntry, navigation));
+            => InternalEntry.EntityType.GetNavigations().Select(
+                navigation => navigation.IsCollection()
+                    ? (NavigationEntry)new CollectionEntry(InternalEntry, navigation)
+                    : new ReferenceEntry(InternalEntry, navigation));
 
         /// <summary>
         ///     Provides access to change tracking information and operations for a given
@@ -237,9 +240,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 .Select(navigation => new CollectionEntry(InternalEntry, navigation));
 
         /// <summary>
-        ///     Gets a value indicating if the key values of this entity have been assigned a value.
-        ///     False if one or more of the key properties is assigned null or the CLR default,
-        ///     otherwise true.
+        ///     <para>
+        ///         Gets a value indicating if the key values of this entity have been assigned a value.
+        ///     </para>
+        ///     <para>
+        ///         For keys with store-generated properties (e.g. mapping to Identity columns), the
+        ///         return value will  be false if any of the store-generated properties have the
+        ///         CLR default value.
+        ///     </para>
+        ///     <para>
+        ///         For keys without any store-generated properties, the return value will always be
+        ///         true since any value is considered a valid key value.
+        ///     </para>
         /// </summary>
         public virtual bool IsKeySet => InternalEntry.IsKeySet;
 
@@ -247,14 +259,20 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     Gets the current property values for this entity.
         /// </summary>
         /// <value> The current values. </value>
-        public virtual PropertyValues CurrentValues => new CurrentPropertyValues(InternalEntry);
+        public virtual PropertyValues CurrentValues
+        {
+            [DebuggerStepThrough] get => new CurrentPropertyValues(InternalEntry);
+        }
 
         /// <summary>
         ///     Gets the original property values for this entity. The original values are the property
         ///     values as they were when the entity was retrieved from the database.
         /// </summary>
         /// <value> The original values. </value>
-        public virtual PropertyValues OriginalValues => new OriginalPropertyValues(InternalEntry);
+        public virtual PropertyValues OriginalValues
+        {
+            [DebuggerStepThrough] get => new OriginalPropertyValues(InternalEntry);
+        }
 
         /// <summary>
         ///     <para>
@@ -295,7 +313,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     A task that represents the asynchronous operation. The task result contains the store values,
         ///     or null if the entity does not exist in the database.
         /// </returns>
-        public virtual async Task<PropertyValues> GetDatabaseValuesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task<PropertyValues> GetDatabaseValuesAsync(CancellationToken cancellationToken = default)
         {
             var values = await Finder.GetDatabaseValuesAsync(InternalEntry, cancellationToken);
 
@@ -334,7 +352,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <returns>
         ///     A task that represents the asynchronous operation.
         /// </returns>
-        public virtual async Task ReloadAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual async Task ReloadAsync(CancellationToken cancellationToken = default)
             => Reload(await GetDatabaseValuesAsync(cancellationToken));
 
         private void Reload(PropertyValues storeValues)
@@ -355,7 +373,32 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         }
 
         private IEntityFinder Finder
-            => InternalEntry.StateManager.Context.GetInfrastructure<DbContextDependencies>().EntityFinderSource
-                .Create(InternalEntry.StateManager.Context, InternalEntry.EntityType);
+            => InternalEntry.StateManager.CreateEntityFinder(InternalEntry.EntityType);
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

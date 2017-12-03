@@ -7,18 +7,18 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerSequenceValueGeneratorTest
     {
@@ -66,7 +66,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         {
             const int blockSize = 4;
 
-            var sequence = Sequence.GetOrAddSequence(new Model(), RelationalFullAnnotationNames.Instance.SequencePrefix, "Foo");
+            var sequence = new Model().SqlServer().GetOrAddSequence("Foo");
             sequence.IncrementBy = blockSize;
             var state = new SqlServerSequenceValueGeneratorState(sequence);
 
@@ -75,9 +75,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 new SqlServerUpdateSqlGenerator(
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
-                            new RelationalSqlGenerationHelperDependencies())), 
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
+                            new RelationalSqlGenerationHelperDependencies()),
+                        new SqlServerTypeMapper(
+                            new CoreTypeMapperDependencies(),
+                            new RelationalTypeMapperDependencies()))),
                 state,
                 CreateConnection());
 
@@ -119,7 +120,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
 
             var serviceProvider = SqlServerTestHelpers.Instance.CreateServiceProvider();
 
-            var sequence = Sequence.GetOrAddSequence(new Model(), RelationalFullAnnotationNames.Instance.SequencePrefix, "Foo");
+            var sequence = new Model().SqlServer().GetOrAddSequence("Foo");
             sequence.IncrementBy = blockSize;
             var state = new SqlServerSequenceValueGeneratorState(sequence);
 
@@ -127,8 +128,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
             var sqlGenerator = new SqlServerUpdateSqlGenerator(
                 new UpdateSqlGeneratorDependencies(
                     new SqlServerSqlGenerationHelper(
-                        new RelationalSqlGenerationHelperDependencies())),
-                new SqlServerTypeMapper(new RelationalTypeMapperDependencies()));
+                        new RelationalSqlGenerationHelperDependencies()),
+                    new SqlServerTypeMapper(
+                        new CoreTypeMapperDependencies(),
+                        new RelationalTypeMapperDependencies())));
 
             var tests = new Func<Task>[threadCount];
             var generatedValues = new List<long>[threadCount];
@@ -165,7 +168,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
         [Fact]
         public void Does_not_generate_temp_values()
         {
-            var sequence = Sequence.GetOrAddSequence(new Model(), RelationalFullAnnotationNames.Instance.SequencePrefix, "Foo");
+            var sequence = new Model().SqlServer().GetOrAddSequence("Foo");
             sequence.IncrementBy = 4;
             var state = new SqlServerSequenceValueGeneratorState(sequence);
 
@@ -174,8 +177,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 new SqlServerUpdateSqlGenerator(
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
-                            new RelationalSqlGenerationHelperDependencies())),
-                    new SqlServerTypeMapper(new RelationalTypeMapperDependencies())),
+                            new RelationalSqlGenerationHelperDependencies()),
+                        new SqlServerTypeMapper(
+                            new CoreTypeMapperDependencies(),
+                            new RelationalTypeMapperDependencies()))),
                 state,
                 CreateConnection());
 
@@ -236,17 +241,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                     throw new NotImplementedException();
                 }
 
-                int IRelationalCommand.ExecuteNonQuery(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-                {
-                    throw new NotImplementedException();
-                }
-
-                public Task<int> ExecuteNonQueryAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default(CancellationToken))
-                {
-                    throw new NotImplementedException();
-                }
-
-                Task<int> IRelationalCommand.ExecuteNonQueryAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
+                public Task<int> ExecuteNonQueryAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default)
                 {
                     throw new NotImplementedException();
                 }
@@ -254,35 +249,15 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 public object ExecuteScalar(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues)
                     => Interlocked.Add(ref _commandBuilder._current, _commandBuilder._blockSize);
 
-                object IRelationalCommand.ExecuteScalar(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-                {
-                    throw new NotImplementedException();
-                }
-
-                public Task<object> ExecuteScalarAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default(CancellationToken))
+                public Task<object> ExecuteScalarAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default)
                     => Task.FromResult<object>(Interlocked.Add(ref _commandBuilder._current, _commandBuilder._blockSize));
-
-                Task<object> IRelationalCommand.ExecuteScalarAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
-                {
-                    throw new NotImplementedException();
-                }
 
                 public RelationalDataReader ExecuteReader(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues)
                 {
                     throw new NotImplementedException();
                 }
 
-                RelationalDataReader IRelationalCommand.ExecuteReader(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection)
-                {
-                    throw new NotImplementedException();
-                }
-
-                public Task<RelationalDataReader> ExecuteReaderAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default(CancellationToken))
-                {
-                    throw new NotImplementedException();
-                }
-
-                Task<RelationalDataReader> IRelationalCommand.ExecuteReaderAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, bool manageConnection, CancellationToken cancellationToken)
+                public Task<RelationalDataReader> ExecuteReaderAsync(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues, CancellationToken cancellationToken = default)
                 {
                     throw new NotImplementedException();
                 }

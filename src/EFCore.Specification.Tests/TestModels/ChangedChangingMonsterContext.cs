@@ -8,7 +8,10 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
+// ReSharper disable ArrangeAccessorOwnerBody
+// ReSharper disable MemberHidesStaticFromOuterClass
+// ReSharper disable ConvertToAutoProperty
+namespace Microsoft.EntityFrameworkCore.TestModels
 {
     public class ChangedChangingMonsterContext : MonsterContext<
         ChangedChangingMonsterContext.Customer, ChangedChangingMonsterContext.Barcode, ChangedChangingMonsterContext.IncorrectScan,
@@ -26,8 +29,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
         ChangedChangingMonsterContext.BackOrderLine, ChangedChangingMonsterContext.DiscontinuedProduct,
         ChangedChangingMonsterContext.ProductPageView>
     {
-        public ChangedChangingMonsterContext(DbContextOptions options, Action<ModelBuilder> onModelCreating)
-            : base(options, onModelCreating)
+        public ChangedChangingMonsterContext(DbContextOptions options)
+            : base(options)
         {
         }
 
@@ -62,6 +65,11 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
             private ISupplier _supplier;
             private int _supplierId;
             private DateTime _eta;
+
+            public BackOrderLine()
+            {
+                ETA = DateTime.Now;
+            }
 
             public DateTime ETA
             {
@@ -1437,6 +1445,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels
             public AuditInfo()
             {
                 Concurrency = new ConcurrencyInfo();
+                ModifiedDate = DateTime.Now;
             }
 
             public DateTime ModifiedDate

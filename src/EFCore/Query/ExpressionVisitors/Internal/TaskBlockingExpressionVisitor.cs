@@ -25,10 +25,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var typeInfo = expression.Type.GetTypeInfo();
 
                 if (typeInfo.IsGenericType
-                    && (typeInfo.GetGenericTypeDefinition() == typeof(Task<>)))
+                    && typeInfo.GetGenericTypeDefinition() == typeof(Task<>))
                 {
                     return Expression.Call(
-                        _resultMethodInfo.MakeGenericMethod(typeInfo.GenericTypeArguments[0]),
+                        ResultMethodInfo.MakeGenericMethod(typeInfo.GenericTypeArguments[0]),
                         expression);
                 }
             }
@@ -36,7 +36,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return expression;
         }
 
-        private static readonly MethodInfo _resultMethodInfo
+        internal static MethodInfo ResultMethodInfo { get; }
             = typeof(TaskBlockingExpressionVisitor).GetTypeInfo()
                 .GetDeclaredMethod(nameof(Result));
 

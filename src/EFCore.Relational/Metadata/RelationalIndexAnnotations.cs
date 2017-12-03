@@ -1,124 +1,85 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata
 {
+    /// <summary>
+    ///     Properties for relational-specific annotations accessed through
+    ///     <see cref="RelationalMetadataExtensions.Relational(IMutableIndex)" />.
+    /// </summary>
     public class RelationalIndexAnnotations : IRelationalIndexAnnotations
     {
-        protected const string DefaultIndexNamePrefix = "IX";
-
-        public RelationalIndexAnnotations([NotNull] IIndex index,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-            : this(new RelationalAnnotations(index), providerFullAnnotationNames)
+        /// <summary>
+        ///     Constructs an instance for annotations of the given <see cref="IIndex" />.
+        /// </summary>
+        /// <param name="index"> The <see cref="IIndex" /> to use. </param>
+        public RelationalIndexAnnotations([NotNull] IIndex index)
+            : this(new RelationalAnnotations(index))
         {
         }
 
-        protected RelationalIndexAnnotations([NotNull] RelationalAnnotations annotations,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-        {
-            Annotations = annotations;
-            ProviderFullAnnotationNames = providerFullAnnotationNames;
-        }
+        /// <summary>
+        ///     Constructs an instance for annotations of the <see cref="IIndex" />
+        ///     represented by the given annotation helper.
+        /// </summary>
+        /// <param name="annotations">
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IIndex" /> to annotate.
+        /// </param>
+        protected RelationalIndexAnnotations([NotNull] RelationalAnnotations annotations)
+            => Annotations = annotations;
 
-        public virtual RelationalFullAnnotationNames ProviderFullAnnotationNames { get; }
-
+        /// <summary>
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IIndex" /> to annotate.
+        /// </summary>
         protected virtual RelationalAnnotations Annotations { get; }
+
+        /// <summary>
+        ///     The <see cref="IIndex" /> to annotate.
+        /// </summary>
         protected virtual IIndex Index => (IIndex)Annotations.Metadata;
 
-        protected virtual IRelationalEntityTypeAnnotations GetAnnotations([NotNull] IEntityType entityType)
-            => new RelationalEntityTypeAnnotations(entityType, ProviderFullAnnotationNames);
-
-        protected virtual RelationalIndexAnnotations GetAnnotations([NotNull] IIndex index)
-            => new RelationalIndexAnnotations(index, ProviderFullAnnotationNames);
-
-        protected virtual IRelationalPropertyAnnotations GetAnnotations([NotNull] IProperty property)
-            => new RelationalPropertyAnnotations(property, ProviderFullAnnotationNames);
-
+        /// <summary>
+        ///     The index name.
+        /// </summary>
         public virtual string Name
         {
-            get
-            {
-                return (string)Annotations.GetAnnotation(RelationalFullAnnotationNames.Instance.Name, ProviderFullAnnotationNames?.Name)
-                       ?? GetDefaultName();
-            }
-            [param: CanBeNull] set { SetName(value); }
+            get => (string)Annotations.Metadata[RelationalAnnotationNames.Name]
+                   ?? ConstraintNamer.GetDefaultName(Index);
+
+            [param: CanBeNull] set => SetName(value);
         }
 
+        /// <summary>
+        ///     The index filter expression.
+        /// </summary>
         public virtual string Filter
         {
-            get
-            {
-                return (string)Annotations.GetAnnotation(RelationalFullAnnotationNames.Instance.Filter, ProviderFullAnnotationNames?.Filter);
-            }
-            [param: CanBeNull] set { SetFilter(value); }
+            get => (string)Annotations.Metadata[RelationalAnnotationNames.Filter];
+            [param: CanBeNull] set => SetFilter(value);
         }
 
+        /// <summary>
+        ///     Attempts to set the <see cref="Filter" /> using the semantics of the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetFilter([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.Filter,
-                ProviderFullAnnotationNames?.Filter,
+                RelationalAnnotationNames.Filter,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     Attempts to set the <see cref="Name" /> using the semantics of the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetName([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.Name,
-                ProviderFullAnnotationNames?.Name,
+                RelationalAnnotationNames.Name,
                 Check.NullButNotEmpty(value, nameof(value)));
-
-        protected virtual string GetDefaultName()
-        {
-            var otherIndexNames = new HashSet<string>(
-                Index.DeclaringEntityType.RootType().GetDerivedTypesInclusive()
-                    .SelectMany(et => et.GetDeclaredIndexes())
-                    .Where(i => i != Index)
-                    .Select(GetAnnotations)
-                    .Where(a => !ConfigurationSource.Convention.Overrides(a.GetNameConfigurationSource()))
-                    .Select(a => a.Name),
-                StringComparer.OrdinalIgnoreCase);
-
-            var baseName = GetDefaultIndexName(
-                GetAnnotations(Index.DeclaringEntityType).TableName,
-                Index.Properties.Select(p => GetAnnotations(p).ColumnName));
-            var name = baseName;
-            var index = 0;
-            while (otherIndexNames.Contains(name))
-            {
-                name = baseName + index++;
-            }
-
-            return name;
-        }
-
-        protected virtual ConfigurationSource? GetNameConfigurationSource()
-        {
-            var index = Index as Index;
-            var annotation = (ProviderFullAnnotationNames == null ? null : index?.FindAnnotation(ProviderFullAnnotationNames?.Name))
-                             ?? index?.FindAnnotation(RelationalFullAnnotationNames.Instance.Name);
-            return annotation?.GetConfigurationSource();
-        }
-
-        public static string GetDefaultIndexName(
-            [NotNull] string tableName,
-            [NotNull] IEnumerable<string> propertyNames)
-        {
-            Check.NotEmpty(tableName, nameof(tableName));
-            Check.NotNull(propertyNames, nameof(propertyNames));
-
-            return new StringBuilder()
-                .Append(DefaultIndexNamePrefix)
-                .Append("_")
-                .Append(tableName)
-                .Append("_")
-                .AppendJoin(propertyNames, "_")
-                .ToString();
-        }
     }
 }

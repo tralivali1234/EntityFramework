@@ -5,13 +5,11 @@ using System;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
+namespace Microsoft.EntityFrameworkCore.Update
 {
     public class ModificationCommandComparerTest
     {
@@ -23,7 +21,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
 
             var optionsBuilder = new DbContextOptionsBuilder()
                 .UseModel(model);
-            optionsBuilder.UseTransientInMemoryDatabase();
+            optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
 
             var stateManager = new DbContext(optionsBuilder.Options).GetService<IStateManager>();
 
@@ -33,52 +31,59 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var entry1 = stateManager.GetOrCreateEntry(new object());
             entry1[key] = 1;
             entry1.SetEntityState(EntityState.Added);
-            var modificationCommandAdded = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null);
+            var modificationCommandAdded = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null);
             modificationCommandAdded.AddEntry(entry1);
 
             var entry2 = stateManager.GetOrCreateEntry(new object());
             entry2[key] = 2;
             entry2.SetEntityState(EntityState.Modified);
-            var modificationCommandModified = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null);
+            var modificationCommandModified = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null);
             modificationCommandModified.AddEntry(entry2);
 
             var entry3 = stateManager.GetOrCreateEntry(new object());
             entry3[key] = 3;
             entry3.SetEntityState(EntityState.Deleted);
-            var modificationCommandDeleted = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null);
+            var modificationCommandDeleted = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null);
             modificationCommandDeleted.AddEntry(entry3);
 
             var mCC = new ModificationCommandComparer();
 
             Assert.True(0 == mCC.Compare(modificationCommandAdded, modificationCommandAdded));
             Assert.True(0 == mCC.Compare(null, null));
-            Assert.True(0 == mCC.Compare(
-                new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
+            Assert.True(
+                0 == mCC.Compare(
+                    new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, false, null)));
 
-            Assert.True(0 > mCC.Compare(null, new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
-            Assert.True(0 < mCC.Compare(new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null), null));
+            Assert.True(0 > mCC.Compare(null, new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null)));
+            Assert.True(0 < mCC.Compare(new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null), null));
 
-            Assert.True(0 > mCC.Compare(
-                new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
-            Assert.True(0 < mCC.Compare(
-                new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
+            Assert.True(
+                0 > mCC.Compare(
+                    new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, false, null)));
+            Assert.True(
+                0 < mCC.Compare(
+                    new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null)));
 
-            Assert.True(0 > mCC.Compare(
-                new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("A", "foo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
-            Assert.True(0 < mCC.Compare(
-                new ModificationCommand("A", "foo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
+            Assert.True(
+                0 > mCC.Compare(
+                    new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("A", "foo", new ParameterNameGenerator().GenerateNext, false, null)));
+            Assert.True(
+                0 < mCC.Compare(
+                    new ModificationCommand("A", "foo", new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("A", "dbo", new ParameterNameGenerator().GenerateNext, false, null)));
 
-            Assert.True(0 > mCC.Compare(
-                new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("B", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
-            Assert.True(0 < mCC.Compare(
-                new ModificationCommand("B", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null),
-                new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null)));
+            Assert.True(
+                0 > mCC.Compare(
+                    new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("B", null, new ParameterNameGenerator().GenerateNext, false, null)));
+            Assert.True(
+                0 < mCC.Compare(
+                    new ModificationCommand("B", null, new ParameterNameGenerator().GenerateNext, false, null),
+                    new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null)));
 
             Assert.True(0 > mCC.Compare(modificationCommandModified, modificationCommandAdded));
             Assert.True(0 < mCC.Compare(modificationCommandAdded, modificationCommandModified));
@@ -141,7 +146,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var model = new Model();
             var entityType = model.AddEntityType(typeof(object));
 
-            var optionsBuilder = new DbContextOptionsBuilder().UseModel(model).UseTransientInMemoryDatabase();
+            var optionsBuilder = new DbContextOptionsBuilder().UseModel(model).UseInMemoryDatabase(Guid.NewGuid().ToString());
 
             var stateManager = new DbContext(optionsBuilder.Options).GetService<IStateManager>();
 
@@ -152,16 +157,16 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var entry1 = stateManager.GetOrCreateEntry(new object());
             entry1[keyProperty] = value1;
             entry1.SetEntityState(EntityState.Modified);
-            var modificationCommand1 = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null);
+            var modificationCommand1 = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null);
             modificationCommand1.AddEntry(entry1);
 
             var entry2 = stateManager.GetOrCreateEntry(new object());
             entry2[keyProperty] = value2;
             entry2.SetEntityState(EntityState.Modified);
-            var modificationCommand2 = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null);
+            var modificationCommand2 = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null);
             modificationCommand2.AddEntry(entry2);
 
-            var modificationCommand3 = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, null);
+            var modificationCommand3 = new ModificationCommand("A", null, new ParameterNameGenerator().GenerateNext, false, null);
             modificationCommand3.AddEntry(entry1);
 
             var mCC = new ModificationCommandComparer();

@@ -4,7 +4,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -19,18 +19,31 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     public class InMemoryStore : IInMemoryStore
     {
         private readonly IInMemoryTableFactory _tableFactory;
+        private readonly bool _useNameMatching;
 
         private readonly object _lock = new object();
 
-        private LazyRef<Dictionary<IEntityType, IInMemoryTable>> _tables = CreateTables();
+        private LazyRef<Dictionary<object, IInMemoryTable>> _tables = CreateTables();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public InMemoryStore([NotNull] IInMemoryTableFactory tableFactory)
+            : this(tableFactory, useNameMatching: false)
+        {
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public InMemoryStore(
+            [NotNull] IInMemoryTableFactory tableFactory,
+            bool useNameMatching)
         {
             _tableFactory = tableFactory;
+            _useNameMatching = useNameMatching;
         }
 
         /// <summary>
@@ -43,8 +56,8 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             {
                 var returnValue = !_tables.HasValue;
 
-                // ReSharper disable once UnusedVariable
-                var _ = _tables.Value;
+                // ReSharper disable once AssignmentIsFullyDiscarded
+                _ = _tables.Value;
 
                 return returnValue;
             }
@@ -64,15 +77,13 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 }
 
                 _tables = CreateTables();
+
                 return true;
             }
         }
 
-        private static LazyRef<Dictionary<IEntityType, IInMemoryTable>> CreateTables()
-        {
-            return new LazyRef<Dictionary<IEntityType, IInMemoryTable>>(
-                () => new Dictionary<IEntityType, IInMemoryTable>());
-        }
+        private static LazyRef<Dictionary<object, IInMemoryTable>> CreateTables()
+            => new LazyRef<Dictionary<object, IInMemoryTable>>(() => new Dictionary<object, IInMemoryTable>());
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -87,9 +98,8 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 {
                     foreach (var et in entityType.GetConcreteTypesInHierarchy())
                     {
-                        IInMemoryTable table;
-
-                        if (_tables.Value.TryGetValue(et, out table))
+                        var key = _useNameMatching ? (object)et.Name : et;
+                        if (_tables.Value.TryGetValue(key, out var table))
                         {
                             data.Add(new InMemoryTableSnapshot(et, table.SnapshotRows()));
                         }
@@ -105,7 +115,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         /// </summary>
         public virtual int ExecuteTransaction(
             IEnumerable<IUpdateEntry> entries,
-            IDiagnosticsLogger<LoggerCategory.Update> updateLogger)
+            IDiagnosticsLogger<DbLoggerCategory.Update> updateLogger)
         {
             var rowsAffected = 0;
 
@@ -117,10 +127,20 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
                     Debug.Assert(!entityType.IsAbstract());
 
-                    IInMemoryTable table;
-                    if (!_tables.Value.TryGetValue(entityType, out table))
+                    var key = _useNameMatching ? (object)entityType.Name : entityType;
+                    if (!_tables.Value.TryGetValue(key, out var table))
                     {
-                        _tables.Value.Add(entityType, table = _tableFactory.Create(entityType));
+                        _tables.Value.Add(key, table = _tableFactory.Create(entityType));
+                    }
+
+                    if (entry.SharedIdentityEntry != null)
+                    {
+                        if (entry.EntityState == EntityState.Deleted)
+                        {
+                            continue;
+                        }
+
+                        table.Delete(entry);
                     }
 
                     switch (entry.EntityState)

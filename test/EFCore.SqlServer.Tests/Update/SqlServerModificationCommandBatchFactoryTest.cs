@@ -1,17 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Diagnostics;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.EntityFrameworkCore.Update;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests.Update
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Update
 {
     public class SqlServerModificationCommandBatchFactoryTest
     {
@@ -21,32 +18,30 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests.Update
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseSqlServer("Database=Crunchie", b => b.MaxBatchSize(1));
 
+            var typeMapper = new SqlServerTypeMapper(
+                new CoreTypeMapperDependencies(),
+                new RelationalTypeMapperDependencies());
+
             var factory = new SqlServerModificationCommandBatchFactory(
                 new RelationalCommandBuilderFactory(
-                    new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                        new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                        new DiagnosticListener("Fake")),
-                    new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                        new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                        new DiagnosticListener("Fake")),
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
+                    new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
+                    typeMapper),
                 new SqlServerSqlGenerationHelper(
                     new RelationalSqlGenerationHelperDependencies()),
                 new SqlServerUpdateSqlGenerator(
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
-                            new RelationalSqlGenerationHelperDependencies())),
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
+                            new RelationalSqlGenerationHelperDependencies()),
+                        typeMapper)),
                 new UntypedRelationalValueBufferFactoryFactory(
-                    new RelationalValueBufferFactoryDependencies()),
+                    new RelationalValueBufferFactoryDependencies(
+                        typeMapper)),
                 optionsBuilder.Options);
 
             var batch = factory.Create();
 
-            Assert.True(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new SqlServerAnnotationProvider(), false, null)));
-            Assert.False(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new SqlServerAnnotationProvider(), false, null)));
+            Assert.True(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, false, null)));
+            Assert.False(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, false, null)));
         }
 
         [Fact]
@@ -55,31 +50,30 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests.Update
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseSqlServer("Database=Crunchie");
 
+            var typeMapper = new SqlServerTypeMapper(
+                new CoreTypeMapperDependencies(),
+                new RelationalTypeMapperDependencies());
+
             var factory = new SqlServerModificationCommandBatchFactory(
                 new RelationalCommandBuilderFactory(
-                    new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                        new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                        new DiagnosticListener("Fake")),
-                    new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                        new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                        new DiagnosticListener("Fake")),
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
+                    new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
+                    typeMapper),
                 new SqlServerSqlGenerationHelper(
                     new RelationalSqlGenerationHelperDependencies()),
                 new SqlServerUpdateSqlGenerator(
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
-                            new RelationalSqlGenerationHelperDependencies())),
-                    new SqlServerTypeMapper(new RelationalTypeMapperDependencies())),
+                            new RelationalSqlGenerationHelperDependencies()),
+                        typeMapper)),
                 new UntypedRelationalValueBufferFactoryFactory(
-                    new RelationalValueBufferFactoryDependencies()),
+                    new RelationalValueBufferFactoryDependencies(
+                        typeMapper)),
                 optionsBuilder.Options);
 
             var batch = factory.Create();
 
-            Assert.True(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new SqlServerAnnotationProvider(), false, null)));
-            Assert.True(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new SqlServerAnnotationProvider(), false, null)));
+            Assert.True(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, false, null)));
+            Assert.True(batch.AddCommand(new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, false, null)));
         }
     }
 }

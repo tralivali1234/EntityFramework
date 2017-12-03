@@ -11,15 +11,13 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.EntityFrameworkCore.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
+namespace Microsoft.EntityFrameworkCore.Storage
 {
     using CommandAction = Action<
         IRelationalConnection,
@@ -33,8 +31,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
 
     public class RelationalCommandTest
     {
-        private const string FileLineEnding = @"
-";
+        private static readonly string EOL = Environment.NewLine;
 
         [Fact]
         public void Configures_DbCommand()
@@ -406,8 +403,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             var relationalCommand = CreateRelationalCommand(
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false),
-                    new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new RelationalTypeMapping("long", typeof(long), DbType.Int64), true),
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false),
+                    new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new LongTypeMapping("long", DbType.Int64), true),
                     new TypeMappedRelationalParameter("ThirdInvariant", "ThirdParameter", RelationalTypeMapping.NullMapping, null)
                 });
 
@@ -442,8 +439,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             var relationalCommand = CreateRelationalCommand(
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false),
-                    new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new RelationalTypeMapping("long", typeof(long), DbType.Int64), true),
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false),
+                    new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new LongTypeMapping("long", DbType.Int64), true),
                     new TypeMappedRelationalParameter("ThirdInvariant", "ThirdParameter", RelationalTypeMapping.NullMapping, null)
                 });
 
@@ -484,8 +481,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             var relationalCommand = CreateRelationalCommand(
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false),
-                    new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new RelationalTypeMapping("long", typeof(long), DbType.Int64), true),
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false),
+                    new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new LongTypeMapping("long", DbType.Int64), true),
                     new TypeMappedRelationalParameter("ThirdInvariant", "ThirdParameter", RelationalTypeMapping.NullMapping, null)
                 });
 
@@ -514,7 +511,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             Assert.Equal("FirstParameter", parameter.ParameterName);
             Assert.Equal(17, parameter.Value);
             Assert.Equal(ParameterDirection.Input, parameter.Direction);
-            Assert.Equal(false, parameter.IsNullable);
+            Assert.False(parameter.IsNullable);
             Assert.Equal(DbType.Int32, parameter.DbType);
 
             parameter = fakeConnection.DbConnections[0].DbCommands[0].Parameters[1];
@@ -522,7 +519,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             Assert.Equal("SecondParameter", parameter.ParameterName);
             Assert.Equal(18L, parameter.Value);
             Assert.Equal(ParameterDirection.Input, parameter.Direction);
-            Assert.Equal(true, parameter.IsNullable);
+            Assert.True(parameter.IsNullable);
             Assert.Equal(DbType.Int64, parameter.DbType);
 
             parameter = fakeConnection.DbConnections[0].DbCommands[0].Parameters[2];
@@ -543,7 +540,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
         {
             var fakeConnection = CreateConnection();
 
-            var typeMapper = new FakeRelationalTypeMapper(new RelationalTypeMapperDependencies());
+            var typeMapper = new FakeRelationalTypeMapper(
+                new CoreTypeMapperDependencies(),
+                new RelationalTypeMapperDependencies());
 
             var dbParameter = new FakeDbParameter { ParameterName = "FirstParameter", Value = 17, DbType = DbType.Int32 };
 
@@ -585,7 +584,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             Assert.Equal("SecondParameter", parameter.ParameterName);
             Assert.Equal(18L, parameter.Value);
             Assert.Equal(ParameterDirection.Input, parameter.Direction);
-            Assert.Equal(false, parameter.IsNullable);
+            Assert.False(parameter.IsNullable);
             Assert.Equal(mapping.DbType, parameter.DbType);
 
             parameter = fakeConnection.DbConnections[0].DbCommands[0].Parameters[2];
@@ -613,8 +612,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
                         "CompositeInvariant",
                         new[]
                         {
-                            new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false),
-                            new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new RelationalTypeMapping("long", typeof(long), DbType.Int64), true),
+                            new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false),
+                            new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new LongTypeMapping("long", DbType.Int64), true),
                             new TypeMappedRelationalParameter("ThirdInvariant", "ThirdParameter", RelationalTypeMapping.NullMapping, null)
                         })
                 });
@@ -642,7 +641,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             Assert.Equal("FirstParameter", parameter.ParameterName);
             Assert.Equal(17, parameter.Value);
             Assert.Equal(ParameterDirection.Input, parameter.Direction);
-            Assert.Equal(false, parameter.IsNullable);
+            Assert.False(parameter.IsNullable);
             Assert.Equal(DbType.Int32, parameter.DbType);
 
             parameter = fakeConnection.DbConnections[0].DbCommands[0].Parameters[1];
@@ -650,7 +649,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             Assert.Equal("SecondParameter", parameter.ParameterName);
             Assert.Equal(18L, parameter.Value);
             Assert.Equal(ParameterDirection.Input, parameter.Direction);
-            Assert.Equal(true, parameter.IsNullable);
+            Assert.True(parameter.IsNullable);
             Assert.Equal(DbType.Int64, parameter.DbType);
 
             parameter = fakeConnection.DbConnections[0].DbCommands[0].Parameters[2];
@@ -678,8 +677,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
                         "CompositeInvariant",
                         new[]
                         {
-                            new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false),
-                            new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new RelationalTypeMapping("long", typeof(long), DbType.Int64), true),
+                            new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false),
+                            new TypeMappedRelationalParameter("SecondInvariant", "SecondParameter", new LongTypeMapping("long", DbType.Int64), true),
                             new TypeMappedRelationalParameter("ThirdInvariant", "ThirdParameter", RelationalTypeMapping.NullMapping, null)
                         })
                 });
@@ -724,7 +723,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
                         "CompositeInvariant",
                         new[]
                         {
-                            new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false)
+                            new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false)
                         })
                 });
 
@@ -764,12 +763,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             var fakeDbConnection = new FakeDbConnection(
                 ConnectionString,
                 new FakeCommandExecutor(
-                    c => { throw exception; },
-                    c => { throw exception; },
-                    (c, cb) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, cb, ct) => { throw exception; }));
+                    c => throw exception,
+                    c => throw exception,
+                    (c, cb) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, cb, ct) => throw exception));
 
             var optionsExtension = new FakeRelationalOptionsExtension().WithConnection(fakeDbConnection);
 
@@ -807,12 +806,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             var fakeDbConnection = new FakeDbConnection(
                 ConnectionString,
                 new FakeCommandExecutor(
-                    c => { throw exception; },
-                    c => { throw exception; },
-                    (c, cb) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, cb, ct) => { throw exception; }));
+                    c => throw exception,
+                    c => throw exception,
+                    (c, cb) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, cb, ct) => throw exception));
 
             var optionsExtension = new FakeRelationalOptionsExtension().WithConnection(fakeDbConnection);
 
@@ -854,12 +853,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
             var fakeDbConnection = new FakeDbConnection(
                 ConnectionString,
                 new FakeCommandExecutor(
-                    c => { throw exception; },
-                    c => { throw exception; },
-                    (c, cb) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, cb, ct) => { throw exception; }));
+                    c => throw exception,
+                    c => throw exception,
+                    (c, cb) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, cb, ct) => throw exception));
 
             var optionsExtension = new FakeRelationalOptionsExtension().WithConnection(fakeDbConnection);
 
@@ -898,18 +897,19 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
         {
             var options = CreateOptions();
 
-            var log = new List<Tuple<LogLevel, string>>();
+            var log = new List<(LogLevel Level, EventId Id, string Message)>();
 
             var fakeConnection = new FakeRelationalConnection(options);
 
             var relationalCommand = CreateRelationalCommand(
-                logger: new InterceptingLogger<LoggerCategory.Database.Sql>(
+                new DiagnosticsLogger<DbLoggerCategory.Database.Command>(
                     new ListLoggerFactory(log),
-                    new FakeLoggingOptions(false)),
+                    new FakeLoggingOptions(false),
+                    new DiagnosticListener("Fake")),
                 commandText: "Logged Command",
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false)
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false)
                 });
 
             var parameterValues = new Dictionary<string, object>
@@ -928,15 +928,15 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Storage
 
             Assert.Equal(2, log.Count);
 
-            Assert.Equal(LogLevel.Debug, log[0].Item1);
-            Assert.Equal(LogLevel.Information, log[1].Item1);
+            Assert.Equal(LogLevel.Debug, log[0].Level);
+            Assert.Equal(LogLevel.Information, log[1].Level);
 
-            foreach (var item in log)
+            foreach (var (Level, Id, Message) in log)
             {
                 Assert.EndsWith(
-                    @"[Parameters=[FirstParameter='?'], CommandType='0', CommandTimeout='30']
-Logged Command",
-                    item.Item2.Replace(Environment.NewLine, FileLineEnding));
+                    @"[Parameters=[FirstParameter='?'], CommandType='0', CommandTimeout='30']" + EOL +
+                    @"Logged Command",
+                    Message);
             }
         }
 
@@ -951,18 +951,19 @@ Logged Command",
 
             var options = CreateOptions(optionsExtension);
 
-            var log = new List<Tuple<LogLevel, string>>();
+            var log = new List<(LogLevel Level, EventId Id, string Message)>();
 
             var fakeConnection = new FakeRelationalConnection(options);
 
             var relationalCommand = CreateRelationalCommand(
-                logger: new InterceptingLogger<LoggerCategory.Database.Sql>(
+                new DiagnosticsLogger<DbLoggerCategory.Database.Command>(
                     new ListLoggerFactory(log),
-                    new FakeLoggingOptions(true)),
+                    new FakeLoggingOptions(true),
+                    new DiagnosticListener("Fake")),
                 commandText: "Logged Command",
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false)
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false)
                 });
 
             var parameterValues = new Dictionary<string, object>
@@ -980,18 +981,18 @@ Logged Command",
             }
 
             Assert.Equal(3, log.Count);
-            Assert.Equal(LogLevel.Warning, log[0].Item1);
-            Assert.Equal(CoreStrings.SensitiveDataLoggingEnabled, log[0].Item2);
+            Assert.Equal(LogLevel.Warning, log[0].Level);
+            Assert.Equal(CoreStrings.LogSensitiveDataLoggingEnabled.GenerateMessage(), log[0].Message);
 
-            Assert.Equal(LogLevel.Debug, log[1].Item1);
-            Assert.Equal(LogLevel.Information, log[2].Item1);
+            Assert.Equal(LogLevel.Debug, log[1].Level);
+            Assert.Equal(LogLevel.Information, log[2].Level);
 
-            foreach (var item in log.Skip(1))
+            foreach (var (Level, Id, Message) in log.Skip(1))
             {
                 Assert.EndsWith(
-                    @"[Parameters=[FirstParameter='17'], CommandType='0', CommandTimeout='30']
-Logged Command",
-                    item.Item2.Replace(Environment.NewLine, FileLineEnding));
+                    @"[Parameters=[FirstParameter='17'], CommandType='0', CommandTimeout='30']" + EOL +
+                    @"Logged Command",
+                    Message);
             }
         }
 
@@ -1009,10 +1010,13 @@ Logged Command",
             var diagnostic = new List<Tuple<string, object>>();
 
             var relationalCommand = CreateRelationalCommand(
-                diagnosticSource: new ListDiagnosticSource(diagnostic),
+                new DiagnosticsLogger<DbLoggerCategory.Database.Command>(
+                    new ListLoggerFactory(new List<(LogLevel, EventId, string)>()),
+                    new FakeLoggingOptions(false),
+                    new ListDiagnosticSource(diagnostic)),
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false)
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false)
                 });
 
             var parameterValues = new Dictionary<string, object>
@@ -1033,8 +1037,8 @@ Logged Command",
             Assert.Equal(RelationalEventId.CommandExecuting.Name, diagnostic[0].Item1);
             Assert.Equal(RelationalEventId.CommandExecuted.Name, diagnostic[1].Item1);
 
-            var beforeData = (CommandData)diagnostic[0].Item2;
-            var afterData = (CommandExecutedData)diagnostic[1].Item2;
+            var beforeData = (CommandEventData)diagnostic[0].Item2;
+            var afterData = (CommandExecutedEventData)diagnostic[1].Item2;
 
             Assert.Equal(fakeConnection.DbConnections[0].DbCommands[0], beforeData.Command);
             Assert.Equal(fakeConnection.DbConnections[0].DbCommands[0], afterData.Command);
@@ -1042,8 +1046,8 @@ Logged Command",
             Assert.Equal(diagnosticName, beforeData.ExecuteMethod);
             Assert.Equal(diagnosticName, afterData.ExecuteMethod);
 
-            Assert.Equal(async, beforeData.Async);
-            Assert.Equal(async, afterData.Async);
+            Assert.Equal(async, beforeData.IsAsync);
+            Assert.Equal(async, afterData.IsAsync);
         }
 
         [Theory]
@@ -1058,12 +1062,12 @@ Logged Command",
             var fakeDbConnection = new FakeDbConnection(
                 ConnectionString,
                 new FakeCommandExecutor(
-                    c => { throw exception; },
-                    c => { throw exception; },
-                    (c, cb) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, ct) => { throw exception; },
-                    (c, cb, ct) => { throw exception; }));
+                    c => throw exception,
+                    c => throw exception,
+                    (c, cb) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, ct) => throw exception,
+                    (c, cb, ct) => throw exception));
 
             var optionsExtension = new FakeRelationalOptionsExtension().WithConnection(fakeDbConnection);
 
@@ -1074,10 +1078,13 @@ Logged Command",
             var fakeConnection = new FakeRelationalConnection(options);
 
             var relationalCommand = CreateRelationalCommand(
-                diagnosticSource: new ListDiagnosticSource(diagnostic),
+                new DiagnosticsLogger<DbLoggerCategory.Database.Command>(
+                    new ListLoggerFactory(new List<(LogLevel, EventId, string)>()),
+                    new FakeLoggingOptions(false),
+                    new ListDiagnosticSource(diagnostic)),
                 parameters: new[]
                 {
-                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new RelationalTypeMapping("int", typeof(int), DbType.Int32), false)
+                    new TypeMappedRelationalParameter("FirstInvariant", "FirstParameter", new IntTypeMapping("int", DbType.Int32), false)
                 });
 
             var parameterValues = new Dictionary<string, object>
@@ -1102,8 +1109,8 @@ Logged Command",
             Assert.Equal(RelationalEventId.CommandExecuting.Name, diagnostic[0].Item1);
             Assert.Equal(RelationalEventId.CommandError.Name, diagnostic[1].Item1);
 
-            var beforeData = (CommandData)diagnostic[0].Item2;
-            var afterData = (CommandErrorData)diagnostic[1].Item2;
+            var beforeData = (CommandEventData)diagnostic[0].Item2;
+            var afterData = (CommandErrorEventData)diagnostic[1].Item2;
 
             Assert.Equal(fakeDbConnection.DbCommands[0], beforeData.Command);
             Assert.Equal(fakeDbConnection.DbCommands[0], afterData.Command);
@@ -1111,8 +1118,8 @@ Logged Command",
             Assert.Equal(diagnosticName, beforeData.ExecuteMethod);
             Assert.Equal(diagnosticName, afterData.ExecuteMethod);
 
-            Assert.Equal(async, beforeData.Async);
-            Assert.Equal(async, afterData.Async);
+            Assert.Equal(async, beforeData.IsAsync);
+            Assert.Equal(async, afterData.IsAsync);
 
             Assert.Equal(exception, afterData.Exception);
         }
@@ -1139,7 +1146,7 @@ Logged Command",
         {
             public FakeLoggingOptions(bool sensitiveDataLoggingEnabled)
             {
-                SensitiveDataLoggingEnabled = sensitiveDataLoggingEnabled;
+                IsSensitiveDataLoggingEnabled = sensitiveDataLoggingEnabled;
             }
 
             public void Initialize(IDbContextOptions options)
@@ -1150,23 +1157,17 @@ Logged Command",
             {
             }
 
-            public bool SensitiveDataLoggingEnabled { get; }
-            public bool SensitiveDataLoggingWarned { get; set; }
+            public bool IsSensitiveDataLoggingEnabled { get; }
+            public bool IsSensitiveDataLoggingWarned { get; set; }
             public WarningsConfiguration WarningsConfiguration => null;
         }
 
         private IRelationalCommand CreateRelationalCommand(
-            IInterceptingLogger<LoggerCategory.Database.Sql> logger = null,
-            DiagnosticSource diagnosticSource = null,
+            IDiagnosticsLogger<DbLoggerCategory.Database.Command> logger = null,
             string commandText = "Command Text",
             IReadOnlyList<IRelationalParameter> parameters = null)
             => new RelationalCommand(
-                new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                    logger ?? new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                    diagnosticSource ?? new DiagnosticListener("Fake")),
-                new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                    new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                    diagnosticSource ?? new DiagnosticListener("Fake")),
+                logger ?? new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
                 commandText,
                 parameters ?? new IRelationalParameter[0]);
     }

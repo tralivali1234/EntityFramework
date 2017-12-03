@@ -7,11 +7,10 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
+namespace Microsoft.EntityFrameworkCore.ChangeTracking
 {
     public class ObservableHashSetTest
     {
@@ -485,17 +484,6 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             Assert.Equal(new[] { "Brendan", "Nate" }, hashSet.OrderBy(i => i));
         }
 
-#if NET46
-
-        [Fact]
-        public void The_BindingList_returned_from_ObservableHasSet_is_cached()
-        {
-            var ols = new ObservableHashSet<string>();
-            var bindingList = ols.ToBindingList();
-
-            Assert.Same(bindingList, ols.ToBindingList());
-        }
-
         [Fact]
         public void ToBindingList_returns_a_new_binding_list_each_time_when_called_on_non_DbLocalView_ObervableCollections()
         {
@@ -508,10 +496,6 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking
             Assert.NotNull(bindingListAgain);
             Assert.NotSame(bindingList, bindingListAgain);
         }
-#elif NETCOREAPP2_0
-#else
-#error target frameworks need to be updated.
-#endif
 
         private static void AssertCountChanging<T>(
             ObservableHashSet<T> hashSet,

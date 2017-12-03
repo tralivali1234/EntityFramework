@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Design.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
@@ -12,28 +14,53 @@ using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Migrations.Design
 {
+    /// <summary>
+    ///     Used to generate C# code for migrations.
+    /// </summary>
     public class CSharpMigrationsGenerator : MigrationsCodeGenerator
     {
-        private readonly CSharpHelper _code;
-        private readonly CSharpMigrationOperationGenerator _operationGenerator;
-        private readonly CSharpSnapshotGenerator _modelGenerator;
-
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="CSharpMigrationsGenerator" /> class.
+        /// </summary>
+        /// <param name="dependencies"> The base dependencies. </param>
+        /// <param name="csharpDependencies"> The dependencies. </param>
         public CSharpMigrationsGenerator(
-            [NotNull] CSharpHelper codeHelper,
-            [NotNull] CSharpMigrationOperationGenerator operationGenerator,
-            [NotNull] CSharpSnapshotGenerator modelGenerator)
+            [NotNull] MigrationsCodeGeneratorDependencies dependencies,
+            [NotNull] CSharpMigrationsGeneratorDependencies csharpDependencies)
+            : base(dependencies)
         {
-            Check.NotNull(codeHelper, nameof(codeHelper));
-            Check.NotNull(operationGenerator, nameof(operationGenerator));
-            Check.NotNull(modelGenerator, nameof(modelGenerator));
+            Check.NotNull(csharpDependencies, nameof(csharpDependencies));
 
-            _code = codeHelper;
-            _operationGenerator = operationGenerator;
-            _modelGenerator = modelGenerator;
+            CSharpDependencies = csharpDependencies;
         }
 
+        /// <summary>
+        ///     Parameter object containing dependencies for this service.
+        /// </summary>
+        protected virtual CSharpMigrationsGeneratorDependencies CSharpDependencies { get; }
+
+        private ICSharpHelper Code => CSharpDependencies.CSharpHelper;
+
+        /// <summary>
+        ///     Gets the file extension code files should use.
+        /// </summary>
+        /// <value> The file extension. </value>
         public override string FileExtension => ".cs";
 
+        /// <summary>
+        ///     Gets the programming language supported by this service.
+        /// </summary>
+        /// <value> The language. </value>
+        public override string Language => "C#";
+
+        /// <summary>
+        ///     Generates the migration code.
+        /// </summary>
+        /// <param name="migrationNamespace"> The migration's namespace. </param>
+        /// <param name="migrationName"> The migration's name. </param>
+        /// <param name="upOperations"> The migration's up operations. </param>
+        /// <param name="downOperations"> The migration's down operations. </param>
+        /// <returns> The migration code. </returns>
         public override string GenerateMigration(
             string migrationNamespace,
             string migrationName,
@@ -53,7 +80,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 "Microsoft.EntityFrameworkCore.Migrations"
             };
             namespaces.AddRange(GetNamespaces(upOperations.Concat(downOperations)));
-            foreach (var n in namespaces.OrderBy(x => x).Distinct())
+            foreach (var n in namespaces.OrderBy(x => x, new NamespaceComparer()).Distinct())
             {
                 builder
                     .Append("using ")
@@ -62,12 +89,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             }
             builder
                 .AppendLine()
-                .Append("namespace ").AppendLine(_code.Namespace(migrationNamespace))
+                .Append("namespace ").AppendLine(Code.Namespace(migrationNamespace))
                 .AppendLine("{");
             using (builder.Indent())
             {
                 builder
-                    .Append("public partial class ").Append(_code.Identifier(migrationName)).AppendLine(" : Migration")
+                    .Append("public partial class ").Append(Code.Identifier(migrationName)).AppendLine(" : Migration")
                     .AppendLine("{");
                 using (builder.Indent())
                 {
@@ -76,7 +103,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                         .AppendLine("{");
                     using (builder.Indent())
                     {
-                        _operationGenerator.Generate("migrationBuilder", upOperations, builder);
+                        CSharpDependencies.CSharpMigrationOperationGenerator.Generate("migrationBuilder", upOperations, builder);
                     }
                     builder
                         .AppendLine()
@@ -86,7 +113,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                         .AppendLine("{");
                     using (builder.Indent())
                     {
-                        _operationGenerator.Generate("migrationBuilder", downOperations, builder);
+                        CSharpDependencies.CSharpMigrationOperationGenerator.Generate("migrationBuilder", downOperations, builder);
                     }
                     builder
                         .AppendLine()
@@ -104,6 +131,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             builder.AppendLine(@"// <auto-generated />");
         }
 
+        /// <summary>
+        ///     Generates the migration metadata code.
+        /// </summary>
+        /// <param name="migrationNamespace"> The migration's namespace. </param>
+        /// <param name="contextType"> The migration's <see cref="DbContext" /> type. </param>
+        /// <param name="migrationName"> The migration's name. </param>
+        /// <param name="migrationId"> The migration's ID. </param>
+        /// <param name="targetModel"> The migraiton's target model. </param>
+        /// <returns> The migration metadata code. </returns>
         public override string GenerateMetadata(
             string migrationNamespace,
             Type contextType,
@@ -125,11 +161,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 "Microsoft.EntityFrameworkCore",
                 "Microsoft.EntityFrameworkCore.Infrastructure",
                 "Microsoft.EntityFrameworkCore.Metadata",
-                "Microsoft.EntityFrameworkCore.Migrations",
-                contextType.Namespace
+                "Microsoft.EntityFrameworkCore.Migrations"
             };
+            if (!string.IsNullOrEmpty(contextType.Namespace))
+            {
+                namespaces.Add(contextType.Namespace);
+            }
             namespaces.AddRange(GetNamespaces(targetModel));
-            foreach (var n in namespaces.OrderBy(x => x).Distinct())
+            foreach (var n in namespaces.OrderBy(x => x, new NamespaceComparer()).Distinct())
             {
                 builder
                     .Append("using ")
@@ -138,26 +177,37 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             }
             builder
                 .AppendLine()
-                .Append("namespace ").AppendLine(_code.Namespace(migrationNamespace))
+                .Append("namespace ").AppendLine(Code.Namespace(migrationNamespace))
                 .AppendLine("{");
             using (builder.Indent())
             {
                 builder
-                    .Append("[DbContext(typeof(").Append(_code.Reference(contextType)).AppendLine("))]")
-                    .Append("[Migration(").Append(_code.Literal(migrationId)).AppendLine(")]")
-                    .Append("partial class ").AppendLine(_code.Identifier(migrationName))
+                    .Append("[DbContext(typeof(").Append(Code.Reference(contextType)).AppendLine("))]")
+                    .Append("[Migration(").Append(Code.Literal(migrationId)).AppendLine(")]")
+                    .Append("partial class ").AppendLine(Code.Identifier(migrationName))
                     .AppendLine("{");
                 using (builder.Indent())
                 {
                     builder
                         .AppendLine("protected override void BuildTargetModel(ModelBuilder modelBuilder)")
-                        .AppendLine("{");
+                        .AppendLine("{")
+                        .DecrementIndent()
+                        .DecrementIndent()
+                        .AppendLine("#pragma warning disable 612, 618")
+                        .IncrementIndent()
+                        .IncrementIndent();
                     using (builder.Indent())
                     {
                         // TODO: Optimize. This is repeated below
-                        _modelGenerator.Generate("modelBuilder", targetModel, builder);
+                        CSharpDependencies.CSharpSnapshotGenerator.Generate("modelBuilder", targetModel, builder);
                     }
-                    builder.AppendLine("}");
+                    builder
+                        .DecrementIndent()
+                        .DecrementIndent()
+                        .AppendLine("#pragma warning restore 612, 618")
+                        .IncrementIndent()
+                        .IncrementIndent()
+                        .AppendLine("}");
                 }
                 builder.AppendLine("}");
             }
@@ -166,6 +216,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             return builder.ToString();
         }
 
+        /// <summary>
+        ///     Generates the model snapshot code.
+        /// </summary>
+        /// <param name="modelSnapshotNamespace"> The model snapshot's namespace. </param>
+        /// <param name="contextType"> The model snapshot's <see cref="DbContext" /> type. </param>
+        /// <param name="modelSnapshotName"> The model snapshot's name. </param>
+        /// <param name="model"> The model. </param>
+        /// <returns> The model snapshot code. </returns>
         public override string GenerateSnapshot(
             string modelSnapshotNamespace,
             Type contextType,
@@ -185,11 +243,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 "Microsoft.EntityFrameworkCore",
                 "Microsoft.EntityFrameworkCore.Infrastructure",
                 "Microsoft.EntityFrameworkCore.Metadata",
-                "Microsoft.EntityFrameworkCore.Migrations",
-                contextType.Namespace
+                "Microsoft.EntityFrameworkCore.Migrations"
             };
+            if (!string.IsNullOrEmpty(contextType.Namespace))
+            {
+                namespaces.Add(contextType.Namespace);
+            }
             namespaces.AddRange(GetNamespaces(model));
-            foreach (var n in namespaces.OrderBy(x => x).Distinct())
+            foreach (var n in namespaces.OrderBy(x => x, new NamespaceComparer()).Distinct())
             {
                 builder
                     .Append("using ")
@@ -198,24 +259,35 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             }
             builder
                 .AppendLine()
-                .Append("namespace ").AppendLine(_code.Namespace(modelSnapshotNamespace))
+                .Append("namespace ").AppendLine(Code.Namespace(modelSnapshotNamespace))
                 .AppendLine("{");
             using (builder.Indent())
             {
                 builder
-                    .Append("[DbContext(typeof(").Append(_code.Reference(contextType)).AppendLine("))]")
-                    .Append("partial class ").Append(_code.Identifier(modelSnapshotName)).AppendLine(" : ModelSnapshot")
+                    .Append("[DbContext(typeof(").Append(Code.Reference(contextType)).AppendLine("))]")
+                    .Append("partial class ").Append(Code.Identifier(modelSnapshotName)).AppendLine(" : ModelSnapshot")
                     .AppendLine("{");
                 using (builder.Indent())
                 {
                     builder
                         .AppendLine("protected override void BuildModel(ModelBuilder modelBuilder)")
-                        .AppendLine("{");
+                        .AppendLine("{")
+                        .DecrementIndent()
+                        .DecrementIndent()
+                        .AppendLine("#pragma warning disable 612, 618")
+                        .IncrementIndent()
+                        .IncrementIndent();
                     using (builder.Indent())
                     {
-                        _modelGenerator.Generate("modelBuilder", model, builder);
+                        CSharpDependencies.CSharpSnapshotGenerator.Generate("modelBuilder", model, builder);
                     }
-                    builder.AppendLine("}");
+                    builder
+                        .DecrementIndent()
+                        .DecrementIndent()
+                        .AppendLine("#pragma warning restore 612, 618")
+                        .IncrementIndent()
+                        .IncrementIndent()
+                        .AppendLine("}");
                 }
                 builder.AppendLine("}");
             }

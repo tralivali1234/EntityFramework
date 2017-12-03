@@ -15,7 +15,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         private readonly TableExpressionBase _tableExpression;
 
         /// <summary>
-        ///     Specialised constructor for use only by derived class.
+        ///     Specialized constructor for use only by derived class.
         /// </summary>
         /// <param name="tableExpression"> The target table expression. </param>
         protected JoinExpressionBase([NotNull] TableExpressionBase tableExpression)
@@ -32,7 +32,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         public virtual TableExpressionBase TableExpression => _tableExpression;
 
         /// <summary>
-        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(System.Linq.Expressions.Expression)" /> method passing the
+        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(Expression)" /> method passing the
         ///     reduced expression.
         ///     Throws an exception if the node isn't reducible.
         /// </summary>

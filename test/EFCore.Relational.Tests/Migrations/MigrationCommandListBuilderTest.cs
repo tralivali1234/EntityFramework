@@ -1,23 +1,16 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
-using System.Diagnostics;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations
+namespace Microsoft.EntityFrameworkCore.Migrations
 {
     public class MigrationCommandListBuilderTest
     {
-        private const string FileLineEnding = @"
-";
-
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -39,7 +32,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations
 Statement2
 Statement3
 ",
-                commandList[0].CommandText.Replace(Environment.NewLine, FileLineEnding));
+                commandList[0].CommandText,
+                ignoreLineEndingDifferences: true);
         }
 
         [Theory]
@@ -66,14 +60,16 @@ Statement3
             Assert.Equal(
                 @"Statement1
 ",
-                commandList[0].CommandText.Replace(Environment.NewLine, FileLineEnding));
+                commandList[0].CommandText,
+                ignoreLineEndingDifferences: true);
 
             Assert.Equal(suppressTransaction, commandList[1].TransactionSuppressed);
             Assert.Equal(
                 @"Statement2
 Statement3
 ",
-                commandList[1].CommandText.Replace(Environment.NewLine, FileLineEnding));
+                commandList[1].CommandText,
+                ignoreLineEndingDifferences: true);
 
             Assert.Equal(suppressTransaction, commandList[2].TransactionSuppressed);
             Assert.Equal(
@@ -81,7 +77,8 @@ Statement3
 Statement5
 Statement6
 ",
-                commandList[2].CommandText.Replace(Environment.NewLine, FileLineEnding));
+                commandList[2].CommandText,
+                ignoreLineEndingDifferences: true);
         }
 
         [Theory]
@@ -107,25 +104,24 @@ Statement6
             Assert.Equal(
                 @"Statement1
 ",
-                commandList[0].CommandText.Replace(Environment.NewLine, FileLineEnding));
+                commandList[0].CommandText,
+                ignoreLineEndingDifferences: true);
 
             Assert.Equal(suppressTransaction, commandList[1].TransactionSuppressed);
             Assert.Equal(
                 @"Statement2
 Statement3
 ",
-                commandList[1].CommandText.Replace(Environment.NewLine, FileLineEnding));
+                commandList[1].CommandText,
+                ignoreLineEndingDifferences: true);
         }
 
         private MigrationCommandListBuilder CreateBuilder()
             => new MigrationCommandListBuilder(
                 new RelationalCommandBuilderFactory(
-                    new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                        new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                        new DiagnosticListener("Fake")),
-                    new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                        new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                        new DiagnosticListener("Fake")),
-                    new FakeRelationalTypeMapper(new RelationalTypeMapperDependencies())));
+                    new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
+                    new FakeRelationalTypeMapper(
+                        new CoreTypeMapperDependencies(),
+                        new RelationalTypeMapperDependencies())));
     }
 }

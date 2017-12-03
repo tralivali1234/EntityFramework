@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
-
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Diagnostics;
@@ -61,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 && Equals(base[itemIndex], _addNewInstance))
             {
                 _cancelNewInstance = _addNewInstance;
-                _addNewInstance = default(T);
+                _addNewInstance = default;
                 _addingNewInstance = false;
             }
             base.CancelNew(itemIndex);
@@ -91,7 +89,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 && Equals(base[itemIndex], _addNewInstance))
             {
                 AddToObservableCollection(_addNewInstance);
-                _addNewInstance = default(T);
+                _addNewInstance = default;
                 _addingNewInstance = false;
             }
             base.EndNew(itemIndex);
@@ -122,7 +120,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 && index < Count
                 && Equals(base[index], _cancelNewInstance))
             {
-                _cancelNewInstance = default(T);
+                _cancelNewInstance = default;
             }
             else
             {
@@ -148,7 +146,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 // that is being passed in.
                 if (Equals(entity, _addNewInstance))
                 {
-                    _addNewInstance = default(T);
+                    _addNewInstance = default;
                     _addingNewInstance = false;
                 }
                 else
@@ -179,8 +177,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     }
 
                     if (e.Action == NotifyCollectionChangedAction.Remove
-                        ||
-                        e.Action == NotifyCollectionChangedAction.Replace)
+                        || e.Action == NotifyCollectionChangedAction.Replace)
                     {
                         foreach (T entity in e.OldItems)
                         {
@@ -189,8 +186,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     }
 
                     if (e.Action == NotifyCollectionChangedAction.Add
-                        ||
-                        e.Action == NotifyCollectionChangedAction.Replace)
+                        || e.Action == NotifyCollectionChangedAction.Replace)
                     {
                         foreach (T entity in e.NewItems)
                         {
@@ -256,7 +252,3 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         }
     }
 }
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif

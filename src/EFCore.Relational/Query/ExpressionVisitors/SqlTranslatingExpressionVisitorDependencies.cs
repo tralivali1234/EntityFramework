@@ -18,10 +18,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
     ///     </para>
     ///     <para>
     ///         Do not construct instances of this class directly from either provider or application code as the
-    ///         constructor signature may change as new dependencies are added. Instead, use this type in 
-    ///         your constructor so that an instance will be created and injected automatically by the 
-    ///         dependency injection container. To create an instance with some dependent services replaced, 
-    ///         first resolve the object from the dependency injection container, then replace selected 
+    ///         constructor signature may change as new dependencies are added. Instead, use this type in
+    ///         your constructor so that an instance will be created and injected automatically by the
+    ///         dependency injection container. To create an instance with some dependent services replaced,
+    ///         first resolve the object from the dependency injection container, then replace selected
     ///         services using the 'With...' methods. Do not call the constructor at any point in this process.
     ///     </para>
     /// </summary>
@@ -36,11 +36,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         ///         directly from your code. This API may change or be removed in future releases.
         ///     </para>
         ///     <para>
-        ///         Do not call this constructor directly from either provider or application code as it may change 
-        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance 
-        ///         will be created and injected automatically by the dependency injection container. To create 
-        ///         an instance with some dependent services replaced, first resolve the object from the dependency 
-        ///         injection container, then replace selected services using the 'With...' methods. Do not call 
+        ///         Do not call this constructor directly from either provider or application code as it may change
+        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance
+        ///         will be created and injected automatically by the dependency injection container. To create
+        ///         an instance with some dependent services replaced, first resolve the object from the dependency
+        ///         injection container, then replace selected services using the 'With...' methods. Do not call
         ///         the constructor at any point in this process.
         ///     </para>
         /// </summary>
@@ -50,7 +50,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         /// <param name="relationalTypeMapper"> The relational type mapper. </param>
         public SqlTranslatingExpressionVisitorDependencies(
             [NotNull] IExpressionFragmentTranslator compositeExpressionFragmentTranslator,
-            [NotNull] IMethodCallTranslator methodCallTranslator,
+            [NotNull] ICompositeMethodCallTranslator methodCallTranslator,
             [NotNull] IMemberTranslator memberTranslator,
             [NotNull] IRelationalTypeMapper relationalTypeMapper)
         {
@@ -73,7 +73,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         /// <summary>
         ///     The method call translator.
         /// </summary>
-        public IMethodCallTranslator MethodCallTranslator { get; }
+        public ICompositeMethodCallTranslator MethodCallTranslator { get; }
 
         /// <summary>
         ///     The member translator.
@@ -102,7 +102,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         /// </summary>
         /// <param name="methodCallTranslator"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
-        public SqlTranslatingExpressionVisitorDependencies With([NotNull] IMethodCallTranslator methodCallTranslator)
+        public SqlTranslatingExpressionVisitorDependencies With([NotNull] ICompositeMethodCallTranslator methodCallTranslator)
             => new SqlTranslatingExpressionVisitorDependencies(
                 CompositeExpressionFragmentTranslator,
                 methodCallTranslator,

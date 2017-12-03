@@ -6,17 +6,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ConcurrencyModel
+namespace Microsoft.EntityFrameworkCore.TestModels.ConcurrencyModel
 {
     public class Team
     {
-#if NET46
         private readonly ObservableCollection<Driver> _drivers = new ObservableCollectionListSource<Driver>();
-#elif NETCOREAPP2_0
-        private readonly ObservableCollection<Driver> _drivers = new ObservableCollection<Driver>();
-#else
-#error target frameworks need to be updated.
-#endif
         private readonly ObservableCollection<Sponsor> _sponsors = new ObservableCollection<Sponsor>();
 
         public int Id { get; set; }
@@ -55,6 +49,6 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.Concurren
         public const int Lotus = 9;
         public const int Hispania = 10;
         public const int Sauber = 11;
-        public const int Virgin = 12;
+        public const int Vickers = 12;
     }
 }

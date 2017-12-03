@@ -4,31 +4,30 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public class CompositeKeyEndToEndTest
+    public class CompositeKeyEndToEndTest : IClassFixture<CompositeKeyEndToEndTest.CompositeKeyEndToEndFixture>
     {
+        public CompositeKeyEndToEndTest(CompositeKeyEndToEndFixture fixture) => Fixture = fixture;
+
+        private CompositeKeyEndToEndFixture Fixture { get; }
+
         [Fact]
         public async Task Can_use_two_non_generated_integers_as_composite_key_end_to_end()
         {
-            var serviceProvider = new ServiceCollection()
-                .AddEntityFrameworkSqlite()
-                .BuildServiceProvider();
-
             var ticks = DateTime.UtcNow.Ticks;
 
-            using (var context = new BronieContext(serviceProvider, "CompositePegasuses"))
+            using (var context = CreateContext())
             {
-                context.Database.EnsureClean();
-
                 context.Add(new Pegasus { Id1 = ticks, Id2 = ticks + 1, Name = "Rainbow Dash" });
                 await context.SaveChangesAsync();
             }
 
-            using (var context = new BronieContext(serviceProvider, "CompositePegasuses"))
+            using (var context = CreateContext())
             {
                 var pegasus = context.Pegasuses.Single(e => e.Id1 == ticks && e.Id2 == ticks + 1);
 
@@ -37,7 +36,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
                 await context.SaveChangesAsync();
             }
 
-            using (var context = new BronieContext(serviceProvider, "CompositePegasuses"))
+            using (var context = CreateContext())
             {
                 var pegasus = context.Pegasuses.Single(e => e.Id1 == ticks && e.Id2 == ticks + 1);
 
@@ -48,7 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
                 await context.SaveChangesAsync();
             }
 
-            using (var context = new BronieContext(serviceProvider, "CompositePegasuses"))
+            using (var context = CreateContext())
             {
                 Assert.Equal(0, context.Pegasuses.Count(e => e.Id1 == ticks && e.Id2 == ticks + 1));
             }
@@ -57,16 +56,10 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
         [Fact]
         public async Task Only_one_part_of_a_composite_key_needs_to_vary_for_uniqueness()
         {
-            var serviceProvider = new ServiceCollection()
-                .AddEntityFrameworkSqlite()
-                .BuildServiceProvider();
-
             var ids = new int[3];
 
-            using (var context = new BronieContext(serviceProvider, "CompositeEarthPonies"))
+            using (var context = CreateContext())
             {
-                context.Database.EnsureClean();
-
                 var pony1 = context.Add(new EarthPony { Id1 = 1, Id2 = 7, Name = "Apple Jack 1" }).Entity;
                 var pony2 = context.Add(new EarthPony { Id1 = 2, Id2 = 7, Name = "Apple Jack 2" }).Entity;
                 var pony3 = context.Add(new EarthPony { Id1 = 3, Id2 = 7, Name = "Apple Jack 3" }).Entity;
@@ -78,7 +71,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
                 ids[2] = pony3.Id1;
             }
 
-            using (var context = new BronieContext(serviceProvider, "CompositeEarthPonies"))
+            using (var context = CreateContext())
             {
                 var ponies = context.EarthPonies.ToList();
                 Assert.Equal(ponies.Count, ponies.Count(e => e.Name == "Apple Jack 1") * 3);
@@ -92,7 +85,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
                 await context.SaveChangesAsync();
             }
 
-            using (var context = new BronieContext(serviceProvider, "CompositeEarthPonies"))
+            using (var context = CreateContext())
             {
                 var ponies = context.EarthPonies.ToArray();
                 Assert.Equal(ponies.Length, ponies.Count(e => e.Name == "Apple Jack 1") * 3);
@@ -106,45 +99,50 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
                 await context.SaveChangesAsync();
             }
 
-            using (var context = new BronieContext(serviceProvider, "CompositeEarthPonies"))
+            using (var context = CreateContext())
             {
                 Assert.Equal(0, context.EarthPonies.Count());
             }
         }
 
+        private BronieContext CreateContext() => (BronieContext)Fixture.CreateContext();
+
+        public class CompositeKeyEndToEndFixture : SharedStoreFixtureBase<DbContext>
+        {
+            protected override string StoreName { get; } = "CompositeKeyEndToEndTest";
+            protected override ITestStoreFactory TestStoreFactory => SqliteTestStoreFactory.Instance;
+            protected override Type ContextType { get; } = typeof(BronieContext);
+        }
+
         private class BronieContext : DbContext
         {
-            private readonly IServiceProvider _serviceProvider;
-            private readonly string _databaseName;
-
-            public BronieContext(IServiceProvider serviceProvider, string databaseName)
+            public BronieContext(DbContextOptions options)
+                : base(options)
             {
-                _serviceProvider = serviceProvider;
-                _databaseName = databaseName;
             }
 
+            // ReSharper disable UnusedAutoPropertyAccessor.Local
             public DbSet<Pegasus> Pegasuses { get; set; }
-            public DbSet<EarthPony> EarthPonies { get; set; }
 
-            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                => optionsBuilder
-                    .UseSqlite(SqliteTestStore.CreateConnectionString(_databaseName))
-                    .UseInternalServiceProvider(_serviceProvider);
+            public DbSet<EarthPony> EarthPonies { get; set; }
+            // ReSharper restore UnusedAutoPropertyAccessor.Local
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Pegasus>(b =>
-                    {
-                        b.ToTable("Pegasus");
-                        b.HasKey(e => new { e.Id1, e.Id2 });
-                    });
+                modelBuilder.Entity<Pegasus>(
+                    b =>
+                        {
+                            b.ToTable("Pegasus");
+                            b.HasKey(e => new { e.Id1, e.Id2 });
+                        });
 
-                modelBuilder.Entity<EarthPony>(b =>
-                    {
-                        b.ToTable("EarthPony");
-                        b.HasKey(e => new { e.Id1, e.Id2 });
-                        b.Property(e => e.Id1);
-                    });
+                modelBuilder.Entity<EarthPony>(
+                    b =>
+                        {
+                            b.ToTable("EarthPony");
+                            b.HasKey(e => new { e.Id1, e.Id2 });
+                            b.Property(e => e.Id1);
+                        });
             }
         }
 

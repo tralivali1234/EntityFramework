@@ -78,8 +78,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             {
                 var nonNullExpression = isLeftNullConstant ? node.Right : node.Left;
 
-                var methodCallExpression = nonNullExpression as MethodCallExpression;
-                if (methodCallExpression != null)
+                if (nonNullExpression is MethodCallExpression methodCallExpression)
                 {
                     if (methodCallExpression.Method.IsEFPropertyMethod())
                     {
@@ -206,12 +205,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     if (newAccessOperation != nullConditionalExpression.AccessOperation)
                     {
                         var test = ValueBufferNullComparisonCheck(newCaller);
-                        if (!newAccessOperation.Type.IsNullableType())
+                        var newAccessOperationWithoutConvert = newAccessOperation.RemoveConvert();
+                        if (!newAccessOperationWithoutConvert.Type.IsNullableType())
                         {
                             // since we are in the NullConditionalExpression, member we are trying to bind to could be coming from Left Join
                             // and therefore its value could be null, even though the property type itself is not nullable
                             // we need to compensate for this with additional check
-                            var nullableAccessOperation = TryCreateNullableAccessOperation(newAccessOperation);
+                            var nullableAccessOperation = TryCreateNullableAccessOperation(newAccessOperationWithoutConvert);
                             if (nullableAccessOperation != null)
                             {
                                 test = Expression.AndAlso(
@@ -235,22 +235,26 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return base.VisitExtension(node);
         }
 
-        private static Expression TryCreateNullableAccessOperation(Expression accessOperation)
+        private static bool TryMakeNullable(
+            MethodInfo method,
+            Type type,
+            out MethodInfo convertedMethod)
         {
-            if (accessOperation is MethodCallExpression methodCallExpression
-                && methodCallExpression.Method.MethodIsClosedFormOf(EntityMaterializerSource.TryReadValueMethod))
+            if (method.MethodIsClosedFormOf(EntityMaterializerSource.TryReadValueMethod))
             {
-                var tryReadValueMethodInfo = EntityMaterializerSource.TryReadValueMethod.MakeGenericMethod(accessOperation.Type.MakeNullable());
-
-                return Expression.Call(
-                    tryReadValueMethodInfo,
-                    methodCallExpression.Arguments[0],
-                    methodCallExpression.Arguments[1],
-                    methodCallExpression.Arguments[2]);
+                convertedMethod = EntityMaterializerSource.TryReadValueMethod.MakeGenericMethod(type.MakeNullable());
+                return true;
             }
 
-            return null;
+            convertedMethod = null;
+            return false;
         }
+
+        private static Expression TryCreateNullableAccessOperation(Expression accessOperation)
+            => accessOperation is MethodCallExpression methodCallExpression
+               && TryMakeNullable(methodCallExpression.Method, accessOperation.Type, out var convertedMethod)
+                ? Expression.Call(convertedMethod, methodCallExpression.Arguments)
+                : null;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -387,9 +391,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             var innerExpression
                 = memberExpression?.Expression
-                    ?? ((methodCallExpression?.Method).IsEFPropertyMethod()
-                        ? methodCallExpression?.Arguments[0]
-                        : null);
+                  ?? ((methodCallExpression?.Method).IsEFPropertyMethod()
+                      ? methodCallExpression?.Arguments[0]
+                      : null);
 
             if (innerExpression == null)
             {
@@ -465,7 +469,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             if (entity == null)
             {
-                return default(T);
+                return default;
             }
 
             return (T)queryContext.QueryBuffer.GetPropertyValue(entity, property);
@@ -480,7 +484,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             if (entity == null)
             {
-                return default(T);
+                return default;
             }
 
             return (T)clrPropertyGetter.GetClrValue(entity);

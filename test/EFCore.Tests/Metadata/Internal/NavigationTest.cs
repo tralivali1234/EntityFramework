@@ -2,23 +2,40 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Moq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class NavigationTest
     {
         [Fact]
         public void Use_of_custom_INavigation_throws()
         {
+            var navigation = new FakeNavigation();
+
             Assert.Equal(
-                CoreStrings.CustomMetadata(nameof(Use_of_custom_INavigation_throws), nameof(INavigation), "INavigationProxy"),
-                Assert.Throws<NotSupportedException>(() => Mock.Of<INavigation>().AsNavigation()).Message);
+                CoreStrings.CustomMetadata(nameof(Use_of_custom_INavigation_throws), nameof(INavigation), nameof(FakeNavigation)),
+                Assert.Throws<NotSupportedException>(() => navigation.AsNavigation()).Message);
+        }
+
+        private class FakeNavigation : INavigation
+        {
+            public object this[string name] => throw new NotImplementedException();
+            public IAnnotation FindAnnotation(string name) => throw new NotImplementedException();
+            public IEnumerable<IAnnotation> GetAnnotations() => throw new NotImplementedException();
+            public string Name { get; }
+            public ITypeBase DeclaringType { get; }
+            public Type ClrType { get; }
+            public PropertyInfo PropertyInfo { get; }
+            public FieldInfo FieldInfo { get; }
+            public bool IsShadowProperty { get; }
+            public IEntityType DeclaringEntityType { get; }
+            public IForeignKey ForeignKey { get; }
+            public bool IsEagerLoaded { get; }
         }
 
         [Fact]

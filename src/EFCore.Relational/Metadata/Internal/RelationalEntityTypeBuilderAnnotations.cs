@@ -29,9 +29,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public RelationalEntityTypeBuilderAnnotations(
             [NotNull] InternalEntityTypeBuilder internalBuilder,
-            ConfigurationSource configurationSource,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-            : base(new RelationalAnnotationsBuilder(internalBuilder, configurationSource), providerFullAnnotationNames)
+            ConfigurationSource configurationSource)
+            : base(new RelationalAnnotationsBuilder(internalBuilder, configurationSource))
         {
         }
 
@@ -54,8 +53,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         protected override RelationalModelAnnotations GetAnnotations(IModel model)
             => new RelationalModelBuilderAnnotations(
                 ((Model)model).Builder,
-                Annotations.ConfigurationSource,
-                ProviderFullAnnotationNames);
+                Annotations.ConfigurationSource);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -64,8 +62,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         protected override RelationalEntityTypeAnnotations GetAnnotations(IEntityType entityType)
             => new RelationalEntityTypeBuilderAnnotations(
                 ((EntityType)entityType).Builder,
-                Annotations.ConfigurationSource,
-                ProviderFullAnnotationNames);
+                Annotations.ConfigurationSource);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -158,9 +155,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 return RemoveDiscriminator();
             }
 
-            return (DiscriminatorProperty != null)
-                   && (DiscriminatorProperty.Name == propertyInfo.Name)
-                   && (DiscriminatorProperty.ClrType == propertyInfo.PropertyType)
+            return DiscriminatorProperty != null
+                   && DiscriminatorProperty.Name == propertyInfo.Name
+                   && DiscriminatorProperty.ClrType == propertyInfo.PropertyType
                 ? DiscriminatorBuilder(null, null)
                 : DiscriminatorBuilder(b => b.Property(propertyInfo, Annotations.ConfigurationSource), null);
         }
@@ -181,8 +178,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 }
             }
 
-            return new DiscriminatorBuilder(Annotations, entityBuilder
-                => new RelationalEntityTypeBuilderAnnotations(entityBuilder, Annotations.ConfigurationSource, ProviderFullAnnotationNames));
+            return new DiscriminatorBuilder(
+                Annotations, entityBuilder
+                    => new RelationalEntityTypeBuilderAnnotations(entityBuilder, Annotations.ConfigurationSource));
         }
 
         private DiscriminatorBuilder DiscriminatorBuilder(
@@ -246,15 +244,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             propertyBuilder.IsRequired(true, configurationSource);
-            // TODO: #2132
-            //propertyBuilder.ReadOnlyBeforeSave(true, configurationSource);
-            propertyBuilder.ReadOnlyAfterSave(true, configurationSource);
+            propertyBuilder.AfterSave(PropertySaveBehavior.Throw, configurationSource);
             propertyBuilder.HasValueGenerator(
                 (property, entityType) => new DiscriminatorValueGenerator(GetAnnotations(entityType).DiscriminatorValue),
                 configurationSource);
 
-            return new DiscriminatorBuilder(Annotations, entityBuilder
-                => new RelationalEntityTypeBuilderAnnotations(entityBuilder, Annotations.ConfigurationSource, ProviderFullAnnotationNames));
+            return new DiscriminatorBuilder(
+                Annotations, entityBuilder
+                    => new RelationalEntityTypeBuilderAnnotations(entityBuilder, Annotations.ConfigurationSource));
         }
 
         /// <summary>

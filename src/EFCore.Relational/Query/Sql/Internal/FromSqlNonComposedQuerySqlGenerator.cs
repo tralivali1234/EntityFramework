@@ -22,6 +22,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
         private readonly string _sql;
         private readonly Expression _arguments;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public FromSqlNonComposedQuerySqlGenerator(
             [NotNull] QuerySqlGeneratorDependencies dependencies,
             [NotNull] SelectExpression selectExpression,
@@ -60,15 +64,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
             var readerColumns
                 = Enumerable
                     .Range(0, dataReader.FieldCount)
-                    .Select(i => new
-                    {
-                        Name = dataReader.GetName(i),
-                        Ordinal = i
-                    })
+                    .Select(
+                        i => new
+                        {
+                            Name = dataReader.GetName(i),
+                            Ordinal = i
+                        })
                     .ToList();
 
-            var types = new Type[SelectExpression.Projection.Count];
-            var indexMap = new int[SelectExpression.Projection.Count];
+            var types = new TypeMaterializationInfo[SelectExpression.Projection.Count];
 
             for (var i = 0; i < SelectExpression.Projection.Count; i++)
             {
@@ -79,21 +83,25 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
                     if (columnName != null)
                     {
                         var readerColumn
-                            = readerColumns.SingleOrDefault(c =>
-                                string.Equals(columnName, c.Name, StringComparison.OrdinalIgnoreCase));
+                            = readerColumns.SingleOrDefault(
+                                c =>
+                                    string.Equals(columnName, c.Name, StringComparison.OrdinalIgnoreCase));
 
                         if (readerColumn == null)
                         {
                             throw new InvalidOperationException(RelationalStrings.FromSqlMissingColumn(columnName));
                         }
 
-                        types[i] = SelectExpression.Projection[i].Type;
-                        indexMap[i] = readerColumn.Ordinal;
+                        types[i] = new TypeMaterializationInfo(
+                            columnExpression.Type,
+                            columnExpression.Property,
+                            Dependencies.RelationalTypeMapper,
+                            readerColumn.Ordinal);
                     }
                 }
             }
 
-            return relationalValueBufferFactoryFactory.Create(types, indexMap);
+            return relationalValueBufferFactoryFactory.Create(types);
         }
     }
 }

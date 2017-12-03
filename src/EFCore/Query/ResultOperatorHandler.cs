@@ -81,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             Check.NotNull(resultOperator, nameof(resultOperator));
             Check.NotNull(queryModel, nameof(queryModel));
 
-            if (!_handlers.TryGetValue(resultOperator.GetType(), out ResultHandler handler))
+            if (!_handlers.TryGetValue(resultOperator.GetType(), out var handler))
             {
                 throw new NotImplementedException(resultOperator.GetType().ToString());
             }
@@ -216,7 +216,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 (choiceResultOperator.ReturnDefaultWhenEmpty
                     ? entityQueryModelVisitor.LinqOperatorProvider.FirstOrDefault
                     : entityQueryModelVisitor.LinqOperatorProvider.First)
-                    .MakeGenericMethod(entityQueryModelVisitor.Expression.Type.GetSequenceType()),
+                .MakeGenericMethod(entityQueryModelVisitor.Expression.Type.GetSequenceType()),
                 entityQueryModelVisitor.Expression);
 
         private static Expression HandleGroup(
@@ -386,12 +386,13 @@ namespace Microsoft.EntityFrameworkCore.Query
                             Expression.Call(
                                 entityQueryModelVisitor.LinqOperatorProvider.ToSequence
                                     .MakeGenericMethod(methodCallExpression.Arguments[0].Type.GetSequenceType()),
-                                CallWithPossibleCancellationToken(
-                                    (choiceResultOperator.ReturnDefaultWhenEmpty
-                                        ? entityQueryModelVisitor.LinqOperatorProvider.LastOrDefault
-                                        : entityQueryModelVisitor.LinqOperatorProvider.Last)
-                                        .MakeGenericMethod(methodCallExpression.Arguments[0].Type.GetSequenceType()),
-                                    methodCallExpression.Arguments[0])),
+                                Expression.Lambda(
+                                    CallWithPossibleCancellationToken(
+                                        (choiceResultOperator.ReturnDefaultWhenEmpty
+                                            ? entityQueryModelVisitor.LinqOperatorProvider.LastOrDefault
+                                            : entityQueryModelVisitor.LinqOperatorProvider.Last)
+                                            .MakeGenericMethod(methodCallExpression.Arguments[0].Type.GetSequenceType()),
+                                        methodCallExpression.Arguments[0]))),
                             methodCallExpression.Arguments[1]
                         });
             }
@@ -400,7 +401,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 (choiceResultOperator.ReturnDefaultWhenEmpty
                     ? entityQueryModelVisitor.LinqOperatorProvider.LastOrDefault
                     : entityQueryModelVisitor.LinqOperatorProvider.Last)
-                    .MakeGenericMethod(entityQueryModelVisitor.Expression.Type.GetSequenceType()),
+                .MakeGenericMethod(entityQueryModelVisitor.Expression.Type.GetSequenceType()),
                 entityQueryModelVisitor.Expression);
         }
 
@@ -430,7 +431,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 (choiceResultOperator.ReturnDefaultWhenEmpty
                     ? entityQueryModelVisitor.LinqOperatorProvider.SingleOrDefault
                     : entityQueryModelVisitor.LinqOperatorProvider.Single)
-                    .MakeGenericMethod(entityQueryModelVisitor.Expression.Type.GetSequenceType()),
+                .MakeGenericMethod(entityQueryModelVisitor.Expression.Type.GetSequenceType()),
                 entityQueryModelVisitor.Expression);
 
         private static Expression HandleSkip(
@@ -564,12 +565,13 @@ namespace Microsoft.EntityFrameworkCore.Query
                     methodInfo,
                     arguments
                         .AsEnumerable()
-                        .Concat(new[]
-                        {
-                            Expression.Property(
-                                EntityQueryModelVisitor.QueryContextParameter,
-                                _cancellationTokenProperty)
-                        }));
+                        .Concat(
+                            new[]
+                            {
+                                Expression.Property(
+                                    EntityQueryModelVisitor.QueryContextParameter,
+                                    _cancellationTokenProperty)
+                            }));
             }
 
             return Expression.Call(methodInfo, arguments);

@@ -2,11 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Data.Common;
-using Moq;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class CommandConfigurationTests
     {
@@ -53,7 +52,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                         () => context.Database.SetCommandTimeout(TimeSpan.FromSeconds(-99)));
 
                     Assert.Throws<ArgumentException>(
-                        () => context.Database.SetCommandTimeout(TimeSpan.FromSeconds(UInt32.MaxValue)));
+                        () => context.Database.SetCommandTimeout(TimeSpan.FromSeconds(uint.MaxValue)));
                 }
             }
 
@@ -64,15 +63,10 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
                 }
 
                 public TimeoutContext(int? commandTimeout)
-                {
-                    Database.SetCommandTimeout(commandTimeout);
-                }
+                    => Database.SetCommandTimeout(commandTimeout);
 
                 protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-                {
-                    var connectionMock = new Mock<DbConnection>();
-                    optionsBuilder.UseSqlServer(connectionMock.Object);
-                }
+                    => optionsBuilder.UseSqlServer(new FakeDbConnection("A=B"));
             }
         }
     }

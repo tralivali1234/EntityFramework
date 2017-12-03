@@ -32,7 +32,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         private readonly ISelectExpressionFactory _selectExpressionFactory;
         private readonly IMaterializerFactory _materializerFactory;
         private readonly IShaperCommandContextFactory _shaperCommandContextFactory;
-        private readonly IRelationalAnnotationProvider _relationalAnnotationProvider;
         private readonly IQuerySource _querySource;
 
         /// <summary>
@@ -53,7 +52,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             _selectExpressionFactory = dependencies.SelectExpressionFactory;
             _materializerFactory = dependencies.MaterializerFactory;
             _shaperCommandContextFactory = dependencies.ShaperCommandContextFactory;
-            _relationalAnnotationProvider = dependencies.RelationalAnnotationProvider;
             _querySource = querySource;
         }
 
@@ -153,14 +151,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
 
             QueryModelVisitor.AddQuery(_querySource, selectExpression);
 
-            var name = _relationalAnnotationProvider.For(entityType).TableName;
+            var name = entityType.Relational().TableName;
 
             var tableAlias
                 = relationalQueryCompilationContext.CreateUniqueTableAlias(
                     _querySource.HasGeneratedItemName()
                         ? name[0].ToString().ToLowerInvariant()
                         : (_querySource as GroupJoinClause)?.JoinClause.ItemName
-                            ?? _querySource.ItemName);
+                          ?? _querySource.ItemName);
 
             var fromSqlAnnotation
                 = relationalQueryCompilationContext
@@ -175,7 +173,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                 selectExpression.AddTable(
                     new TableExpression(
                         name,
-                        _relationalAnnotationProvider.For(entityType).Schema,
+                        entityType.Relational().Schema,
                         tableAlias,
                         _querySource));
             }
@@ -258,15 +256,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
 
                 shaper
                     = (Shaper)_createEntityShaperMethodInfo.MakeGenericMethod(elementType)
-                        .Invoke(null, new object[]
-                        {
-                            _querySource,
-                            QueryModelVisitor.QueryCompilationContext.IsTrackingQuery,
-                            entityType.FindPrimaryKey(),
-                            materializer,
-                            typeIndexMap,
-                            QueryModelVisitor.QueryCompilationContext.IsQueryBufferRequired
-                        });
+                        .Invoke(
+                            null, new object[]
+                            {
+                                _querySource,
+                                QueryModelVisitor.QueryCompilationContext.IsTrackingQuery,
+                                entityType.FindPrimaryKey(),
+                                materializer,
+                                typeIndexMap,
+                                QueryModelVisitor.QueryCompilationContext.IsQueryBufferRequired
+                            });
             }
             else
             {
@@ -291,8 +290,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             }
 
             var discriminatorProperty
-                = _relationalAnnotationProvider
-                    .For(concreteEntityTypes[0]).DiscriminatorProperty;
+                = concreteEntityTypes[0].Relational().DiscriminatorProperty;
 
             var discriminatorColumn
                 = selectExpression.BindProperty(
@@ -301,7 +299,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
 
             var firstDiscriminatorValue
                 = Expression.Constant(
-                    _relationalAnnotationProvider.For(concreteEntityTypes[0]).DiscriminatorValue,
+                    concreteEntityTypes[0].Relational().DiscriminatorValue,
                     discriminatorColumn.Type);
 
             var discriminatorPredicate
@@ -318,15 +316,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             discriminatorPredicate
                 = concreteEntityTypes
                     .Skip(1)
-                    .Select(concreteEntityType
-                        => Expression.Constant(
-                            _relationalAnnotationProvider
-                                .For(concreteEntityType).DiscriminatorValue,
-                            discriminatorColumn.Type))
-                    .Aggregate(discriminatorPredicate, (current, discriminatorValue) =>
-                        Expression.OrElse(
-                            Expression.Equal(discriminatorColumn, discriminatorValue),
-                            current));
+                    .Select(
+                        concreteEntityType
+                            => Expression.Constant(
+                                concreteEntityType.Relational().DiscriminatorValue,
+                                discriminatorColumn.Type))
+                    .Aggregate(
+                        discriminatorPredicate, (current, discriminatorValue) =>
+                            Expression.OrElse(
+                                Expression.Equal(discriminatorColumn, discriminatorValue),
+                                current));
 
             selectExpression.Predicate
                 = new DiscriminatorPredicateExpression(discriminatorPredicate, querySource);

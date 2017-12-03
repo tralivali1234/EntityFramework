@@ -2,11 +2,15 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
-using Microsoft.EntityFrameworkCore.Query.Internal;
+using Remotion.Linq.Clauses.Expressions;
+using Remotion.Linq.Clauses.ResultOperators;
 
 namespace Microsoft.EntityFrameworkCore.Query.Expressions
 {
@@ -92,9 +96,31 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             return _querySource == PreProcessQuerySource(querySource);
         }
 
+        /// <summary>
+        ///     Pre-processes the given <see cref="IQuerySource" />.
+        /// </summary>
+        /// <param name="querySource"> The query source. </param>
+        /// <returns> The query source after pre-processing. </returns>
         protected virtual IQuerySource PreProcessQuerySource([NotNull] IQuerySource querySource)
         {
             Check.NotNull(querySource, nameof(querySource));
+
+            // TODO: DRY this up with include pipeline trying to find innerQSRE in similar cases
+            var innerQsre = (querySource as FromClauseBase)?.FromExpression as QuerySourceReferenceExpression;
+            if (innerQsre?.Type.IsGrouping() == true)
+            {
+                var groupByResultOperator =
+                    (GroupResultOperator)((SubQueryExpression)((MainFromClause)innerQsre.ReferencedQuerySource).FromExpression)
+                    .QueryModel.ResultOperators
+                    .Last();
+
+                var innerQuerySource = groupByResultOperator.ElementSelector.TryGetReferencedQuerySource();
+
+                if (innerQuerySource != null)
+                {
+                    return innerQuerySource;
+                }
+            }
 
             var newQuerySource = (querySource as AdditionalFromClause)?.TryGetFlattenedGroupJoinClause() ?? querySource;
 
@@ -102,7 +128,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         }
 
         /// <summary>
-        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(System.Linq.Expressions.Expression)" /> method passing the
+        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(Expression)" /> method passing the
         ///     reduced expression.
         ///     Throws an exception if the node isn't reducible.
         /// </summary>

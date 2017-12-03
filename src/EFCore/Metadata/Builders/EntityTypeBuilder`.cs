@@ -84,26 +84,29 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// </param>
         /// <returns> An object that can be used to configure the primary key. </returns>
         public virtual KeyBuilder HasKey([NotNull] Expression<Func<TEntity, object>> keyExpression)
-            => new KeyBuilder(Builder.PrimaryKey(
-                Check.NotNull(keyExpression, nameof(keyExpression)).GetPropertyAccessList(), ConfigurationSource.Explicit));
+            => new KeyBuilder(
+                Builder.PrimaryKey(
+                    Check.NotNull(keyExpression, nameof(keyExpression)).GetPropertyAccessList(), ConfigurationSource.Explicit));
 
         /// <summary>
-        ///     Creates a new unique constraint for this entity type if one does not already exist over the specified
-        ///     properties.
+        ///     Creates an alternate key in the model for this entity type if one does not already exist over the specified
+        ///     properties. This will force the properties to be read-only. Use <see cref="HasIndex" /> to specify uniqueness
+        ///     in the model that does not force properties to be read-only.
         /// </summary>
         /// <param name="keyExpression">
         ///     <para>
-        ///         A lambda expression representing the unique constraint property(s) (<c>blog => blog.Url</c>).
+        ///         A lambda expression representing the key property(s) (<c>blog => blog.Url</c>).
         ///     </para>
         ///     <para>
-        ///         If the unique constraint is made up of multiple properties then specify an anonymous type including
+        ///         If the key is made up of multiple properties then specify an anonymous type including
         ///         the properties (<c>post => new { post.Title, post.BlogId }</c>).
         ///     </para>
         /// </param>
-        /// <returns> An object that can be used to configure the unique constraint. </returns>
+        /// <returns> An object that can be used to configure the key. </returns>
         public virtual KeyBuilder HasAlternateKey([NotNull] Expression<Func<TEntity, object>> keyExpression)
-            => new KeyBuilder(Builder.HasKey(
-                Check.NotNull(keyExpression, nameof(keyExpression)).GetPropertyAccessList(), ConfigurationSource.Explicit));
+            => new KeyBuilder(
+                Builder.HasKey(
+                    Check.NotNull(keyExpression, nameof(keyExpression)).GetPropertyAccessList(), ConfigurationSource.Explicit));
 
         /// <summary>
         ///     Returns an object that can be used to configure a property of the entity type.
@@ -115,8 +118,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// </param>
         /// <returns> An object that can be used to configure the property. </returns>
         public virtual PropertyBuilder<TProperty> Property<TProperty>([NotNull] Expression<Func<TEntity, TProperty>> propertyExpression)
-            => new PropertyBuilder<TProperty>(Builder.Property(
-                Check.NotNull(propertyExpression, nameof(propertyExpression)).GetPropertyAccess(), ConfigurationSource.Explicit));
+            => new PropertyBuilder<TProperty>(
+                Builder.Property(
+                    Check.NotNull(propertyExpression, nameof(propertyExpression)).GetPropertyAccess(), ConfigurationSource.Explicit));
 
         /// <summary>
         ///     Excludes the given property from the entity type. This method is typically used to remove properties
@@ -143,7 +147,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     this entity type.
         /// </summary>
         /// <param name="filter">The LINQ predicate expression.</param>
-        /// <returns></returns>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
         public virtual EntityTypeBuilder<TEntity> HasQueryFilter([CanBeNull] Expression<Func<TEntity, bool>> filter)
             => (EntityTypeBuilder<TEntity>)base.HasQueryFilter(filter);
 
@@ -163,8 +167,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// </param>
         /// <returns> An object that can be used to configure the index. </returns>
         public virtual IndexBuilder HasIndex([NotNull] Expression<Func<TEntity, object>> indexExpression)
-            => new IndexBuilder(Builder.HasIndex(
-                Check.NotNull(indexExpression, nameof(indexExpression)).GetPropertyAccessList(), ConfigurationSource.Explicit));
+            => new IndexBuilder(
+                Builder.HasIndex(
+                    Check.NotNull(indexExpression, nameof(indexExpression)).GetPropertyAccessList(), ConfigurationSource.Explicit));
 
         /// <summary>
         ///     <para>
@@ -278,7 +283,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 Builder.Metadata,
                 relatedEntityType,
                 navigation,
-                Builder.Navigation(relatedEntityType.Builder, navigation, ConfigurationSource.Explicit,
+                Builder.Navigation(
+                    relatedEntityType.Builder, navigation, ConfigurationSource.Explicit,
                     setTargetAsPrincipal: Builder.Metadata == relatedEntityType));
         }
 
@@ -343,11 +349,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties of this entity type as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for all properties of this entity type any access mode that was
+        ///         Calling this method overrides for all properties of this entity type any access mode that was
         ///         set on the model.
         ///     </para>
         /// </summary>
@@ -355,6 +361,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
         public new virtual EntityTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
             => (EntityTypeBuilder<TEntity>)base.UsePropertyAccessMode(propertyAccessMode);
+
+        /// <summary>
+        ///     Configures this entity to have seed data. It is used to generate data motion migrations.
+        /// </summary>
+        /// <param name="data">
+        ///     An array of seed data.
+        /// </param>
+        public virtual EntityTypeBuilder<TEntity> SeedData([NotNull] params TEntity[] data)
+            => (EntityTypeBuilder<TEntity>)base.SeedData(data);
 
         private InternalEntityTypeBuilder Builder => this.GetInfrastructure<InternalEntityTypeBuilder>();
     }

@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
-
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -24,7 +22,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
     ///         For WPF data binding use an ObservableCollection rather than an instance of this class.
     ///     </para>
     /// </summary>
-    /// <typeparam name="T"> </typeparam>
+    /// <typeparam name="T"> The type of elements in the collection. </typeparam>
     public class ObservableCollectionListSource<T> : ObservableCollection<T>, IListSource
         where T : class
     {
@@ -73,7 +71,3 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         IList IListSource.GetList() => _bindingList ?? (_bindingList = this.ToBindingList());
     }
 }
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif

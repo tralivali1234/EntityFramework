@@ -5,18 +5,18 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
-using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Xunit;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Xunit;
 
 // ReSharper disable FieldCanBeMadeReadOnly.Local
 // ReSharper disable UnusedMember.Local
 // ReSharper disable ConvertToAutoProperty
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class PropertyBaseTest
     {
@@ -542,7 +542,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             return navigation;
         }
 
-        public void MemberInfoTest(
+        private void MemberInfoTest(
             IMutableProperty property, PropertyAccessMode? accessMode, string forConstruction, string forSet, string forGet)
         {
             property.SetPropertyAccessMode(accessMode);
@@ -550,7 +550,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             MemberInfoTestCommon(property, accessMode, forConstruction, forSet, forGet);
         }
 
-        public void MemberInfoTest(
+        private void MemberInfoTest(
             IMutableNavigation navigation, PropertyAccessMode? accessMode, string forConstruction, string forSet, string forGet)
         {
             navigation.SetPropertyAccessMode(accessMode);
@@ -558,7 +558,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             MemberInfoTestCommon(navigation, accessMode, forConstruction, forSet, forGet);
         }
 
-        public void MemberInfoTestCommon(
+        private void MemberInfoTestCommon(
             IPropertyBase propertyBase, PropertyAccessMode? accessMode, string forConstruction, string forSet, string forGet)
         {
             string failMessage = null;
@@ -615,11 +615,9 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             try
             {
-                new CoreModelValidator(new ModelValidatorDependencies(
-                        new DiagnosticsLogger<LoggerCategory.Model.Validation>(
-                            new FakeLogger(),
-                            new DiagnosticListener("Fake"))))
+                InMemoryTestHelpers.Instance.CreateContextServices().GetRequiredService<IModelValidator>()
                     .Validate(propertyBase.DeclaringType.Model);
+
                 Assert.Null(failMessage);
             }
             catch (InvalidOperationException ex)
@@ -628,7 +626,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             }
         }
 
-        private class FakeLogger : IInterceptingLogger<LoggerCategory.Model.Validation>
+        private class FakeLogger : IDiagnosticsLogger<DbLoggerCategory.Model.Validation>, ILogger
         {
             public void Log<TState>(
                 LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
@@ -636,13 +634,19 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
                 throw new InvalidOperationException(formatter(state, exception));
             }
 
-            public bool IsEnabled(EventId eventId, LogLevel logLevel) => true;
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public WarningBehavior GetLogBehavior(EventId eventId, LogLevel logLevel) => WarningBehavior.Log;
 
             public IDisposable BeginScope<TState>(TState state) => null;
 
             public ILoggingOptions Options { get; }
 
-            public bool ShouldLogSensitiveData(IDiagnosticsLogger<LoggerCategory.Model.Validation> diagnostics) => false;
+            public bool ShouldLogSensitiveData() => false;
+
+            public ILogger Logger => this;
+
+            public DiagnosticSource DiagnosticSource { get; } = new DiagnosticListener("Fake");
         }
 
         [Fact]
@@ -678,13 +682,13 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
         {
             var propertyInfo = typeof(FullProp).GetAnyProperty("Foo");
 
-            Properties_can_have_field_cleared(
+            Properties_can_have_field_cleared_test(
                 new Model().AddEntityType(typeof(FullProp)).AddProperty(propertyInfo), propertyInfo, "_foo");
         }
 
         [Fact]
         public virtual void Field_only_properties_can_have_field_cleared()
-            => Properties_can_have_field_cleared(
+            => Properties_can_have_field_cleared_test(
                 new Model().AddEntityType(typeof(FieldOnly)).AddProperty("Foo", typeof(int)), null, "_foo");
 
         [Fact]
@@ -697,11 +701,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             var propertyInfo = typeof(FullProp).GetAnyProperty("Reference");
 
-            Properties_can_have_field_cleared(
+            Properties_can_have_field_cleared_test(
                 foreignKey.HasDependentToPrincipal(propertyInfo), propertyInfo, "_reference");
         }
 
-        public virtual void Properties_can_have_field_cleared(PropertyBase propertyBase, PropertyInfo propertyInfo, string fieldName)
+        private void Properties_can_have_field_cleared_test(PropertyBase propertyBase, PropertyInfo propertyInfo, string fieldName)
         {
             Assert.Null(propertyBase.GetFieldName());
             Assert.Null(propertyBase.FieldInfo);

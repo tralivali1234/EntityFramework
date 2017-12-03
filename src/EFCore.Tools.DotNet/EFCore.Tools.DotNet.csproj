@@ -2,17 +2,18 @@
 
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
-  <Import Project="..\..\build\common.props" />
-
   <UsingTask TaskName="Microsoft.NET.Build.Tasks.ResolvePackageDependencies" AssemblyFile="$(MicrosoftNETBuildTasksAssembly)" />
 
   <PropertyGroup>
     <TargetFramework>netcoreapp2.0</TargetFramework>
+    <PackageId>Microsoft.EntityFrameworkCore.Tools.DotNet</PackageId>
     <NuspecFile>$(MSBuildThisFileDirectory)$(MSBuildProjectName).nuspec</NuspecFile>
     <NoPackageAnalysis>true</NoPackageAnalysis>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSource>false</IncludeSource>
     <IncludeSymbols>false</IncludeSymbols>
     <EnableApiCheck>false</EnableApiCheck>
+    <PackageType>DotnetCliTool</PackageType>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="$(JsonNetVersion)" />
+    <PackageReference Include="Newtonsoft.Json" Version="$(NewtonsoftJsonPackageVersion)" />
   </ItemGroup>
 
   <Target Name="SetPackageProperties" BeforeTargets="GenerateNuspec">
@@ -30,6 +31,7 @@
     </ResolvePackageDependencies>
     <PropertyGroup>
       <NuspecProperties>
+        id=$(PackageId);
         version=$(PackageVersion);
         configuration=$(Configuration);
         runtimeFrameworkVersion=@(_PackageDefinitions-&gt;WithMetadataValue('Name', 'Microsoft.NETCore.App')-&gt;Metadata('Version'));

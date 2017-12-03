@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class ProviderSpecificServicesTest
     {
@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
                     new ServiceCollection()
                         .AddEntityFrameworkInMemoryDatabase()
                         .BuildServiceProvider())
-                .UseTransientInMemoryDatabase()
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
 
             using (var context = new ConstructorTestContext1A(options))
@@ -35,7 +35,7 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
             var appServiceProivder = new ServiceCollection()
                 .AddEntityFrameworkInMemoryDatabase()
                 .AddDbContext<ConstructorTestContext1A>(
-                    (p, b) => b.UseTransientInMemoryDatabase().UseInternalServiceProvider(p))
+                    (p, b) => b.UseInMemoryDatabase(Guid.NewGuid().ToString()).UseInternalServiceProvider(p))
                 .BuildServiceProvider();
 
             using (var serviceScope = appServiceProivder

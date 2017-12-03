@@ -5,12 +5,10 @@ using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore.Relational.Tests.Storage;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Storage
+namespace Microsoft.EntityFrameworkCore.Storage
 {
     public class SqliteTypeMappingTest : RelationalTypeMappingTest
     {
@@ -19,6 +17,14 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Storage
 
         protected override DbType DefaultParameterType
             => DbType.String;
+
+        [InlineData(typeof(SqliteDateTimeOffsetTypeMapping), typeof(DateTimeOffset))]
+        [InlineData(typeof(SqliteDateTimeTypeMapping), typeof(DateTime))]
+        [InlineData(typeof(SqliteGuidTypeMapping), typeof(Guid))]
+        public override void Create_and_clone_with_converter(Type mappingType, Type clrType)
+        {
+            base.Create_and_clone_with_converter(mappingType, clrType);
+        }
 
         [Theory]
         [InlineData("TEXT", typeof(string))]
@@ -39,7 +45,34 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Storage
         [InlineData("", typeof(string))]
         public void It_maps_strings_to_not_null_types(string typeName, Type clrType)
         {
-            Assert.Equal(clrType, new SqliteTypeMapper(new RelationalTypeMapperDependencies()).GetMapping(typeName).ClrType);
+            Assert.Equal(clrType, new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).GetMapping(typeName).ClrType);
         }
+
+        public override void GenerateSqlLiteral_returns_DateTime_literal()
+        {
+            var value = new DateTime(2015, 3, 12, 13, 36, 37, 371);
+            var literal = new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies())
+                .GetMapping(typeof(DateTime)).GenerateSqlLiteral(value);
+            Assert.Equal("'2015-03-12 13:36:37.371'", literal);
+        }
+
+        public override void GenerateSqlLiteral_returns_DateTimeOffset_literal()
+        {
+            var value = new DateTimeOffset(2015, 3, 12, 13, 36, 37, 371, new TimeSpan(-7, 0, 0));
+            var literal = new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies())
+                .GetMapping(typeof(DateTimeOffset)).GenerateSqlLiteral(value);
+            Assert.Equal("'2015-03-12 13:36:37.371-07:00'", literal);
+        }
+
+        public override void GenerateSqlLiteral_returns_Guid_literal()
+        {
+            var value = new Guid("c6f43a9e-91e1-45ef-a320-832ea23b7292");
+            var literal = new SqliteTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies())
+                .GetMapping(typeof(Guid)).GenerateSqlLiteral(value);
+            Assert.Equal("X'9E3AF4C6E191EF45A320832EA23B7292'", literal);
+        }
+
+        protected override DbContextOptions ContextOptions { get; } 
+            = new DbContextOptionsBuilder().UseSqlite("Filename=dummmy.db").Options;
     }
 }

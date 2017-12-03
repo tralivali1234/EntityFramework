@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Sql;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Query.Expressions
@@ -18,10 +18,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
     ///     </para>
     ///     <para>
     ///         Do not construct instances of this class directly from either provider or application code as the
-    ///         constructor signature may change as new dependencies are added. Instead, use this type in 
-    ///         your constructor so that an instance will be created and injected automatically by the 
-    ///         dependency injection container. To create an instance with some dependent services replaced, 
-    ///         first resolve the object from the dependency injection container, then replace selected 
+    ///         constructor signature may change as new dependencies are added. Instead, use this type in
+    ///         your constructor so that an instance will be created and injected automatically by the
+    ///         dependency injection container. To create an instance with some dependent services replaced,
+    ///         first resolve the object from the dependency injection container, then replace selected
     ///         services using the 'With...' methods. Do not call the constructor at any point in this process.
     ///     </para>
     /// </summary>
@@ -32,24 +32,25 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         ///         Creates the service dependencies parameter object for a <see cref="SelectExpression" />.
         ///     </para>
         ///     <para>
-        ///         Do not call this constructor directly from either provider or application code as it may change 
-        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance 
-        ///         will be created and injected automatically by the dependency injection container. To create 
-        ///         an instance with some dependent services replaced, first resolve the object from the dependency 
-        ///         injection container, then replace selected services using the 'With...' methods. Do not call 
+        ///         Do not call this constructor directly from either provider or application code as it may change
+        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance
+        ///         will be created and injected automatically by the dependency injection container. To create
+        ///         an instance with some dependent services replaced, first resolve the object from the dependency
+        ///         injection container, then replace selected services using the 'With...' methods. Do not call
         ///         the constructor at any point in this process.
         ///     </para>
         /// </summary>
         /// <param name="querySqlGeneratorFactory"> The query SQL generator factory. </param>
-        /// <param name="relationalAnnotationProvider"></param>
-        public SelectExpressionDependencies([NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory,
-            [NotNull] IRelationalAnnotationProvider relationalAnnotationProvider)
+        /// <param name="typeMapper"> The type mapper. </param>
+        public SelectExpressionDependencies(
+            [NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory,
+            [NotNull] IRelationalTypeMapper typeMapper)
         {
             Check.NotNull(querySqlGeneratorFactory, nameof(querySqlGeneratorFactory));
-            Check.NotNull(relationalAnnotationProvider, nameof(relationalAnnotationProvider));
+            Check.NotNull(typeMapper, nameof(typeMapper));
 
             QuerySqlGeneratorFactory = querySqlGeneratorFactory;
-            RelationalAnnotationProvider = relationalAnnotationProvider;
+            TypeMapper = typeMapper;
         }
 
         /// <summary>
@@ -58,9 +59,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         public IQuerySqlGeneratorFactory QuerySqlGeneratorFactory { get; }
 
         /// <summary>
-        ///     The relational annotation provider.
+        ///     Gets the type mapper.
         /// </summary>
-        public IRelationalAnnotationProvider RelationalAnnotationProvider { get; }
+        public IRelationalTypeMapper TypeMapper { get; }
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -68,14 +69,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// <param name="querySqlGeneratorFactory"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
         public SelectExpressionDependencies With([NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory)
-            => new SelectExpressionDependencies(Check.NotNull(querySqlGeneratorFactory, nameof(querySqlGeneratorFactory)), RelationalAnnotationProvider);
+            => new SelectExpressionDependencies(querySqlGeneratorFactory, TypeMapper);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
-        /// <param name="relationalAnnotationProvider"> A replacement for the current dependency of this type. </param>
+        /// <param name="typeMapper"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
-        public SelectExpressionDependencies With([NotNull] IRelationalAnnotationProvider relationalAnnotationProvider)
-            => new SelectExpressionDependencies(QuerySqlGeneratorFactory, Check.NotNull(relationalAnnotationProvider, nameof(relationalAnnotationProvider)));
+        public SelectExpressionDependencies With([NotNull] IRelationalTypeMapper typeMapper)
+            => new SelectExpressionDependencies(QuerySqlGeneratorFactory, typeMapper);
     }
 }

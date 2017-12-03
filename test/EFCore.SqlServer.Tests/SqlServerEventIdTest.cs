@@ -3,15 +3,15 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerEventIdTest
     {
@@ -23,26 +23,15 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.Tests
 
             var fakeFactories = new Dictionary<Type, Func<object>>
             {
-                { typeof(IProperty), () => property }
+                { typeof(IList<string>), () => new List<string> { "Fake1", "Fake2" } },
+                { typeof(IProperty), () => property },
+                { typeof(string), () => "Fake" }
             };
 
             SqlServerTestHelpers.Instance.TestEventLogging(
                 typeof(SqlServerEventId),
                 typeof(SqlServerLoggerExtensions),
                 fakeFactories);
-        }
-
-        private class FakeSequence : ISequence
-        {
-            public string Name => "SequenceName";
-            public string Schema => throw new NotImplementedException();
-            public long StartValue => throw new NotImplementedException();
-            public int IncrementBy => throw new NotImplementedException();
-            public long? MinValue => throw new NotImplementedException();
-            public long? MaxValue => throw new NotImplementedException();
-            public Type ClrType => throw new NotImplementedException();
-            public IModel Model => throw new NotImplementedException();
-            public bool IsCyclic => throw new NotImplementedException();
         }
     }
 }

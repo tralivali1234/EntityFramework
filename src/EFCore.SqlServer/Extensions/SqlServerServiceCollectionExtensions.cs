@@ -5,10 +5,8 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
 using Microsoft.EntityFrameworkCore.Query;
@@ -73,7 +71,6 @@ namespace Microsoft.Extensions.DependencyInjection
                 .TryAdd<IValueGeneratorCache>(p => p.GetService<ISqlServerValueGeneratorCache>())
                 .TryAdd<IRelationalTypeMapper, SqlServerTypeMapper>()
                 .TryAdd<ISqlGenerationHelper, SqlServerSqlGenerationHelper>()
-                .TryAdd<IRelationalAnnotationProvider, SqlServerAnnotationProvider>()
                 .TryAdd<IMigrationsAnnotationProvider, SqlServerMigrationsAnnotationProvider>()
                 .TryAdd<IRelationalValueBufferFactoryFactory, UntypedRelationalValueBufferFactoryFactory>()
                 .TryAdd<IModelValidator, SqlServerModelValidator>()
@@ -89,15 +86,16 @@ namespace Microsoft.Extensions.DependencyInjection
                 .TryAdd<IExecutionStrategyFactory, SqlServerExecutionStrategyFactory>()
                 .TryAdd<IQueryCompilationContextFactory, SqlServerQueryCompilationContextFactory>()
                 .TryAdd<IMemberTranslator, SqlServerCompositeMemberTranslator>()
-                .TryAdd<IMethodCallTranslator, SqlServerCompositeMethodCallTranslator>()
+                .TryAdd<ICompositeMethodCallTranslator, SqlServerCompositeMethodCallTranslator>()
                 .TryAdd<IQuerySqlGeneratorFactory, SqlServerQuerySqlGeneratorFactory>()
                 .TryAdd<ISingletonOptions, ISqlServerOptions>(p => p.GetService<ISqlServerOptions>())
-                .TryAddProviderSpecificServices(b => b
-                    .TryAddSingleton<ISqlServerValueGeneratorCache, SqlServerValueGeneratorCache>()
-                    .TryAddSingleton<ISqlServerOptions, SqlServerOptions>()
-                    .TryAddScoped<ISqlServerUpdateSqlGenerator, SqlServerUpdateSqlGenerator>()
-                    .TryAddScoped<ISqlServerSequenceValueGeneratorFactory, SqlServerSequenceValueGeneratorFactory>()
-                    .TryAddScoped<ISqlServerConnection, SqlServerConnection>());
+                .TryAddProviderSpecificServices(
+                    b => b
+                        .TryAddSingleton<ISqlServerValueGeneratorCache, SqlServerValueGeneratorCache>()
+                        .TryAddSingleton<ISqlServerOptions, SqlServerOptions>()
+                        .TryAddSingleton<ISqlServerUpdateSqlGenerator, SqlServerUpdateSqlGenerator>()
+                        .TryAddSingleton<ISqlServerSequenceValueGeneratorFactory, SqlServerSequenceValueGeneratorFactory>()
+                        .TryAddScoped<ISqlServerConnection, SqlServerConnection>());
 
             builder.TryAddCoreServices();
 

@@ -1,10 +1,8 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Data.Common;
-using System.Diagnostics;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
@@ -12,25 +10,24 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
-using Microsoft.EntityFrameworkCore.Update;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 // ReSharper disable MemberCanBePrivate.Local
 // ReSharper disable UnusedAutoPropertyAccessor.Local
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
+namespace Microsoft.EntityFrameworkCore.Update
 {
     public class ReaderModificationCommandBatchTest
     {
         [Fact]
         public void AddCommand_adds_command_if_possible()
         {
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
 
             var batch = new ModificationCommandBatchFake();
             batch.AddCommand(command);
@@ -47,7 +44,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         [Fact]
         public void AddCommand_does_not_add_command_if_not_possible()
         {
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
 
             var batch = new ModificationCommandBatchFake();
             batch.AddCommand(command);
@@ -63,7 +60,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         [Fact]
         public void AddCommand_does_not_add_command_if_resulting_sql_is_invalid()
         {
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
 
             var batch = new ModificationCommandBatchFake();
             batch.AddCommand(command);
@@ -81,17 +78,18 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         {
             var entry = CreateEntry(EntityState.Added);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
-            var sqlGeneratorMock = new Mock<IUpdateSqlGenerator>();
-            var batch = new ModificationCommandBatchFake(sqlGeneratorMock.Object);
+            var fakeSqlGenerator = new FakeSqlGenerator(
+                RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<UpdateSqlGeneratorDependencies>());
+            var batch = new ModificationCommandBatchFake(fakeSqlGenerator);
             batch.AddCommand(command);
 
             batch.UpdateCachedCommandTextBase(0);
 
-            sqlGeneratorMock.Verify(g => g.AppendBatchHeader(It.IsAny<StringBuilder>()));
-            sqlGeneratorMock.Verify(g => g.AppendInsertOperation(It.IsAny<StringBuilder>(), command, 0));
+            Assert.Equal(1, fakeSqlGenerator.AppendBatchHeaderCalls);
+            Assert.Equal(1, fakeSqlGenerator.AppendInsertOperationCalls);
         }
 
         [Fact]
@@ -99,17 +97,18 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         {
             var entry = CreateEntry(EntityState.Modified, generateKeyValues: true);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
-            var sqlGeneratorMock = new Mock<IUpdateSqlGenerator>();
-            var batch = new ModificationCommandBatchFake(sqlGeneratorMock.Object);
+            var fakeSqlGenerator = new FakeSqlGenerator(
+                RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<UpdateSqlGeneratorDependencies>());
+            var batch = new ModificationCommandBatchFake(fakeSqlGenerator);
             batch.AddCommand(command);
 
             batch.UpdateCachedCommandTextBase(0);
 
-            sqlGeneratorMock.Verify(g => g.AppendBatchHeader(It.IsAny<StringBuilder>()));
-            sqlGeneratorMock.Verify(g => g.AppendUpdateOperation(It.IsAny<StringBuilder>(), command, 0));
+            Assert.Equal(1, fakeSqlGenerator.AppendBatchHeaderCalls);
+            Assert.Equal(1, fakeSqlGenerator.AppendUpdateOperationCalls);
         }
 
         [Fact]
@@ -117,17 +116,18 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         {
             var entry = CreateEntry(EntityState.Deleted);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
-            var sqlGeneratorMock = new Mock<IUpdateSqlGenerator>();
-            var batch = new ModificationCommandBatchFake(sqlGeneratorMock.Object);
+            var fakeSqlGenerator = new FakeSqlGenerator(
+                RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<UpdateSqlGeneratorDependencies>());
+            var batch = new ModificationCommandBatchFake(fakeSqlGenerator);
             batch.AddCommand(command);
 
             batch.UpdateCachedCommandTextBase(0);
 
-            sqlGeneratorMock.Verify(g => g.AppendBatchHeader(It.IsAny<StringBuilder>()));
-            sqlGeneratorMock.Verify(g => g.AppendDeleteOperation(It.IsAny<StringBuilder>(), command, 0));
+            Assert.Equal(1, fakeSqlGenerator.AppendBatchHeaderCalls);
+            Assert.Equal(1, fakeSqlGenerator.AppendDeleteOperationCalls);
         }
 
         [Fact]
@@ -135,7 +135,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         {
             var entry = CreateEntry(EntityState.Added);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var fakeSqlGenerator = new FakeSqlGenerator(
@@ -154,7 +154,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         {
             var entry = CreateEntry(EntityState.Added);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var dbDataReader = CreateFakeDataReader();
@@ -176,7 +176,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var entry = CreateEntry(EntityState.Added, generateKeyValues: true);
             entry.MarkAsTemporary(entry.EntityType.FindPrimaryKey().Properties[0]);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var connection = CreateConnection(
@@ -198,7 +198,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                 EntityState.Added, generateKeyValues: true, computeNonKeyValue: true);
             entry.MarkAsTemporary(entry.EntityType.FindPrimaryKey().Properties[0]);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var connection = CreateConnection(
@@ -219,7 +219,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var entry = CreateEntry(
                 EntityState.Modified, generateKeyValues: true, computeNonKeyValue: true);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var connection = CreateConnection(
@@ -240,7 +240,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var entry = CreateEntry(EntityState.Added, generateKeyValues: true);
             entry.MarkAsTemporary(entry.EntityType.FindPrimaryKey().Properties[0]);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var connection = CreateConnection(
@@ -265,7 +265,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         {
             var entry = CreateEntry(EntityState.Added);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var connection = CreateConnection(
@@ -274,9 +274,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var batch = new ModificationCommandBatchFake();
             batch.AddCommand(command);
 
-            Assert.Equal(RelationalStrings.UpdateConcurrencyException(1, 42),
-            (await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-                async () => await batch.ExecuteAsync(connection))).Message);
+            Assert.Equal(
+                RelationalStrings.UpdateConcurrencyException(1, 42),
+                (await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+                    async () => await batch.ExecuteAsync(connection))).Message);
         }
 
         [Fact]
@@ -285,7 +286,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var entry = CreateEntry(EntityState.Added, generateKeyValues: true);
             entry.MarkAsTemporary(entry.EntityType.FindPrimaryKey().Properties[0]);
 
-            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), true, null);
+            var command = new ModificationCommand("T1", null, new ParameterNameGenerator().GenerateNext, true, null);
             command.AddEntry(entry);
 
             var connection = CreateConnection(
@@ -294,9 +295,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var batch = new ModificationCommandBatchFake();
             batch.AddCommand(command);
 
-            Assert.Equal(RelationalStrings.UpdateConcurrencyException(1, 0),
-            (await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
-                async () => await batch.ExecuteAsync(connection))).Message);
+            Assert.Equal(
+                RelationalStrings.UpdateConcurrencyException(1, 0),
+                (await Assert.ThrowsAsync<DbUpdateConcurrencyException>(
+                    async () => await batch.ExecuteAsync(connection))).Message);
         }
 
         [Fact]
@@ -314,7 +316,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                     "T",
                     "S",
                     parameterNameGenerator.GenerateNext,
-                    new TestAnnotationProvider(),
                     true,
                     new List<ColumnModification>
                     {
@@ -331,7 +332,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                     "T",
                     "S",
                     parameterNameGenerator.GenerateNext,
-                    new TestAnnotationProvider(),
                     true,
                     new List<ColumnModification>
                     {
@@ -368,7 +368,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                     "T",
                     "S",
                     parameterNameGenerator.GenerateNext,
-                    new TestAnnotationProvider(),
                     true,
                     new List<ColumnModification>
                     {
@@ -403,7 +402,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                     "T",
                     "S",
                     parameterNameGenerator.GenerateNext,
-                    new TestAnnotationProvider(),
                     true,
                     new List<ColumnModification>
                     {
@@ -438,7 +436,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                     "T",
                     "S",
                     parameterNameGenerator.GenerateNext,
-                    new TestAnnotationProvider(),
                     true,
                     new List<ColumnModification>
                     {
@@ -473,7 +470,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                     "T",
                     "S",
                     parameterNameGenerator.GenerateNext,
-                    new TestAnnotationProvider(),
                     true,
                     new List<ColumnModification>
                     {
@@ -511,8 +507,16 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             nonKey.Relational().ColumnName = "Col2";
             nonKey.ValueGenerated = computeNonKeyValue ? ValueGenerated.OnAddOrUpdate : ValueGenerated.Never;
 
+            GenerateMapping(key);
+            GenerateMapping(nonKey);
+
             return model;
         }
+
+        private static void GenerateMapping(IMutableProperty property)
+            => property[CoreAnnotationNames.TypeMapping] = new TestRelationalTypeMapper(
+                new CoreTypeMapperDependencies(),
+                new RelationalTypeMapperDependencies()).GetMapping(property);
 
         private static InternalEntityEntry CreateEntry(
             EntityState entityState,
@@ -538,17 +542,19 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
                 IUpdateSqlGenerator sqlGenerator = null)
                 : base(
                     new RelationalCommandBuilderFactory(
-                        new DiagnosticsLogger<LoggerCategory.Database.Sql>(
-                            new FakeInterceptingLogger<LoggerCategory.Database.Sql>(),
-                            new DiagnosticListener("Fake")),
-                        new DiagnosticsLogger<LoggerCategory.Database.DataReader>(
-                            new FakeInterceptingLogger<LoggerCategory.Database.DataReader>(),
-                            new DiagnosticListener("Fake")),
-                        new FakeRelationalTypeMapper(new RelationalTypeMapperDependencies())),
-                    new RelationalSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
+                        new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
+                        new FakeRelationalTypeMapper(
+                            new CoreTypeMapperDependencies(),
+                            new RelationalTypeMapperDependencies())),
+                    new RelationalSqlGenerationHelper(
+                        new RelationalSqlGenerationHelperDependencies()),
                     sqlGenerator ?? new FakeSqlGenerator(
                         RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<UpdateSqlGeneratorDependencies>()),
-                    new TypedRelationalValueBufferFactoryFactory(new RelationalValueBufferFactoryDependencies()))
+                    new TypedRelationalValueBufferFactoryFactory(
+                        new RelationalValueBufferFactoryDependencies(
+                            new FakeRelationalTypeMapper(
+                                new CoreTypeMapperDependencies(),
+                                new RelationalTypeMapperDependencies()))))
             {
                 ShouldAddCommand = true;
                 ShouldValidateSql = true;
@@ -601,8 +607,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             var optionsBuilder = new DbContextOptionsBuilder();
 
             ((IDbContextOptionsBuilderInfrastructure)optionsBuilder)
-                .AddOrUpdateExtension(optionsExtension
-                                      ?? new FakeRelationalOptionsExtension().WithConnectionString(ConnectionString));
+                .AddOrUpdateExtension(
+                    optionsExtension
+                    ?? new FakeRelationalOptionsExtension().WithConnectionString(ConnectionString));
 
             return optionsBuilder.Options;
         }

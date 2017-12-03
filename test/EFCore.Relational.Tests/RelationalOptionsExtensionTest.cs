@@ -2,13 +2,12 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities.FakeProvider;
-using Moq;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class RelationalOptionsExtensionTest
     {
@@ -21,16 +20,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
 
             Assert.Null(optionsExtension.Connection);
 
-            var connection = Mock.Of<DbConnection>();
+            var connection = new FakeDbConnection("A=B");
             optionsExtension = (FakeRelationalOptionsExtension)optionsExtension.WithConnection(connection);
 
             Assert.Same(connection, optionsExtension.Connection);
-        }
-
-        [Fact]
-        public void Throws_when_setting_Connection_to_null()
-        {
-            Assert.Throws<ArgumentNullException>(() => new FakeRelationalOptionsExtension().WithConnection(null));
         }
 
         [Fact]
@@ -43,12 +36,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests
             optionsExtension = (FakeRelationalOptionsExtension)optionsExtension.WithConnectionString(ConnectionString);
 
             Assert.Equal(ConnectionString, optionsExtension.ConnectionString);
-        }
-
-        [Fact]
-        public void Throws_when_setting_ConnectionString_to_null()
-        {
-            Assert.Throws<ArgumentNullException>(() => new FakeRelationalOptionsExtension().WithConnectionString(null));
         }
 
         [Fact]

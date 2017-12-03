@@ -1,17 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
-
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
+namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class ObservableBackedBindingListTest
     {
@@ -181,9 +177,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             var item = new ListElement(4);
             var oc = new ObservableCollection<ListElement> { 3, 1, item, 1, 5, 9 };
-            var obbl = new ObservableBackedBindingList<ListElement>(oc);
-
-            obbl.Add(item);
+            var obbl = new ObservableBackedBindingList<ListElement>(oc)
+            {
+                item
+            };
 
             Assert.Equal(7, oc.Count);
             Assert.Equal(2, oc.Count(i => ReferenceEquals(i, item)));
@@ -366,9 +363,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             var item = new ListElement(4);
             var oc = new ObservableHashSet<ListElement> { 3, 1, item, 1, 5, 9 };
-            var obbl = new ObservableBackedBindingList<ListElement>(oc);
-
-            obbl.Add(item);
+            var obbl = new ObservableBackedBindingList<ListElement>(oc)
+            {
+                item
+            };
 
             Assert.Equal(6, oc.Count);
             Assert.Equal(1, oc.Count(i => ReferenceEquals(i, item)));
@@ -419,14 +417,16 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
             public static implicit operator ListElement(int i) => new ListElement(i);
 
             public int Int { get; }
-            public int? NullableInt { get; set; }
-            public string String { get; set; }
-            public NotXNode XNode { get; set; }
-            public Random Random { get; set; }
-            public byte[] ByteArray { get; set; }
+            public int? NullableInt { get; }
+            public string String { get; }
+            public NotXNode XNode { get; }
+            public Random Random { get; }
+            public byte[] ByteArray { get; }
 
             public static PropertyDescriptor Property(string name)
-                => TypeDescriptor.GetProperties(typeof(ListElement))[name];
+            {
+                return TypeDescriptor.GetProperties(typeof(ListElement))[name];
+            }
         }
 
         private abstract class NotXNode
@@ -444,7 +444,3 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         }
     }
 }
-#elif NETCOREAPP2_0
-#else
-#error target frameworks need to be updated.
-#endif

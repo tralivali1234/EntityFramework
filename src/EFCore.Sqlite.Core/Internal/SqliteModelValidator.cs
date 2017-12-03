@@ -5,12 +5,19 @@ using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Internal
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class SqliteModelValidator : RelationalModelValidator
     {
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqliteModelValidator(
             [NotNull] ModelValidatorDependencies dependencies,
             [NotNull] RelationalModelValidatorDependencies relationalDependencies)
@@ -18,25 +25,37 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public override void Validate(IModel model)
         {
             base.Validate(model);
-            
-            EnsureNoSchemas(model);
-            EnsureNoSequences(model);
+
+            ValidateNoSchemas(model);
+            ValidateNoSequences(model);
         }
 
-        protected virtual void EnsureNoSchemas([NotNull] IModel model)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void ValidateNoSchemas([NotNull] IModel model)
         {
-            foreach (var entityType in model.GetEntityTypes().Where(e => e.Sqlite().Schema != null))
+            foreach (var entityType in model.GetEntityTypes().Where(e => e.Relational().Schema != null))
             {
-                Dependencies.Logger.SchemaConfiguredWarning(entityType, entityType.Sqlite().Schema);
+                Dependencies.Logger.SchemaConfiguredWarning(entityType, entityType.Relational().Schema);
             }
         }
 
-        protected virtual void EnsureNoSequences([NotNull] IModel model)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void ValidateNoSequences([NotNull] IModel model)
         {
-            foreach (var sequence in model.Sqlite().Sequences)
+            foreach (var sequence in model.Relational().Sequences)
             {
                 Dependencies.Logger.SequenceConfiguredWarning(sequence);
             }

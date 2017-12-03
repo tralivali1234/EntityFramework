@@ -4,58 +4,70 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Storage.Internal
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class SqlServerExecutionStrategy : IExecutionStrategy
     {
-        private SqlServerExecutionStrategy()
+        private ExecutionStrategyDependencies Dependencies { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public SqlServerExecutionStrategy([NotNull] ExecutionStrategyDependencies dependencies)
         {
+            Dependencies = dependencies;
         }
 
-        public static SqlServerExecutionStrategy Instance => new SqlServerExecutionStrategy();
-
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual bool RetriesOnFailure => false;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual TResult Execute<TState, TResult>(
-            Func<TState, TResult> operation,
-            Func<TState, ExecutionResult<TResult>> verifySucceeded,
-            TState state)
+            TState state,
+            Func<DbContext, TState, TResult> operation,
+            Func<DbContext, TState, ExecutionResult<TResult>> verifySucceeded)
         {
             try
             {
-                return operation(state);
+                return operation(Dependencies.CurrentDbContext.Context, state);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ExecutionStrategy.CallOnWrappedException(ex, SqlServerTransientExceptionDetector.ShouldRetryOn))
             {
-                if (ExecutionStrategy.CallOnWrappedException(ex, SqlServerTransientExceptionDetector.ShouldRetryOn))
-                {
-                    throw new InvalidOperationException(SqlServerStrings.TransientExceptionDetected, ex);
-                }
-
-                throw;
+                throw new InvalidOperationException(SqlServerStrings.TransientExceptionDetected, ex);
             }
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual async Task<TResult> ExecuteAsync<TState, TResult>(
-            Func<TState, CancellationToken, Task<TResult>> operation,
-            Func<TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
             TState state,
+            Func<DbContext, TState, CancellationToken, Task<TResult>> operation,
+            Func<DbContext, TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
             CancellationToken cancellationToken)
         {
             try
             {
-                return await operation(state, cancellationToken);
+                return await operation(Dependencies.CurrentDbContext.Context, state, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ExecutionStrategy.CallOnWrappedException(ex, SqlServerTransientExceptionDetector.ShouldRetryOn))
             {
-                if (ExecutionStrategy.CallOnWrappedException(ex, SqlServerTransientExceptionDetector.ShouldRetryOn))
-                {
-                    throw new InvalidOperationException(SqlServerStrings.TransientExceptionDetected, ex);
-                }
-
-                throw;
+                throw new InvalidOperationException(SqlServerStrings.TransientExceptionDetected, ex);
             }
         }
     }

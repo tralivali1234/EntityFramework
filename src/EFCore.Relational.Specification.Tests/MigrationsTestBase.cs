@@ -8,12 +8,13 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public abstract class MigrationsTestBase<TFixture> : IClassFixture<TFixture>
         where TFixture : MigrationsFixtureBase, new()
@@ -23,6 +24,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         protected MigrationsTestBase(TFixture fixture)
         {
             Fixture = fixture;
+            Fixture.TestStore.CloseConnection();
         }
 
         protected string Sql { get; private set; }
@@ -265,15 +267,22 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 await db.Database.EnsureDeletedAsync();
                 await db.Database.EnsureCreatedAsync();
 
-                var services = db.GetInfrastructure<IServiceProvider>();
+                var services = db.GetInfrastructure();
                 var connection = db.Database.GetDbConnection();
 
                 await db.Database.OpenConnectionAsync();
 
-                await ExecuteAsync(services, BuildFirstMigration);
-                await AssertFirstMigrationAsync(connection);
-                await ExecuteAsync(services, BuildSecondMigration);
-                await AssertSecondMigrationAsync(connection);
+                try
+                {
+                    await ExecuteAsync(services, BuildFirstMigration);
+                    await AssertFirstMigrationAsync(connection);
+                    await ExecuteAsync(services, BuildSecondMigration);
+                    await AssertSecondMigrationAsync(connection);
+                }
+                finally
+                {
+                    db.Database.CloseConnection();
+                }
             }
         }
 
@@ -284,11 +293,11 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             var connection = services.GetRequiredService<IRelationalConnection>();
             var databaseProvider = services.GetRequiredService<IDatabaseProvider>();
 
-            var migrationBuilder = new MigrationBuilder(databaseProvider.InvariantName);
+            var migrationBuilder = new MigrationBuilder(databaseProvider.Name);
             buildMigration(migrationBuilder);
             var operations = migrationBuilder.Operations.ToList();
 
-            var commandList = generator.Generate(operations, model: null);
+            var commandList = generator.Generate(operations);
 
             await executor.ExecuteNonQueryAsync(commandList, connection);
         }
@@ -299,7 +308,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 name: "CreatedTable",
                 columns: x => new
                 {
-                    Id = x.Column<int>(nullable: false),
+                    Id = x.Column<int>(),
                     ColumnWithDefaultToDrop = x.Column<int>(nullable: true, defaultValue: 0),
                     ColumnWithDefaultToAlter = x.Column<int>(nullable: true, defaultValue: 1)
                 },

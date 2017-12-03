@@ -7,10 +7,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Utilities
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Utilities
 {
     public class TypeExtensionsTest
     {
@@ -154,12 +156,14 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
             Assert.Throws<AmbiguousMatchException>(() => typeof(TindersticksIICd).GetAnyProperty("SleepySong"));
         }
 
-        // ReSharper disable InconsistentNaming
         public class TindersticksII
         {
             public virtual int ElDiabloEnElOjo { get; set; }
             internal virtual int ANightIn { get; set; }
+
+            // ReSharper disable once UnusedMember.Local
             private int MySister { get; set; }
+
             protected virtual int TinyTears { get; set; }
             public virtual int SnowyInFSharpMinor { get; private set; }
             public virtual int Seaweed { private get; set; }
@@ -253,6 +257,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
             Assert.Same(typeof(string), typeof(MultipleImplementor<Random, string>).TryGetElementType(typeof(IEnumerable<>)));
         }
 
+        [Fact]
         public void TryGetElementType_returns_element_type_for_given_class()
         {
             Assert.Same(typeof(string), typeof(Collection<string>).TryGetElementType(typeof(Collection<>)));
@@ -382,7 +387,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
         [Fact]
         public void Can_get_default_value_for_type()
         {
-            Assert.Equal(false, typeof(bool).GetDefaultValue());
+            Assert.False((bool)typeof(bool).GetDefaultValue());
             Assert.Equal((sbyte)0, typeof(sbyte).GetDefaultValue());
             Assert.Equal((short)0, typeof(short).GetDefaultValue());
             Assert.Equal(0, typeof(int).GetDefaultValue());
@@ -394,29 +399,31 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
             Assert.Equal((float)0.0, typeof(float).GetDefaultValue());
             Assert.Equal(0.0, typeof(double).GetDefaultValue());
             Assert.Equal((char)0, typeof(char).GetDefaultValue());
+#pragma warning disable IDE0034 // Simplify 'default' expression - GetDefaultValue returns object causing inference of default(object)
             Assert.Equal(default(Guid), typeof(Guid).GetDefaultValue());
             Assert.Equal(default(DateTime), typeof(DateTime).GetDefaultValue());
             Assert.Equal(default(DateTimeOffset), typeof(DateTimeOffset).GetDefaultValue());
             Assert.Equal(default(SomeStruct), typeof(SomeStruct).GetDefaultValue());
             Assert.Equal(default(SomeEnum), typeof(SomeEnum).GetDefaultValue());
-            Assert.Equal(null, typeof(string).GetDefaultValue());
-            Assert.Equal(null, typeof(bool?).GetDefaultValue());
-            Assert.Equal(null, typeof(sbyte?).GetDefaultValue());
-            Assert.Equal(null, typeof(short?).GetDefaultValue());
-            Assert.Equal(null, typeof(int?).GetDefaultValue());
-            Assert.Equal(null, typeof(long?).GetDefaultValue());
-            Assert.Equal(null, typeof(byte?).GetDefaultValue());
-            Assert.Equal(null, typeof(ushort?).GetDefaultValue());
-            Assert.Equal(null, typeof(uint?).GetDefaultValue());
-            Assert.Equal(null, typeof(ulong?).GetDefaultValue());
-            Assert.Equal(null, typeof(float?).GetDefaultValue());
-            Assert.Equal(null, typeof(double?).GetDefaultValue());
-            Assert.Equal(null, typeof(char?).GetDefaultValue());
-            Assert.Equal(null, typeof(Guid?).GetDefaultValue());
-            Assert.Equal(null, typeof(DateTime?).GetDefaultValue());
-            Assert.Equal(null, typeof(DateTimeOffset?).GetDefaultValue());
-            Assert.Equal(null, typeof(SomeStruct?).GetDefaultValue());
-            Assert.Equal(null, typeof(SomeEnum?).GetDefaultValue());
+#pragma warning restore IDE0034 // Simplify 'default' expression
+            Assert.Null(typeof(string).GetDefaultValue());
+            Assert.Null(typeof(bool?).GetDefaultValue());
+            Assert.Null(typeof(sbyte?).GetDefaultValue());
+            Assert.Null(typeof(short?).GetDefaultValue());
+            Assert.Null(typeof(int?).GetDefaultValue());
+            Assert.Null(typeof(long?).GetDefaultValue());
+            Assert.Null(typeof(byte?).GetDefaultValue());
+            Assert.Null(typeof(ushort?).GetDefaultValue());
+            Assert.Null(typeof(uint?).GetDefaultValue());
+            Assert.Null(typeof(ulong?).GetDefaultValue());
+            Assert.Null(typeof(float?).GetDefaultValue());
+            Assert.Null(typeof(double?).GetDefaultValue());
+            Assert.Null(typeof(char?).GetDefaultValue());
+            Assert.Null(typeof(Guid?).GetDefaultValue());
+            Assert.Null(typeof(DateTime?).GetDefaultValue());
+            Assert.Null(typeof(DateTimeOffset?).GetDefaultValue());
+            Assert.Null(typeof(SomeStruct?).GetDefaultValue());
+            Assert.Null(typeof(SomeEnum?).GetDefaultValue());
         }
 
         private struct SomeStruct
@@ -439,7 +446,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
                 typeof(SomeGenericClass<int>),
                 typeof(SomeTypeWithoutDefaultCtor));
 
-            var types = assembly.GetConstructableTypes().Select(t => t.AsType()).ToList();
+            var types = assembly.GetConstructibleTypes().Select(t => t.AsType()).ToList();
 
             Assert.DoesNotContain(typeof(SomeAbstractClass), types);
             Assert.DoesNotContain(typeof(SomeGenericClass<>), types);
@@ -460,6 +467,29 @@ namespace Microsoft.EntityFrameworkCore.Tests.Utilities
             public SomeTypeWithoutDefaultCtor(int value)
             {
             }
+        }
+
+        [Fact]
+        public void GetNamespaces_works()
+        {
+            // Predefined Types
+            Assert.Equal(new[] { "System" }, typeof(int).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "System.Collections.Generic", "System" }, typeof(List<int>).GetNamespaces().ToArray());
+
+            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities" }, typeof(A).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "System.Collections.Generic", "Microsoft.EntityFrameworkCore.Utilities" }, typeof(List<A>).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "System.Collections.Generic", "System", "System.Collections.Generic", "Microsoft.EntityFrameworkCore.Utilities" }, typeof(Dictionary<string, List<A>>).GetNamespaces().ToArray());
+
+            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities", "System" }, typeof(Outer<int>).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities", "System.Collections.Generic", "System" }, typeof(Outer<List<int>>).GetNamespaces().ToArray());
+        }
+
+        private class Outer<T>
+        {
+        }
+
+        private class A
+        {
         }
     }
 }

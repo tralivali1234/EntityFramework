@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Threading;
@@ -11,15 +12,8 @@ using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Query.Internal;
-
-#if NET46
-using System.ComponentModel;
 using Microsoft.EntityFrameworkCore.Internal;
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif
+using Microsoft.EntityFrameworkCore.Query.Internal;
 
 namespace Microsoft.EntityFrameworkCore
 {
@@ -45,8 +39,8 @@ namespace Microsoft.EntityFrameworkCore
     ///     </para>
     /// </summary>
     /// <typeparam name="TEntity"> The type of entity being operated on by this set. </typeparam>
-    public abstract partial class DbSet<TEntity>
-        : IQueryable<TEntity>, IAsyncEnumerableAccessor<TEntity>, IInfrastructure<IServiceProvider>
+    public abstract class DbSet<TEntity>
+        : IQueryable<TEntity>, IAsyncEnumerableAccessor<TEntity>, IInfrastructure<IServiceProvider>, IListSource
         where TEntity : class
     {
         /// <summary>
@@ -62,14 +56,12 @@ namespace Microsoft.EntityFrameworkCore
         ///     <para>
         ///         This property can be used for data binding by populating the set with data, for example by using the
         ///         <see cref="EntityFrameworkQueryableExtensions.Load{TSource}" /> extension method,
-        ///         and then binding to the local data through this property.  For WPF bind to this property
-        ///         directly.  For Windows Forms bind to the result of calling ToBindingList on this property.
+        ///         and then binding to the local data through this property by calling
+        ///         <see cref="LocalView{TEntity}.ToObservableCollection" /> for WPF binding, or
+        ///         <see cref="LocalView{TEntity}.ToBindingList" /> for WinForms.
         ///     </para>
         /// </summary>
-        public virtual LocalView<TEntity> Local
-        {
-            get { throw new NotImplementedException(); }
-        }
+        public virtual LocalView<TEntity> Local => throw new NotImplementedException();
 
         /// <summary>
         ///     Finds an entity with the given primary key values. If an entity with the given primary key values
@@ -80,10 +72,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </summary>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual TEntity Find([NotNull] params object[] keyValues)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual TEntity Find([NotNull] params object[] keyValues) => throw new NotImplementedException();
 
         /// <summary>
         ///     Finds an entity with the given primary key values. If an entity with the given primary key values
@@ -94,10 +83,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </summary>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<TEntity> FindAsync([NotNull] params object[] keyValues)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual Task<TEntity> FindAsync([NotNull] params object[] keyValues) => throw new NotImplementedException();
 
         /// <summary>
         ///     Finds an entity with the given primary key values. If an entity with the given primary key values
@@ -110,9 +96,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>The entity found, or null.</returns>
         public virtual Task<TEntity> FindAsync([NotNull] object[] keyValues, CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
-        }
+            => throw new NotImplementedException();
 
         /// <summary>
         ///     Begins tracking the given entity, and any other reachable entities that are
@@ -124,10 +108,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Add([NotNull] TEntity entity)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual EntityEntry<TEntity> Add([NotNull] TEntity entity) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -150,24 +131,21 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual Task<EntityEntry<TEntity>> AddAsync(
             [NotNull] TEntity entity,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
+            CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
-        ///         Begins tracking the given entity in the <see cref="EntityState.Unchanged" /> state 
-        ///         such that no operation will be performed when <see cref="DbContext.SaveChanges()" /> 
+        ///         Begins tracking the given entity in the <see cref="EntityState.Unchanged" /> state
+        ///         such that no operation will be performed when <see cref="DbContext.SaveChanges()" />
         ///         is called.
         ///     </para>
         ///     <para>
         ///         A recursive search of the navigation properties will be performed to find reachable entities
-        ///         that are not already being tracked by the context. These entities will also begin to be tracked 
+        ///         that are not already being tracked by the context. These entities will also begin to be tracked
         ///         by the context. If a reachable entity has its primary key value set
         ///         then it will be tracked in the <see cref="EntityState.Unchanged" /> state. If the primary key
-        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state. 
-        ///         An entity is considered to have its primary key value set if the primary key property is set 
+        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state.
+        ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
         /// </summary>
@@ -176,10 +154,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Attach([NotNull] TEntity entity)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual EntityEntry<TEntity> Attach([NotNull] TEntity entity) => throw new NotImplementedException();
 
         /// <summary>
         ///     Begins tracking the given entity in the <see cref="EntityState.Deleted" /> state such that it will
@@ -202,10 +177,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Remove([NotNull] TEntity entity)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual EntityEntry<TEntity> Remove([NotNull] TEntity entity) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -219,11 +191,11 @@ namespace Microsoft.EntityFrameworkCore
         ///     </para>
         ///     <para>
         ///         A recursive search of the navigation properties will be performed to find reachable entities
-        ///         that are not already being tracked by the context. These entities will also begin to be tracked 
+        ///         that are not already being tracked by the context. These entities will also begin to be tracked
         ///         by the context. If a reachable entity has its primary key value set
         ///         then it will be tracked in the <see cref="EntityState.Modified" /> state. If the primary key
-        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state. 
-        ///         An entity is considered to have its primary key value set if the primary key property is set 
+        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state.
+        ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
         /// </summary>
@@ -232,10 +204,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     The <see cref="EntityEntry" /> for the entity. The entry provides
         ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Update([NotNull] TEntity entity)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual EntityEntry<TEntity> Update([NotNull] TEntity entity) => throw new NotImplementedException();
 
         /// <summary>
         ///     Begins tracking the given entities, and any other reachable entities that are
@@ -243,10 +212,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     be inserted into the database when <see cref="DbContext.SaveChanges()" /> is called.
         /// </summary>
         /// <param name="entities"> The entities to add. </param>
-        public virtual void AddRange([NotNull] params TEntity[] entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void AddRange([NotNull] params TEntity[] entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -262,32 +228,26 @@ namespace Microsoft.EntityFrameworkCore
         /// </summary>
         /// <param name="entities"> The entities to add. </param>
         /// <returns> A task that represents the asynchronous operation. </returns>
-        public virtual Task AddRangeAsync([NotNull] params TEntity[] entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual Task AddRangeAsync([NotNull] params TEntity[] entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
-        ///         Begins tracking the given entities in the <see cref="EntityState.Unchanged" /> state 
-        ///         such that no operation will be performed when <see cref="DbContext.SaveChanges()" /> 
+        ///         Begins tracking the given entities in the <see cref="EntityState.Unchanged" /> state
+        ///         such that no operation will be performed when <see cref="DbContext.SaveChanges()" />
         ///         is called.
         ///     </para>
         ///     <para>
         ///         A recursive search of the navigation properties will be performed to find reachable entities
-        ///         that are not already being tracked by the context. These entities will also begin to be tracked 
+        ///         that are not already being tracked by the context. These entities will also begin to be tracked
         ///         by the context. If a reachable entity has its primary key value set
         ///         then it will be tracked in the <see cref="EntityState.Unchanged" /> state. If the primary key
-        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state. 
-        ///         An entity is considered to have its primary key value set if the primary key property is set 
+        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state.
+        ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
         /// </summary>
         /// <param name="entities"> The entities to attach. </param>
-        public virtual void AttachRange([NotNull] params TEntity[] entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void AttachRange([NotNull] params TEntity[] entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     Begins tracking the given entities in the <see cref="EntityState.Deleted" /> state such that they will
@@ -306,10 +266,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     </para>
         /// </remarks>
         /// <param name="entities"> The entities to remove. </param>
-        public virtual void RemoveRange([NotNull] params TEntity[] entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void RemoveRange([NotNull] params TEntity[] entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -323,19 +280,16 @@ namespace Microsoft.EntityFrameworkCore
         ///     </para>
         ///     <para>
         ///         A recursive search of the navigation properties will be performed to find reachable entities
-        ///         that are not already being tracked by the context. These entities will also begin to be tracked 
+        ///         that are not already being tracked by the context. These entities will also begin to be tracked
         ///         by the context. If a reachable entity has its primary key value set
         ///         then it will be tracked in the <see cref="EntityState.Modified" /> state. If the primary key
-        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state. 
-        ///         An entity is considered to have its primary key value set if the primary key property is set 
+        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state.
+        ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
         /// </summary>
         /// <param name="entities"> The entities to update. </param>
-        public virtual void UpdateRange([NotNull] params TEntity[] entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void UpdateRange([NotNull] params TEntity[] entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     Begins tracking the given entities, and any other reachable entities that are
@@ -343,10 +297,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     be inserted into the database when <see cref="DbContext.SaveChanges()" /> is called.
         /// </summary>
         /// <param name="entities"> The entities to add. </param>
-        public virtual void AddRange([NotNull] IEnumerable<TEntity> entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void AddRange([NotNull] IEnumerable<TEntity> entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -365,32 +316,26 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns> A task that represents the asynchronous operation. </returns>
         public virtual Task AddRangeAsync(
             [NotNull] IEnumerable<TEntity> entities,
-            CancellationToken cancellationToken = default(CancellationToken))
-        {
-            throw new NotImplementedException();
-        }
+            CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
-        ///         Begins tracking the given entities in the <see cref="EntityState.Unchanged" /> state 
-        ///         such that no operation will be performed when <see cref="DbContext.SaveChanges()" /> 
+        ///         Begins tracking the given entities in the <see cref="EntityState.Unchanged" /> state
+        ///         such that no operation will be performed when <see cref="DbContext.SaveChanges()" />
         ///         is called.
         ///     </para>
         ///     <para>
         ///         A recursive search of the navigation properties will be performed to find reachable entities
-        ///         that are not already being tracked by the context. These entities will also begin to be tracked 
+        ///         that are not already being tracked by the context. These entities will also begin to be tracked
         ///         by the context. If a reachable entity has its primary key value set
         ///         then it will be tracked in the <see cref="EntityState.Unchanged" /> state. If the primary key
-        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state. 
-        ///         An entity is considered to have its primary key value set if the primary key property is set 
+        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state.
+        ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
         /// </summary>
         /// <param name="entities"> The entities to attach. </param>
-        public virtual void AttachRange([NotNull] IEnumerable<TEntity> entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void AttachRange([NotNull] IEnumerable<TEntity> entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     Begins tracking the given entities in the <see cref="EntityState.Deleted" /> state such that they will
@@ -409,10 +354,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     </para>
         /// </remarks>
         /// <param name="entities"> The entities to remove. </param>
-        public virtual void RemoveRange([NotNull] IEnumerable<TEntity> entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void RemoveRange([NotNull] IEnumerable<TEntity> entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -426,73 +368,52 @@ namespace Microsoft.EntityFrameworkCore
         ///     </para>
         ///     <para>
         ///         A recursive search of the navigation properties will be performed to find reachable entities
-        ///         that are not already being tracked by the context. These entities will also begin to be tracked 
+        ///         that are not already being tracked by the context. These entities will also begin to be tracked
         ///         by the context. If a reachable entity has its primary key value set
         ///         then it will be tracked in the <see cref="EntityState.Modified" /> state. If the primary key
-        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state. 
-        ///         An entity is considered to have its primary key value set if the primary key property is set 
+        ///         value is not set then it will be tracked in the <see cref="EntityState.Added" /> state.
+        ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
         /// </summary>
         /// <param name="entities"> The entities to update. </param>
-        public virtual void UpdateRange([NotNull] IEnumerable<TEntity> entities)
-        {
-            throw new NotImplementedException();
-        }
+        public virtual void UpdateRange([NotNull] IEnumerable<TEntity> entities) => throw new NotImplementedException();
 
         /// <summary>
         ///     Returns an <see cref="IEnumerator{T}" /> which when enumerated will execute a query against the database
         ///     to load all entities from the database.
         /// </summary>
         /// <returns> The query results. </returns>
-        IEnumerator<TEntity> IEnumerable<TEntity>.GetEnumerator()
-        {
-            throw new NotImplementedException();
-        }
+        IEnumerator<TEntity> IEnumerable<TEntity>.GetEnumerator() => throw new NotImplementedException();
 
         /// <summary>
         ///     Returns an <see cref="IEnumerator" /> which when enumerated will execute a query against the database
         ///     to load all entities from the database.
         /// </summary>
         /// <returns> The query results. </returns>
-        IEnumerator IEnumerable.GetEnumerator()
-        {
-            throw new NotImplementedException();
-        }
+        IEnumerator IEnumerable.GetEnumerator() => throw new NotImplementedException();
 
         /// <summary>
         ///     Returns an <see cref="IAsyncEnumerable{T}" /> which when enumerated will asynchronously execute the query against
         ///     the database.
         /// </summary>
         /// <returns> The query results. </returns>
-        IAsyncEnumerable<TEntity> IAsyncEnumerableAccessor<TEntity>.AsyncEnumerable
-        {
-            get { throw new NotImplementedException(); }
-        }
+        IAsyncEnumerable<TEntity> IAsyncEnumerableAccessor<TEntity>.AsyncEnumerable => throw new NotImplementedException();
 
         /// <summary>
         ///     Gets the IQueryable element type.
         /// </summary>
-        Type IQueryable.ElementType
-        {
-            get { throw new NotImplementedException(); }
-        }
+        Type IQueryable.ElementType => throw new NotImplementedException();
 
         /// <summary>
         ///     Gets the IQueryable LINQ Expression.
         /// </summary>
-        Expression IQueryable.Expression
-        {
-            get { throw new NotImplementedException(); }
-        }
+        Expression IQueryable.Expression => throw new NotImplementedException();
 
         /// <summary>
         ///     Gets the IQueryable provider.
         /// </summary>
-        IQueryProvider IQueryable.Provider
-        {
-            get { throw new NotImplementedException(); }
-        }
+        IQueryProvider IQueryable.Provider => throw new NotImplementedException();
 
         /// <summary>
         ///     <para>
@@ -503,26 +424,22 @@ namespace Microsoft.EntityFrameworkCore
         ///         not directly exposed in the public API surface.
         ///     </para>
         /// </summary>
-        IServiceProvider IInfrastructure<IServiceProvider>.Instance
-        {
-            get { throw new NotImplementedException(); }
-        }
-    }
+        IServiceProvider IInfrastructure<IServiceProvider>.Instance => throw new NotImplementedException();
 
-#if NET46
-
-    public abstract partial class DbSet<TEntity> : IListSource
-        where TEntity : class
-    {
         /// <summary>
         ///     <para>
-        ///         This method is called by data binding frameworks when attempting to data bind directly to a <see cref="DbSet{TEntity}" />.
+        ///         This method is called by data binding frameworks when attempting to data bind
+        ///         directly to a <see cref="DbSet{TEntity}" />.
         ///     </para>
         ///     <para>
-        ///         This implementation always throws an exception as binding directly to a <see cref="DbSet{TEntity}" /> will result in a query being
-        ///         sent to the database every time the data binding framework requests the contents of the collection. Instead materialize the results
-        ///         into a collection, by calling a method such as <see cref="Enumerable.ToList{TSource}(IEnumerable{TSource})" /> or
-        ///         <see cref="Enumerable.ToArray{TSource}(IEnumerable{TSource})" />, and bind to the collection.
+        ///         This implementation always throws an exception as binding directly to a
+        ///         <see cref="DbSet{TEntity}" /> will result in a query being
+        ///         sent to the database every time the data binding framework requests the contents
+        ///         of the collection. Instead load the results into the context, for example, by using the
+        ///         <see cref="EntityFrameworkQueryableExtensions.Load{TSource}" /> extension method,
+        ///         and then bind to the local data through the <see cref="Local" /> by calling
+        ///         <see cref="LocalView{TEntity}.ToObservableCollection" /> for WPF binding, or
+        ///         <see cref="LocalView{TEntity}.ToBindingList" /> for WinForms.
         ///     </para>
         /// </summary>
         /// <exception cref="NotSupportedException"> Always thrown. </exception>
@@ -537,9 +454,31 @@ namespace Microsoft.EntityFrameworkCore
         ///     Always returns false.
         /// </summary>
         bool IListSource.ContainsListCollection => false;
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif
 }

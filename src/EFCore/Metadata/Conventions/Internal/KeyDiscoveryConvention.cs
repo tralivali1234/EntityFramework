@@ -16,12 +16,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
     public class KeyDiscoveryConvention :
-        IEntityTypeConvention,
-        IPropertyConvention,
+        IEntityTypeAddedConvention,
+        IPropertyAddedConvention,
         IKeyRemovedConvention,
-        IBaseTypeConvention,
+        IBaseTypeChangedConvention,
         IPropertyFieldChangedConvention,
-        IForeignKeyConvention,
+        IForeignKeyAddedConvention,
         IForeignKeyRemovedConvention
     {
         private const string KeySuffix = "Id";
@@ -39,7 +39,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 && ConfigurationSource.Convention.Overrides(entityType.GetPrimaryKeyConfigurationSource()))
             {
                 IReadOnlyList<string> keyPropertyNames = null;
-                if (entityType.HasDelegatedIdentity())
+                if (entityType.HasDefiningNavigation())
                 {
                     var definingFk = entityType.FindDefiningNavigation()?.ForeignKey;
                     if (definingFk != null)
@@ -52,9 +52,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
                 if (keyPropertyNames == null)
                 {
-                    var candidateProperties = entityType.GetProperties().Where(p =>
-                        !p.IsShadowProperty
-                        || !ConfigurationSource.Convention.Overrides(p.GetConfigurationSource())).ToList();
+                    var candidateProperties = entityType.GetProperties().Where(
+                        p =>
+                            !p.IsShadowProperty
+                            || !ConfigurationSource.Convention.Overrides(p.GetConfigurationSource())).ToList();
                     keyPropertyNames = DiscoverKeyProperties(entityType, candidateProperties).Select(p => p.Name).ToList();
                     if (keyPropertyNames.Count > 1)
                     {
@@ -143,7 +144,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         public virtual InternalRelationshipBuilder Apply(InternalRelationshipBuilder relationshipBuilder)
         {
             var entityType = relationshipBuilder.Metadata.DeclaringEntityType;
-            if (entityType.HasDelegatedIdentity())
+            if (entityType.HasDefiningNavigation())
             {
                 Apply(entityType.Builder);
             }
@@ -157,7 +158,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         /// </summary>
         public virtual void Apply(InternalEntityTypeBuilder entityTypeBuilder, ForeignKey foreignKey)
         {
-            if (entityTypeBuilder.Metadata.HasDelegatedIdentity())
+            if (entityTypeBuilder.Metadata.HasDefiningNavigation())
             {
                 Apply(entityTypeBuilder);
             }

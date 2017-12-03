@@ -11,7 +11,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class TypeMappedRelationalParameter : IRelationalParameter
+    public class TypeMappedRelationalParameter : RelationalParameterBase
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -21,7 +21,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             [NotNull] string invariantName,
             [NotNull] string name,
             [NotNull] RelationalTypeMapping relationalTypeMapping,
-            [CanBeNull] bool? nullable)
+            bool? nullable)
         {
             Check.NotEmpty(invariantName, nameof(invariantName));
             Check.NotEmpty(name, nameof(name));
@@ -37,7 +37,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string InvariantName { get; }
+        public override string InvariantName { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -55,13 +55,14 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void AddDbParameter(DbCommand command, object value)
+        public override void AddDbParameter(DbCommand command, object value)
         {
             Check.NotNull(command, nameof(command));
 
             command.Parameters
-                .Add(RelationalTypeMapping
-                    .CreateParameter(command, Name, value, IsNullable));
+                .Add(
+                    RelationalTypeMapping
+                        .CreateParameter(command, Name, value, IsNullable));
         }
     }
 }

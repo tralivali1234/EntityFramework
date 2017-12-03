@@ -34,11 +34,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void PropagateValue(InternalEntityEntry entry, IProperty property)
+        public virtual InternalEntityEntry PropagateValue(InternalEntityEntry entry, IProperty property)
         {
             Debug.Assert(property.IsForeignKey());
 
-            if (!TryPropagateValue(entry, property)
+            var principalEntry = TryPropagateValue(entry, property);
+            if (principalEntry == null
                 && property.IsKey())
             {
                 var valueGenerator = TryGetValueGenerator(property);
@@ -53,20 +54,23 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     }
                 }
             }
+
+            return principalEntry;
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual async Task PropagateValueAsync(
+        public virtual async Task<InternalEntityEntry> PropagateValueAsync(
             InternalEntityEntry entry,
             IProperty property,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             Debug.Assert(property.IsForeignKey());
 
-            if (!TryPropagateValue(entry, property)
+            var principalEntry = TryPropagateValue(entry, property);
+            if (principalEntry == null
                 && property.IsKey())
             {
                 var valueGenerator = TryGetValueGenerator(property);
@@ -81,9 +85,11 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     }
                 }
             }
+
+            return principalEntry;
         }
 
-        private bool TryPropagateValue(InternalEntityEntry entry, IProperty property)
+        private static InternalEntityEntry TryPropagateValue(InternalEntityEntry entry, IProperty property)
         {
             var entityType = entry.EntityType;
             var stateManager = entry.StateManager;
@@ -94,8 +100,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 {
                     if (property == foreignKey.Properties[propertyIndex])
                     {
+                        var principal = foreignKey.DependentToPrincipal == null
+                            ? null
+                            : entry[foreignKey.DependentToPrincipal];
                         InternalEntityEntry principalEntry = null;
-                        var principal = foreignKey.DependentToPrincipal?.GetGetter().GetClrValue(entry.Entity);
                         if (principal != null)
                         {
                             principalEntry = stateManager.GetOrCreateEntry(principal);
@@ -129,7 +137,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                                     entry.MarkAsTemporary(property, isTemporary: false);
                                 }
 
-                                return true;
+                                return principalEntry;
                             }
                         }
 
@@ -138,7 +146,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 }
             }
 
-            return false;
+            return null;
         }
 
         private ValueGenerator TryGetValueGenerator(IProperty property)

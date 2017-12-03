@@ -6,7 +6,7 @@ using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class NamedDatabaseTest
     {
@@ -206,13 +206,12 @@ namespace Microsoft.EntityFrameworkCore.InMemory.FunctionalTests
 
                 if (_databaseName == null)
                 {
-                    optionsBuilder.UseTransientInMemoryDatabase();
+                    optionsBuilder.UseInMemoryDatabase(Guid.NewGuid().ToString());
                 }
                 else
                 {
                     optionsBuilder.UseInMemoryDatabase(_databaseName);
                 }
-                    
             }
         }
 

@@ -2,16 +2,22 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable ClassNeverInstantiated.Local
+// ReSharper disable UnusedMember.Local
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 {
     public class MigrationsModelDifferTest : MigrationsModelDifferTestBase
     {
@@ -27,7 +33,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("ID");
-                                    x.HasKey("ID");
                                     x.Property<int>("FK");
                                 });
 
@@ -36,7 +41,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("ID");
-                                    x.HasKey("ID");
                                     x.Property<int>("FK");
                                 });
 
@@ -70,7 +74,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("FourthId");
                                 });
                         modelBuilder.Entity(
@@ -78,7 +81,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("ThirdId");
                                 });
 
@@ -101,27 +103,27 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         {
             Execute(
                 _ => { },
+                _ => { },
                 modelBuilder => modelBuilder.Entity(
                     "Node",
                     x =>
                         {
                             x.ToTable("Node", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AltId");
                             x.HasAlternateKey("AltId");
                             x.Property<int?>("ParentAltId");
                             x.HasOne("Node").WithMany().HasForeignKey("ParentAltId");
                             x.HasIndex("ParentAltId");
                         }),
-                operations =>
+                upOps =>
                     {
-                        Assert.Equal(3, operations.Count);
+                        Assert.Equal(3, upOps.Count);
 
-                        var ensureSchemaOperation = Assert.IsType<EnsureSchemaOperation>(operations[0]);
+                        var ensureSchemaOperation = Assert.IsType<EnsureSchemaOperation>(upOps[0]);
                         Assert.Equal("dbo", ensureSchemaOperation.Name);
 
-                        var createTableOperation = Assert.IsType<CreateTableOperation>(operations[1]);
+                        var createTableOperation = Assert.IsType<CreateTableOperation>(upOps[1]);
                         Assert.Equal("Node", createTableOperation.Name);
                         Assert.Equal("dbo", createTableOperation.Schema);
                         Assert.Equal(3, createTableOperation.Columns.Count);
@@ -130,38 +132,363 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         Assert.Equal(1, createTableOperation.UniqueConstraints.Count);
                         Assert.Equal(1, createTableOperation.ForeignKeys.Count);
 
-                        Assert.IsType<CreateIndexOperation>(operations[2]);
-                    });
+                        Assert.IsType<CreateIndexOperation>(upOps[2]);
+                    },
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<DropTableOperation>(o);
+                            Assert.Equal("Node", operation.Name);
+                        }));
+        }
+
+        class CreateTableEntity1
+        {
+            public int Id { get; set; }
+            public int C { get; set; }
+            public int B { get; set; }
+            public int A { get; set; }
+        }
+
+        class CreateTableEntity2
+        {
+            public int Id { get; set; }
+            public int E { get; set; }
+            public CreateTableEntity2B D { get; set; }
+            public int A { get; set; }
+        }
+
+        class CreateTableEntity2B
+        {
+            public int B { get; set; }
+            public int C { get; set; }
         }
 
         [Fact]
-        public void Drop_table()
+        public void Create_table_columns_use_property_order()
         {
             Execute(
-                modelBuilder => modelBuilder.Entity("Fox").ToTable("Fox", "dbo"),
                 _ => { },
+                modelBuilder => modelBuilder.Entity<CreateTableEntity1>(),
                 operations =>
-                    {
-                        Assert.Equal(1, operations.Count);
+                {
+                    var operation = Assert.IsType<CreateTableOperation>(Assert.Single(operations));
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("C", x.Name),
+                        x => Assert.Equal("B", x.Name),
+                        x => Assert.Equal("A", x.Name));
+                });
+        }
 
-                        var operation = Assert.IsType<DropTableOperation>(operations[0]);
-                        Assert.Equal("Fox", operation.Name);
-                        Assert.Equal("dbo", operation.Schema);
-                    });
+        [Fact]
+        public void Create_table_columns_use_dependent_to_principal_and_key_order_when_shadow_fk()
+        {
+            Execute(
+                _ => { },
+                modelBuilder =>
+                {
+                    modelBuilder.Entity<CreateTableEntity2>();
+                    modelBuilder.Entity<CreateTableEntity2B>().HasKey(e => new { e.C, e.B });
+                },
+                operations =>
+                {
+                    Assert.Equal(3, operations.Count);
+
+                    Assert.IsType<CreateTableOperation>(operations[0]);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[1]);
+                    Assert.Equal("CreateTableEntity2", operation.Name);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("E", x.Name),
+                        x => Assert.Equal("DC", x.Name),
+                        x => Assert.Equal("DB", x.Name),
+                        x => Assert.Equal("A", x.Name));
+
+                    Assert.IsType<CreateIndexOperation>(operations[2]);
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_uses_defining_navigation_order()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder.Entity<CreateTableEntity2>().OwnsOne(e => e.D),
+                operations =>
+                {
+                    var operation = Assert.IsType<CreateTableOperation>(Assert.Single(operations));
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("E", x.Name),
+                        x => Assert.Equal("D_B", x.Name),
+                        x => Assert.Equal("D_C", x.Name),
+                        x => Assert.Equal("A", x.Name));
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_uses_principal_to_dependent_order_when_splitting()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder.Entity<CreateTableEntity2B>().ToTable("CreateTableEntity2")
+                    .HasOne<CreateTableEntity2>().WithOne(x => x.D).HasForeignKey<CreateTableEntity2B>("Id"),
+                operations =>
+                {
+                    var operation = Assert.IsType<CreateTableOperation>(Assert.Single(operations));
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("E", x.Name),
+                        x => Assert.Equal("B", x.Name),
+                        x => Assert.Equal("C", x.Name),
+                        x => Assert.Equal("A", x.Name));
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_groups_and_sorts_type_hierarchy()
+        {
+            Execute(
+                _ => { },
+                modelBuilder =>
+                {
+                    modelBuilder.Entity("D").Property<int>("Id");
+                    modelBuilder.Entity("C").HasBaseType("D").Property<int>("C");
+                    modelBuilder.Entity("B").HasBaseType("D").Property<int>("B");
+                    modelBuilder.Entity("A").HasBaseType("B").Property<int>("A");
+                },
+                operations =>
+                {
+                    var operation = Assert.IsType<CreateTableOperation>(Assert.Single(operations));
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("Discriminator", x.Name),
+                        x => Assert.Equal("B", x.Name),
+                        x => Assert.Equal("A", x.Name),
+                        x => Assert.Equal("C", x.Name));
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_aliased_columns()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder.Entity<CreateTableEntity1>().Property(e => e.A).HasColumnName("C"),
+                operations =>
+                {
+                    var operation = Assert.IsType<CreateTableOperation>(Assert.Single(operations));
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("C", x.Name),
+                        x => Assert.Equal("B", x.Name));
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_shadow_defining_navigation()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder.Entity(
+                        "X",
+                        x =>
+                        {
+                            x.Property<int>("Id");
+                            x.OwnsOne("Y", "Y").Property<int>("A");
+                        }),
+                operations =>
+                {
+                    var operation = Assert.IsType<CreateTableOperation>(Assert.Single(operations));
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("Y_A", x.Name));
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_shadow_principal_to_dependent_when_splitting()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder
+                    .Entity("X", x => x.Property<int>("Id"))
+                    .Entity(
+                        "Y",
+                        x =>
+                        {
+                            x.ToTable("X");
+                            x.Property<int>("A");
+                            x.HasOne("X").WithOne("Y").HasForeignKey("Y", "Id");
+                        }),
+                operations =>
+                {
+                    Assert.Equal(1, operations.Count);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[0]);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("A", x.Name));
+
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_no_principal_to_dependent_when_splitting()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder
+                    .Entity("X", x => x.Property<int>("Id"))
+                    .Entity(
+                        "Y",
+                        x =>
+                        {
+                            x.ToTable("X");
+                            x.Property<int>("A");
+                            x.HasOne("X").WithOne().HasForeignKey("Y", "Id");
+                        }),
+                operations =>
+                {
+                    Assert.Equal(1, operations.Count);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[0]);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("A", x.Name));
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_shadow_dependent_to_principal()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder
+                    .Entity("X", x => x.Property<int>("Id"))
+                    .Entity(
+                        "Y",
+                        x =>
+                        {
+                            x.Property<int>("Id");
+                            x.HasOne("X", "X").WithMany("Ys").HasForeignKey("XId");
+                        }),
+                operations =>
+                {
+                    Assert.Equal(3, operations.Count);
+
+                    Assert.IsType<CreateTableOperation>(operations[0]);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[1]);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("XId", x.Name));
+
+                    Assert.IsType<CreateIndexOperation>(operations[2]);
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_no_dependent_to_principal()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder
+                    .Entity("X", x => x.Property<int>("Id"))
+                    .Entity(
+                        "Y",
+                        x =>
+                        {
+                            x.Property<int>("Id");
+                            x.HasOne("X").WithMany().HasForeignKey("XId");
+                        }),
+                operations =>
+                {
+                    Assert.Equal(3, operations.Count);
+
+                    Assert.IsType<CreateTableOperation>(operations[0]);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[1]);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("XId", x.Name));
+
+                    Assert.IsType<CreateIndexOperation>(operations[2]);
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_self_referencing_one_to_many()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder
+                    .Entity(
+                        "X",
+                        x =>
+                        {
+                            x.Property<int>("Id");
+                            x.HasOne("X").WithMany();
+                        }),
+                operations =>
+                {
+                    Assert.Equal(2, operations.Count);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[0]);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("XId", x.Name));
+
+                    Assert.IsType<CreateIndexOperation>(operations[1]);
+                });
+        }
+
+        [Fact]
+        public void Create_table_columns_handles_self_referencing_one_to_one()
+        {
+            Execute(
+                _ => { },
+                modelBuilder => modelBuilder
+                    .Entity(
+                        "X",
+                        x =>
+                        {
+                            x.Property<int>("Id");
+                            x.HasOne("X").WithOne();
+                        }),
+                operations =>
+                {
+                    Assert.Equal(2, operations.Count);
+
+                    var operation = Assert.IsType<CreateTableOperation>(operations[0]);
+                    Assert.Collection(
+                        operation.Columns,
+                        x => Assert.Equal("Id", x.Name),
+                        x => Assert.Equal("XId", x.Name));
+
+                    Assert.IsType<CreateIndexOperation>(operations[1]);
+                });
         }
 
         [Fact]
         public void Rename_table()
         {
             Execute(
-                source => source.Entity(
-                    "Cat",
-                    x =>
-                        {
-                            x.ToTable("Cat", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Cat").ToTable("Cat", "dbo").Property<int>("Id"),
                 target => target.Entity(
                     "Cat",
                     x =>
@@ -186,21 +513,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Move_table()
         {
             Execute(
-                source => source.Entity(
-                    "Person",
-                    x =>
-                        {
-                            x.ToTable("People", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
-                target => target.Entity("Person",
-                    x =>
-                        {
-                            x.ToTable("People", "public");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Person").ToTable("People", "dbo").Property<int>("Id"),
+                target => target.Entity("Person").ToTable("People", "public").Property<int>("Id"),
                 operations =>
                     {
                         Assert.Equal(2, operations.Count);
@@ -243,6 +557,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         {
             Execute(
                 _ => { },
+                _ => { },
                 modelBuilder =>
                     {
                         modelBuilder.Entity(
@@ -251,7 +566,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 {
                                     x.Property<int>("Id");
                                     x.Property<string>("MouseId");
-                                    x.HasKey("Id");
                                     x.ToTable("Animal");
                                 });
                         modelBuilder.Entity(
@@ -260,56 +574,26 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 {
                                     x.Property<int>("Id");
                                     x.Property<string>("BoneId");
-                                    x.HasKey("Id");
                                     x.HasOne("Cat").WithOne().HasForeignKey("Dog", "Id");
                                     x.ToTable("Animal");
                                 });
                     },
-                operations =>
+                upOps =>
                     {
-                        Assert.Equal(1, operations.Count);
+                        Assert.Equal(1, upOps.Count);
 
-                        var createTableOperation = Assert.IsType<CreateTableOperation>(operations[0]);
+                        var createTableOperation = Assert.IsType<CreateTableOperation>(upOps[0]);
                         Assert.Equal("Animal", createTableOperation.Name);
                         Assert.Equal("Id", createTableOperation.PrimaryKey.Columns.Single());
                         Assert.Equal(new[] { "Id", "MouseId", "BoneId" }, createTableOperation.Columns.Select(c => c.Name));
                         Assert.Equal(0, createTableOperation.ForeignKeys.Count);
                         Assert.Equal(0, createTableOperation.UniqueConstraints.Count);
-                    });
-        }
-
-        [Fact]
-        public void Drop_shared_table_with_two_types()
-        {
-            Execute(
-                modelBuilder =>
-                    {
-                        modelBuilder.Entity(
-                            "Cat",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.Property<string>("MouseId");
-                                    x.HasKey("Id");
-                                    x.ToTable("Animal");
-                                });
-                        modelBuilder.Entity(
-                            "Dog",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.Property<string>("BoneId");
-                                    x.HasKey("Id");
-                                    x.HasOne("Cat").WithOne().HasForeignKey("Dog", "Id");
-                                    x.ToTable("Animal");
-                                });
                     },
-                _ => { },
-                operations =>
+                downOps =>
                     {
-                        Assert.Equal(1, operations.Count);
+                        Assert.Equal(1, downOps.Count);
 
-                        var dropTableOperation = Assert.IsType<DropTableOperation>(operations[0]);
+                        var dropTableOperation = Assert.IsType<DropTableOperation>(downOps[0]);
                         Assert.Equal("Animal", dropTableOperation.Name);
                     });
         }
@@ -318,17 +602,17 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Add_type_to_shared_table()
         {
             Execute(
-                modelBuilder => {
-                         modelBuilder.Entity(
-                             "Cat",
-                             x =>
-                                 {
-                                     x.Property<int>("Id");
-                                     x.Property<string>("MouseId");
-                                     x.HasKey("Id");
-                                     x.ToTable("Animal");
-                                 });
-                },
+                modelBuilder =>
+                    {
+                        modelBuilder.Entity(
+                            "Cat",
+                            x =>
+                                {
+                                    x.Property<int>("Id");
+                                    x.Property<string>("MouseId");
+                                    x.ToTable("Animal");
+                                });
+                    },
                 _ => { },
                 modelBuilder =>
                     {
@@ -338,60 +622,28 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 {
                                     x.Property<int>("Id");
                                     x.Property<string>("BoneId");
-                                    x.HasKey("Id");
                                     x.HasOne("Cat").WithOne().HasForeignKey("Dog", "Id");
                                     x.ToTable("Animal");
                                 });
                     },
-                operations =>
+                upOps =>
                     {
-                        Assert.Equal(1, operations.Count);
+                        Assert.Equal(1, upOps.Count);
 
-                        var alterTableOperation = Assert.IsType<AddColumnOperation>(operations[0]);
+                        var alterTableOperation = Assert.IsType<AddColumnOperation>(upOps[0]);
+                        Assert.Equal("BoneId", alterTableOperation.Name);
+                    },
+                downOps =>
+                    {
+                        Assert.Equal(1, downOps.Count);
+
+                        var alterTableOperation = Assert.IsType<DropColumnOperation>(downOps[0]);
                         Assert.Equal("BoneId", alterTableOperation.Name);
                     });
         }
 
         [Fact]
-        public void Remove_type_from_shared_table()
-        {
-            Execute(
-                modelBuilder => {
-                                    modelBuilder.Entity(
-                                        "Cat",
-                                        x =>
-                                            {
-                                                x.Property<int>("Id");
-                                                x.Property<string>("MouseId");
-                                                x.HasKey("Id");
-                                                x.ToTable("Animal");
-                                            });
-                },
-                modelBuilder =>
-                    {
-                        modelBuilder.Entity(
-                            "Dog",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.Property<string>("BoneId");
-                                    x.HasKey("Id");
-                                    x.HasOne("Cat").WithOne().HasForeignKey("Dog", "Id");
-                                    x.ToTable("Animal");
-                                });
-                    },
-                _ => { },
-                operations =>
-                    {
-                        Assert.Equal(1, operations.Count);
-
-                        var alterTableOperation = Assert.IsType<DropColumnOperation>(operations[0]);
-                        Assert.Equal("BoneId", alterTableOperation.Name);
-                    });
-        }
-
-        [Fact]
-        public void Move_type_from_one_shared_table_to_another()
+        public void Move_type_from_one_shared_table_to_another_with_seed_data()
         {
             Execute(
                 modelBuilder =>
@@ -402,7 +654,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 {
                                     x.Property<int>("Id");
                                     x.Property<string>("MouseId");
-                                    x.HasKey("Id");
+                                    x.SeedData(
+                                        new { Id = 42, MouseId = "Jerry" });
                                 });
                         modelBuilder.Entity(
                             "Dog",
@@ -410,7 +663,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 {
                                     x.Property<int>("Id");
                                     x.Property<string>("BoneId");
-                                    x.HasKey("Id");
+                                    x.SeedData(
+                                        new { Id = 42, BoneId = "Brook" });
                                 });
                         modelBuilder.Entity(
                             "Animal",
@@ -418,7 +672,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 {
                                     x.Property<int>("Id");
                                     x.Property<string>("HandlerId");
-                                    x.HasKey("Id");
+                                    x.SeedData(
+                                        new { Id = 42, HandlerId = "Brenda" });
                                 });
                     },
                 modelBuilder =>
@@ -441,81 +696,244 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                     x.ToTable("Cat");
                                 });
                     },
+            upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DropColumnOperation>(o);
+                            Assert.Equal("HandlerId", m.Name);
+                            Assert.Equal("Dog", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<AddColumnOperation>(o);
+                            Assert.Equal("HandlerId", m.Name);
+                            Assert.Equal("Cat", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<UpdateDataOperation>(o);
+                            Assert.Equal("Cat", m.Table);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(42, v));
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal("Brenda", v));
+                            Assert.Collection(m.Columns,
+                                v => Assert.Equal("HandlerId", v));
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DropColumnOperation>(o);
+                            Assert.Equal("HandlerId", m.Name);
+                            Assert.Equal("Cat", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<AddColumnOperation>(o);
+                            Assert.Equal("HandlerId", m.Name);
+                            Assert.Equal("Dog", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<UpdateDataOperation>(o);
+                            Assert.Equal("Dog", m.Table);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(42, v));
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal("Brenda", v));
+                            Assert.Collection(m.Columns,
+                                v => Assert.Equal("HandlerId", v));
+                        }));
+        }
+
+        [Fact]
+        public void Can_split_entity_in_two_using_shared_table_with_seed_data()
+        {
+            Execute(
+                modelBuilder =>
+                {
+                    modelBuilder.Entity(
+                        "Animal",
+                        x =>
+                            {
+                                x.Property<int>("Id");
+                                x.Property<string>("MouseId");
+                                x.Property<string>("BoneId");
+                                x.SeedData(new { Id = 42, MouseId = "1", BoneId = "2" });
+                            });
+                },
+                modelBuilder =>
+                    {
+                        modelBuilder.Entity(
+                            "Cat",
+                            x =>
+                                {
+                                    x.Property<int>("Id");
+                                    x.Property<string>("MouseId");
+                                    x.ToTable("Animal");
+                                    x.SeedData(new { Id = 42, MouseId = "1" });
+                                });
+                        modelBuilder.Entity(
+                            "Dog",
+                            x =>
+                                {
+                                    x.Property<int>("Id");
+                                    x.Property<string>("BoneId");
+                                    x.HasOne("Cat").WithOne().HasForeignKey("Dog", "Id");
+                                    x.ToTable("Animal");
+                                    x.SeedData(new { Id = 42, BoneId = "2" });
+                                });
+                    },
                 operations =>
                     {
-                        Assert.Equal(2, operations.Count);
-
-                        var dropColumnOperation = Assert.IsType<DropColumnOperation>(operations[0]);
-                        Assert.Equal("HandlerId", dropColumnOperation.Name);
-                        Assert.Equal("Dog", dropColumnOperation.Table);
-
-
-                        var addColumnOperation = Assert.IsType<AddColumnOperation>(operations[1]);
-                        Assert.Equal("HandlerId", addColumnOperation.Name);
-                        Assert.Equal("Cat", addColumnOperation.Table);
+                        Assert.Equal(0, operations.Count);
                     });
         }
 
         [Fact]
-        public void Add_column()
+        public void Add_owned_type_with_seed_data()
         {
             Execute(
-                source => source.Entity(
-                    "Dragon",
-                    x =>
-                        {
-                            x.ToTable("Dragon", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
-                target => target.Entity(
-                    "Dragon",
-                    x =>
-                        {
-                            x.ToTable("Dragon", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                            x.Property<string>("Name")
-                                .HasColumnType("nvarchar(30)")
-                                .IsRequired()
-                                .HasDefaultValue("Draco")
-                                .HasDefaultValueSql("CreateDragonName()");
-                        }),
-                operations =>
+                modelBuilder =>
                     {
-                        Assert.Equal(1, operations.Count);
+                        modelBuilder.Entity(
+                            "Order",
+                            x =>
+                                {
+                                    x.Property<int>("Id");
+                                    x.SeedData(new { Id = 42 });
+                                });
+                    },
+                _ => { },
+                modelBuilder =>
+                    {
+                        modelBuilder.Entity(
+                            "Order",
+                            x =>
+                                {
+                                    x.OwnsOne("Address", "ShippingAddress", s =>
+                                        {
+                                            s.Property<string>("Street");
+                                            s.Property<string>("City");
+                                            s.SeedData(new { OrderId = 42, Street = "Lombard", City = "San Francisco" });
+                                        });
+                                    x.OwnsOne("Address", "BillingAddress", s =>
+                                        {
+                                            s.Property<string>("Street");
+                                            s.Property<string>("City");
+                                            s.SeedData(new { OrderId = 42, Street = "Abbey Road", City = "London" });
+                                        });
+                                });
+                    },
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<AddColumnOperation>(o);
+                            Assert.Equal("BillingAddress_City", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<AddColumnOperation>(o);
+                            Assert.Equal("BillingAddress_Street", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<AddColumnOperation>(o);
+                            Assert.Equal("ShippingAddress_City", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<AddColumnOperation>(o);
+                            Assert.Equal("ShippingAddress_Street", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<UpdateDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(42, v));
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal("London", v),
+                                v => Assert.Equal("Abbey Road", v),
+                                v => Assert.Equal("San Francisco", v),
+                                v => Assert.Equal("Lombard", v));
+                            Assert.Collection(m.Columns,
+                                v => Assert.Equal("BillingAddress_City", v),
+                                v => Assert.Equal("BillingAddress_Street", v),
+                                v => Assert.Equal("ShippingAddress_City", v),
+                                v => Assert.Equal("ShippingAddress_Street", v));
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DropColumnOperation>(o);
+                            Assert.Equal("BillingAddress_City", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<DropColumnOperation>(o);
+                            Assert.Equal("BillingAddress_Street", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<DropColumnOperation>(o);
+                            Assert.Equal("ShippingAddress_City", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<DropColumnOperation>(o);
+                            Assert.Equal("ShippingAddress_Street", m.Name);
+                            Assert.Equal("Order", m.Table);
+                        }));
+        }
 
-                        var operation = Assert.IsType<AddColumnOperation>(operations[0]);
-                        Assert.Equal("dbo", operation.Schema);
-                        Assert.Equal("Dragon", operation.Table);
-                        Assert.Equal("Name", operation.Name);
-                        Assert.Equal(typeof(string), operation.ClrType);
-                        Assert.Equal("nvarchar(30)", operation.ColumnType);
-                        Assert.False(operation.IsNullable);
-                        Assert.Equal("", operation.DefaultValue);
-                        Assert.Equal("CreateDragonName()", operation.DefaultValueSql);
-                    });
+        [Fact]
+        public void Rename_entity_type_with_seed_data()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithIdWrongName",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.HasKey("Id").HasName("PK_EntityId");
+                        x.SeedData(
+                            new { Id = 42 },
+                            new { Id = 27 });
+                    }),
+                target => target.Entity(
+                    "EntityWithId",
+                    x =>
+                    {
+                        x.ToTable("EntityWithIdWrongName");
+                        x.Property<int>("Id");
+                        x.HasKey("Id").HasName("PK_EntityId");
+                        x.SeedData(
+                            new { Id = 42 },
+                            new { Id = 27 });
+                    }),
+                Assert.Empty,
+                Assert.Empty);
         }
 
         [Fact]
         public void Add_column_with_computed_value()
         {
             Execute(
-                source => source.Entity(
-                    "Dragon",
-                    x =>
-                        {
-                            x.ToTable("Dragon", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Dragon").ToTable("Dragon", "dbo").Property<int>("Id"),
                 target => target.Entity(
                     "Dragon",
                     x =>
                         {
                             x.ToTable("Dragon", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -542,24 +960,45 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Add_column_ValueGeneratedOnAddOrUpdate_with_default_value_sql()
         {
             Execute(
-                source => source.Entity(
-                    "Dragon",
-                    x =>
-                        {
-                            x.ToTable("Dragon", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Dragon").ToTable("Dragon", "dbo").Property<int>("Id"),
                 target => target.Entity(
                     "Dragon",
                     x =>
                         {
                             x.ToTable("Dragon", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<DateTime>("LastModified")
                                 .HasDefaultValueSql("GETDATE()")
                                 .ValueGeneratedOnAddOrUpdate();
+                        }),
+                operations =>
+                    {
+                        Assert.Equal(1, operations.Count);
+
+                        var operation = Assert.IsType<AddColumnOperation>(operations[0]);
+                        Assert.Equal("dbo", operation.Schema);
+                        Assert.Equal("Dragon", operation.Table);
+                        Assert.Equal("LastModified", operation.Name);
+                        Assert.Equal(typeof(DateTime), operation.ClrType);
+                        Assert.Null(operation.ComputedColumnSql);
+                        Assert.Equal("GETDATE()", operation.DefaultValueSql);
+                    });
+        }
+
+        [Fact]
+        public void Add_column_ValueGeneratedOnUpdate_with_default_value_sql()
+        {
+            Execute(
+                source => source.Entity("Dragon").ToTable("Dragon", "dbo").Property<int>("Id"),
+                target => target.Entity(
+                    "Dragon",
+                    x =>
+                        {
+                            x.ToTable("Dragon", "dbo");
+                            x.Property<int>("Id");
+                            x.Property<DateTime>("LastModified")
+                                .HasDefaultValueSql("GETDATE()")
+                                .ValueGeneratedOnUpdate();
                         }),
                 operations =>
                     {
@@ -585,19 +1024,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Add_column_not_null(Type type, object expectedDefault)
         {
             Execute(
-                source => source.Entity(
-                    "Robin",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Robin").Property<int>("Id"),
                 target => target.Entity(
                     "Robin",
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property(type, "Value").IsRequired();
                         }),
                 operations =>
@@ -611,41 +1043,73 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     });
         }
 
-        private enum SomeEnum
-        {
-            Default
-        }
-
         [Fact]
-        public void Drop_column()
+        public void Add_column_with_seed_data()
         {
             Execute(
+                _ => { },
                 source => source.Entity(
                     "Firefly",
                     x =>
-                        {
-                            x.ToTable("Firefly", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                            x.Property<string>("Name").HasColumnType("nvarchar(30)");
-                        }),
+                    {
+                        x.ToTable("Firefly", "dbo");
+                        x.Property<int>("Id");
+                        x.SeedData(
+                            new { Id = 42 });
+                    }),
                 target => target.Entity(
                     "Firefly",
                     x =>
-                        {
-                            x.ToTable("Firefly", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
-                operations =>
                     {
-                        Assert.Equal(1, operations.Count);
-
-                        var operation = Assert.IsType<DropColumnOperation>(operations[0]);
+                        x.ToTable("Firefly", "dbo");
+                        x.Property<int>("Id");
+                        x.Property<string>("Name").HasColumnType("nvarchar(30)");
+                        x.SeedData(
+                            new { Id = 42, Name = "Firefly 1" },
+                            new { Id = 43, Name = "Firefly 2" });
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<AddColumnOperation>(o);
                         Assert.Equal("dbo", operation.Schema);
                         Assert.Equal("Firefly", operation.Table);
                         Assert.Equal("Name", operation.Name);
-                    });
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal("Firefly 1", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(43, v),
+                            v => Assert.Equal("Firefly 2", v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DeleteDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(43, v));
+                        },
+                    o =>
+                    {
+                        var operation = Assert.IsType<DropColumnOperation>(o);
+                        Assert.Equal("dbo", operation.Schema);
+                        Assert.Equal("Firefly", operation.Table);
+                        Assert.Equal("Name", operation.Name);
+                    }));
+        }
+
+        private enum SomeEnum
+        {
+            Default
         }
 
         [Fact]
@@ -658,7 +1122,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Zebra", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name").HasColumnType("nvarchar(30)");
                         }),
                 target => target.Entity(
@@ -667,7 +1130,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Zebra", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name").HasColumnName("ZebraName").HasColumnType("nvarchar(30)");
                         }),
                 operations =>
@@ -683,27 +1145,136 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
+        public void Rename_column_with_seed_data()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("IdBeforeRename");
+                        x.HasKey("IdBeforeRename");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { IdBeforeRename = 42, Value1 = 32, Value2 = "equal" },
+                            new { IdBeforeRename = 24, Value1 = 72, Value2 = "not equal1" });
+                    }),
+                target => target.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 42, Value1 = 27, Value2 = "equal" }, // modified
+                            new { Id = 24, Value1 = 99, Value2 = "not equal2" }); // modified
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<RenameColumnOperation>(o);
+                        Assert.Null(operation.Schema);
+                        Assert.Equal("EntityWithTwoProperties", operation.Table);
+                        Assert.Equal("IdBeforeRename", operation.Name);
+                        Assert.Equal("Id", operation.NewName);
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(99, v),
+                            v => Assert.Equal("not equal2", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(27, v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<RenameColumnOperation>(o);
+                        Assert.Null(operation.Schema);
+                        Assert.Equal("EntityWithTwoProperties", operation.Table);
+                        Assert.Equal("Id", operation.Name);
+                        Assert.Equal("IdBeforeRename", operation.NewName);
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(72, v),
+                            v => Assert.Equal("not equal1", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(32, v));
+                    }));
+        }
+
+        [Fact]
         public void Rename_property()
         {
             Execute(
                 source => source.Entity(
                     "Buffalo",
                     x =>
-                        {
-                            x.ToTable("Buffalo", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                            x.Property<string>("BuffaloName").HasColumnType("nvarchar(30)");
-                        }),
+                    {
+                        x.ToTable("Buffalo", "dbo");
+                        x.Property<int>("Id");
+                        x.Property<string>("BuffaloName").HasColumnType("nvarchar(30)");
+                    }),
                 target => target.Entity(
                     "Buffalo",
                     x =>
-                        {
-                            x.ToTable("Buffalo", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                            x.Property<string>("Name").HasColumnName("BuffaloName").HasColumnType("nvarchar(30)");
-                        }),
+                    {
+                        x.ToTable("Buffalo", "dbo");
+                        x.Property<int>("Id");
+                        x.Property<string>("Name").HasColumnName("BuffaloName").HasColumnType("nvarchar(30)");
+                    }),
+                Assert.Empty);
+        }
+
+        [Fact]
+        public void Rename_property_with_same_seed_data()
+        {
+            Execute(
+                _ => { },
+                target => target.Entity(
+                    "Zebra",
+                    x =>
+                    {
+                        x.ToTable("Zebra", "dbo");
+                        x.Property<int>("Id");
+                        x.Property<string>("ZebraName").HasColumnType("nvarchar(30)");
+                        x.SeedData(
+                            new { Id = 42, ZebraName = "equal" });
+                    }),
+                source => source.Entity(
+                    "Zebra",
+                    x =>
+                    {
+                        x.ToTable("Zebra", "dbo");
+                        x.Property<int>("Id");
+                        x.Property<string>("Name").HasColumnName("ZebraName").HasColumnType("nvarchar(30)");
+                        x.SeedData(
+                            new { Id = 42, Name = "equal" });
+                    }),
+                Assert.Empty,
                 Assert.Empty);
         }
 
@@ -722,6 +1293,47 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         Assert.Equal("BuffaloId", operation.Name);
                         Assert.Equal("Id", operation.NewName);
                     });
+        }
+
+        [Fact]
+        public void Rename_property_and_column_when_snapshot()
+        {
+            // NB: No conventions to simulate the snapshot.
+            var sourceModelBuilder = new ModelBuilder(new ConventionSet());
+            sourceModelBuilder.Entity(
+                // ReSharper disable once AssignNullToNotNullAttribute
+                typeof(Crab).FullName,
+                x =>
+                {
+                    x.ToTable("Crab");
+
+                    x.Property<string>("CrabId")
+                        .ValueGeneratedOnAdd();
+
+                    x.HasKey("CrabId");
+                });
+
+            var targetModelBuilder = CreateModelBuilder();
+            targetModelBuilder.Entity<Crab>();
+
+            // NB: Call Validate() so ModelBuilt conventions are applied.
+            targetModelBuilder.GetInfrastructure().Metadata.Validate();
+
+            var modelDiffer = RelationalTestHelpers.Instance.CreateContextServices()
+                .GetRequiredService<IMigrationsModelDiffer>();
+            var operations = modelDiffer.GetDifferences(sourceModelBuilder.Model, targetModelBuilder.Model);
+
+            Assert.Equal(1, operations.Count);
+
+            var operation = Assert.IsType<RenameColumnOperation>(operations[0]);
+            Assert.Equal("Crab", operation.Table);
+            Assert.Equal("CrabId", operation.Name);
+            Assert.Equal("Id", operation.NewName);
+        }
+
+        private class Crab
+        {
+            public string Id { get; set; }
         }
 
         [Fact]
@@ -788,10 +1400,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Bison", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
-                                .IsRequired(true)
+                                .IsRequired()
                                 .HasDefaultValue("Buffy")
                                 .HasDefaultValueSql("CreateBisonName()");
                         }),
@@ -801,7 +1412,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Bison", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired(false)
@@ -828,31 +1438,30 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Alter_column_type()
         {
             Execute(
-                source => source.Entity(
+                common => common.Entity(
                     "Puma",
                     x =>
                         {
                             x.ToTable("Puma", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
-                                .HasColumnType("varchar(30)")
                                 .IsRequired()
                                 .HasDefaultValue("Puff")
                                 .HasDefaultValueSql("CreatePumaName()");
+                        }),
+                source => source.Entity(
+                    "Puma",
+                    x =>
+                        {
+                            x.Property<string>("Name")
+                                .HasColumnType("varchar(30)");
                         }),
                 target => target.Entity(
                     "Puma",
                     x =>
                         {
-                            x.ToTable("Puma", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
-                                .HasColumnType("varchar(450)")
-                                .IsRequired()
-                                .HasDefaultValue("Puff")
-                                .HasDefaultValueSql("CreatePumaName()");
+                                .HasColumnType("varchar(450)");
                         }),
                 operations =>
                     {
@@ -868,6 +1477,129 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         Assert.Null(operation.DefaultValue);
                         Assert.Equal("CreatePumaName()", operation.DefaultValueSql);
                     });
+        }
+
+        [Fact]
+        public void Alter_column_type_with_seed_data()
+        {
+            Execute(
+                common => common.Entity(
+                    "Puma",
+                    x =>
+                        {
+                            x.ToTable("Puma", "dbo");
+                            x.Property<int>("Id");
+                        }),
+                source => source.Entity(
+                    "Puma",
+                    x =>
+                        {
+                            x.Property<short>("ClawCount")
+                                .HasColumnType("int");
+                            x.SeedData(new { Id = 42, ClawCount = (short)20 });
+                        }),
+                target => target.Entity(
+                    "Puma",
+                    x =>
+                        {
+                            x.Property<int>("ClawCount");
+                            x.SeedData(new { Id = 42, ClawCount = 20 });
+                        }),
+                operations =>
+                    {
+                        Assert.Equal(1, operations.Count);
+
+                        var operation = Assert.IsType<UpdateDataOperation>(operations[0]);
+                        Assert.Equal("dbo", operation.Schema);
+                        Assert.Equal("Puma", operation.Table);
+
+                        AssertMultidimensionalArray(operation.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(operation.Values,
+                            v => Assert.Equal(20, v));
+                    });
+        }
+
+        [Fact]
+        public void Alter_key_column_type_with_seed_data()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "Firefly",
+                    x =>
+                        {
+                            x.ToTable("Firefly", "dbo");
+                            x.Property<int>("Id");
+                            x.SeedData(
+                                new { Id = 42 },
+                                new { Id = 43 });
+                        }),
+                target => target.Entity(
+                    "Firefly",
+                    x =>
+                        {
+                            x.ToTable("Firefly", "dbo");
+                            x.Property<string>("Id").HasColumnType("nvarchar(30)");
+                            x.SeedData(
+                                new { Id = "42" });
+                        }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DeleteDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(42, v));
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<DeleteDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(43, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<AlterColumnOperation>(o);
+                            Assert.Equal("dbo", operation.Schema);
+                            Assert.Equal("Firefly", operation.Table);
+                            Assert.Equal("Id", operation.Name);
+                            Assert.Equal(typeof(string), operation.ClrType);
+                            Assert.Equal(typeof(int), operation.OldColumn.ClrType);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<InsertDataOperation>(o);
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal("42", v));
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DeleteDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal("42", v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<AlterColumnOperation>(o);
+                            Assert.Equal("dbo", operation.Schema);
+                            Assert.Equal("Firefly", operation.Table);
+                            Assert.Equal("Id", operation.Name);
+                            Assert.Equal(typeof(int), operation.ClrType);
+                            Assert.Equal(typeof(string), operation.OldColumn.ClrType);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<InsertDataOperation>(o);
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal(42, v));
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<InsertDataOperation>(o);
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal(43, v));
+                        }));
         }
 
         [Fact]
@@ -942,7 +1674,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Cougar", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -955,7 +1686,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Cougar", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -988,7 +1718,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("MountainLion", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -1001,7 +1730,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("MountainLion", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -1034,7 +1762,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("MountainLion", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -1047,7 +1774,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("MountainLion", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name")
                                 .HasColumnType("nvarchar(30)")
                                 .IsRequired()
@@ -1080,7 +1806,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Flamingo", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                         }),
                 target => target.Entity(
@@ -1089,7 +1814,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Flamingo", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId");
                         }),
@@ -1115,7 +1839,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Penguin", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId");
                         }),
@@ -1125,7 +1848,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Penguin", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                         }),
                 operations =>
@@ -1149,7 +1871,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Pelican", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId");
                         }),
@@ -1159,7 +1880,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Pelican", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId").HasName("AK_dbo.Pelican_AlternateId");
                         }),
@@ -1190,7 +1910,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Rook", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId");
                             x.Property<int>("AlternateRookId");
@@ -1201,7 +1920,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Rook", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.Property<int>("AlternateRookId");
                             x.HasAlternateKey("AlternateRookId").HasName("AK_Rook_AlternateId");
@@ -1227,14 +1945,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Rename_primary_key()
         {
             Execute(
-                source => source.Entity(
-                    "Puffin",
-                    x =>
-                        {
-                            x.ToTable("Puffin", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Puffin").ToTable("Puffin", "dbo").Property<int>("Id"),
                 target => target.Entity(
                     "Puffin",
                     x =>
@@ -1300,28 +2011,64 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
+        public void Alter_primary_key_column_order_with_seed_data()
+        {
+            Execute(
+                common => common.Entity(
+                    "Raven",
+                    x =>
+                        {
+                            x.ToTable("Raven", "dbo");
+                            x.Property<int>("Id");
+                            x.Property<string>("RavenId");
+                            x.SeedData(new { Id = 42, RavenId = "42" });
+                        }),
+                source => source.Entity(
+                    "Raven",
+                    x =>
+                        {
+                            x.HasKey("Id", "RavenId");
+                        }),
+                target => target.Entity(
+                    "Raven",
+                    x =>
+                        {
+                            x.HasKey("RavenId", "Id");
+                        }),
+                operations =>
+                    {
+                        Assert.Equal(2, operations.Count);
+
+                        var dropOperation = Assert.IsType<DropPrimaryKeyOperation>(operations[0]);
+                        Assert.Equal("dbo", dropOperation.Schema);
+                        Assert.Equal("Raven", dropOperation.Table);
+                        Assert.Equal("PK_Raven", dropOperation.Name);
+
+                        var addOperation = Assert.IsType<AddPrimaryKeyOperation>(operations[1]);
+                        Assert.Equal("dbo", addOperation.Schema);
+                        Assert.Equal("Raven", addOperation.Table);
+                        Assert.Equal("PK_Raven", addOperation.Name);
+                        Assert.Equal(new[] { "RavenId", "Id" }, addOperation.Columns);
+                    });
+        }
+
+        [Fact]
         public void Add_foreign_key()
         {
             Execute(
-                source => source.Entity(
+                common => common.Entity(
                     "Amoeba",
                     x =>
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                         }),
+                _ => { },
                 target => target.Entity(
                     "Amoeba",
-                    x =>
-                        {
-                            x.ToTable("Amoeba", "dbo");
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                            x.Property<int>("ParentId");
-                            x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId");
-                        }),
+                    x => x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId")
+                    ),
                 operations =>
                     {
                         Assert.Equal(2, operations.Count);
@@ -1355,7 +2102,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("ParentId");
                         }),
                 target => target.Entity(
@@ -1364,7 +2110,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("ParentId");
                             x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId");
                         }),
@@ -1401,7 +2146,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("ParentId");
                         }),
                 target => target.Entity(
@@ -1410,7 +2154,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("ParentId");
                             x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId").OnDelete(DeleteBehavior.Cascade);
                         }),
@@ -1438,7 +2181,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
-        public void Add_required_foreign_key_without_cascade_delete()
+        public void Add_required_foreign_key_with_restrict()
         {
             Execute(
                 source => source.Entity(
@@ -1447,7 +2190,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                         }),
                 target => target.Entity(
@@ -1456,7 +2198,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId").OnDelete(DeleteBehavior.Restrict);
                         }),
@@ -1484,7 +2225,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
-        public void Add_optional_foreign_key_wit_set_null()
+        public void Add_required_foreign_key_with_default()
         {
             Execute(
                 source => source.Entity(
@@ -1493,7 +2234,50 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
+                            x.Property<int>("ParentId");
+                        }),
+                target => target.Entity(
+                    "Amoeba",
+                    x =>
+                        {
+                            x.ToTable("Amoeba", "dbo");
+                            x.Property<int>("Id");
+                            x.Property<int>("ParentId");
+                            x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId").OnDelete(DeleteBehavior.ClientSetNull);
+                        }),
+                operations =>
+                    {
+                        Assert.Equal(2, operations.Count);
+
+                        var createIndexOperation = Assert.IsType<CreateIndexOperation>(operations[0]);
+                        Assert.Equal("dbo", createIndexOperation.Schema);
+                        Assert.Equal("Amoeba", createIndexOperation.Table);
+                        Assert.Equal("IX_Amoeba_ParentId", createIndexOperation.Name);
+                        Assert.Equal(new[] { "ParentId" }, createIndexOperation.Columns);
+
+                        var addFkOperation = Assert.IsType<AddForeignKeyOperation>(operations[1]);
+                        Assert.Equal("dbo", addFkOperation.Schema);
+                        Assert.Equal("Amoeba", addFkOperation.Table);
+                        Assert.Equal("FK_Amoeba_Amoeba_ParentId", addFkOperation.Name);
+                        Assert.Equal(new[] { "ParentId" }, addFkOperation.Columns);
+                        Assert.Equal("dbo", addFkOperation.PrincipalSchema);
+                        Assert.Equal("Amoeba", addFkOperation.PrincipalTable);
+                        Assert.Equal(new[] { "Id" }, addFkOperation.PrincipalColumns);
+                        Assert.Equal(ReferentialAction.Restrict, addFkOperation.OnDelete);
+                        Assert.Equal(ReferentialAction.NoAction, addFkOperation.OnUpdate);
+                    });
+        }
+
+        [Fact]
+        public void Add_optional_foreign_key_with_set_null()
+        {
+            Execute(
+                source => source.Entity(
+                    "Amoeba",
+                    x =>
+                        {
+                            x.ToTable("Amoeba", "dbo");
+                            x.Property<int>("Id");
                             x.Property<int?>("ParentId");
                         }),
                 target => target.Entity(
@@ -1502,7 +2286,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Amoeba", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("ParentId");
                             x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId").OnDelete(DeleteBehavior.SetNull);
                         }),
@@ -1530,6 +2313,50 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
+        public void Add_optional_foreign_key_with_restrict()
+        {
+            Execute(
+                source => source.Entity(
+                    "Amoeba",
+                    x =>
+                        {
+                            x.ToTable("Amoeba", "dbo");
+                            x.Property<int>("Id");
+                            x.Property<int?>("ParentId");
+                        }),
+                target => target.Entity(
+                    "Amoeba",
+                    x =>
+                        {
+                            x.ToTable("Amoeba", "dbo");
+                            x.Property<int>("Id");
+                            x.Property<int?>("ParentId");
+                            x.HasOne("Amoeba").WithMany().HasForeignKey("ParentId").OnDelete(DeleteBehavior.Restrict);
+                        }),
+                operations =>
+                    {
+                        Assert.Equal(2, operations.Count);
+
+                        var createIndexOperation = Assert.IsType<CreateIndexOperation>(operations[0]);
+                        Assert.Equal("dbo", createIndexOperation.Schema);
+                        Assert.Equal("Amoeba", createIndexOperation.Table);
+                        Assert.Equal("IX_Amoeba_ParentId", createIndexOperation.Name);
+                        Assert.Equal(new[] { "ParentId" }, createIndexOperation.Columns);
+
+                        var addFkOperation = Assert.IsType<AddForeignKeyOperation>(operations[1]);
+                        Assert.Equal("dbo", addFkOperation.Schema);
+                        Assert.Equal("Amoeba", addFkOperation.Table);
+                        Assert.Equal("FK_Amoeba_Amoeba_ParentId", addFkOperation.Name);
+                        Assert.Equal(new[] { "ParentId" }, addFkOperation.Columns);
+                        Assert.Equal("dbo", addFkOperation.PrincipalSchema);
+                        Assert.Equal("Amoeba", addFkOperation.PrincipalTable);
+                        Assert.Equal(new[] { "Id" }, addFkOperation.PrincipalColumns);
+                        Assert.Equal(ReferentialAction.Restrict, addFkOperation.OnDelete);
+                        Assert.Equal(ReferentialAction.NoAction, addFkOperation.OnUpdate);
+                    });
+        }
+
+        [Fact]
         public void Remove_foreign_key()
         {
             Execute(
@@ -1539,7 +2366,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Anemone", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Anemone").WithMany().HasForeignKey("ParentId");
                         }),
@@ -1549,7 +2375,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Anemone", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                         }),
                 operations =>
@@ -1578,7 +2403,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Nematode", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Nematode").WithMany().HasForeignKey("ParentId");
                         }),
@@ -1588,7 +2412,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Nematode", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Nematode").WithMany().HasForeignKey("ParentId").HasConstraintName("FK_Nematode_NematodeParent");
                         }),
@@ -1622,7 +2445,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Mushroom", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId1");
                             x.HasOne("Mushroom").WithMany().HasForeignKey("ParentId1");
                             x.Property<int>("ParentId2");
@@ -1633,7 +2455,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Mushroom", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId1");
                             x.Property<int>("ParentId2");
                             x.HasOne("Mushroom").WithMany().HasForeignKey("ParentId2").HasConstraintName("FK_Mushroom_Mushroom_ParentId1");
@@ -1679,7 +2500,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Mushroom", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId1");
                             x.HasOne("Mushroom").WithMany().HasForeignKey("ParentId1").OnDelete(DeleteBehavior.Restrict);
                             x.Property<int>("ParentId2");
@@ -1690,7 +2510,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Mushroom", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId1");
                             x.HasOne("Mushroom").WithMany().HasForeignKey("ParentId1").OnDelete(DeleteBehavior.Cascade);
                             x.Property<int>("ParentId2");
@@ -1723,58 +2542,28 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        source.Entity(
-                            "Lion",
-                            x =>
-                                {
-                                    x.ToTable("Lion", "odb");
-                                    x.Property<int>("LionId");
-                                    x.HasKey("LionId");
-                                });
-                        source.Entity(
-                            "Tiger",
-                            x =>
-                                {
-                                    x.ToTable("Tiger", "bod");
-                                    x.Property<int>("TigerId");
-                                    x.HasKey("TigerId");
-                                });
+                        source.Entity("Lion").ToTable("Lion", "odb").Property<int>("LionId");
+                        source.Entity("Tiger").ToTable("Tiger", "bod").Property<int>("TigerId");
                         source.Entity(
                             "Liger",
                             x =>
                                 {
                                     x.ToTable("Liger", "dbo");
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("ParentId");
                                     x.HasOne("Lion").WithMany().HasForeignKey("ParentId");
                                 });
                     },
                 target =>
                     {
-                        target.Entity(
-                            "Lion",
-                            x =>
-                                {
-                                    x.ToTable("Lion", "odb");
-                                    x.Property<int>("LionId");
-                                    x.HasKey("LionId");
-                                });
-                        target.Entity(
-                            "Tiger",
-                            x =>
-                                {
-                                    x.ToTable("Tiger", "bod");
-                                    x.Property<int>("TigerId");
-                                    x.HasKey("TigerId");
-                                });
+                        target.Entity("Lion").ToTable("Lion", "odb").Property<int>("LionId");
+                        target.Entity("Tiger").ToTable("Tiger", "bod").Property<int>("TigerId");
                         target.Entity(
                             "Liger",
                             x =>
                                 {
                                     x.ToTable("Liger", "dbo");
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("ParentId");
                                     x.HasOne("Tiger").WithMany().HasForeignKey("ParentId").HasConstraintName("FK_Liger_Lion_ParentId");
                                 });
@@ -1809,7 +2598,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Hippo", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                         }),
                 target => target.Entity(
@@ -1818,7 +2606,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Hippo", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value").IsUnique();
                         }),
@@ -1845,7 +2632,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Horse", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value");
                         }),
@@ -1855,7 +2641,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Horse", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                         }),
                 operations =>
@@ -1879,7 +2664,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Donkey", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value");
                         }),
@@ -1889,7 +2673,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Donkey", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value").HasName("IX_dbo.Donkey_Value");
                         }),
@@ -1915,7 +2698,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Muel", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value");
                             x.Property<int>("MuleValue");
@@ -1926,7 +2708,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Muel", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.Property<int>("MuleValue");
                             x.HasIndex("MuleValue").HasName("IX_Muel_Value");
@@ -1958,7 +2739,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Pony", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value").IsUnique(false);
                         }),
@@ -1968,9 +2748,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         {
                             x.ToTable("Pony", "dbo");
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
-                            x.HasIndex("Value").IsUnique(true);
+                            x.HasIndex("Value").IsUnique();
                         }),
                 operations =>
                     {
@@ -2171,7 +2950,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     .IncrementsBy(3)
                     .HasMin(1)
                     .HasMax(4)
-                    .IsCyclic(true),
+                    .IsCyclic(),
                 source => source.HasSequence<int>("Foxtrot", "dbo")
                     .StartsAt(2)
                     .IncrementsBy(3)
@@ -2287,7 +3066,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("Value");
                         }),
                 target => target.Entity(
@@ -2295,7 +3073,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                         }),
                 operations =>
@@ -2316,7 +3093,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                         }),
                 target => target.Entity(
@@ -2324,7 +3100,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int?>("Value");
                         }),
                 operations =>
@@ -2345,7 +3120,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                         }),
                 target => target.Entity(
@@ -2353,7 +3127,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value").HasColumnType("bigint");
                         }),
                 operations =>
@@ -2369,13 +3142,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Sort_works_with_primary_keys_and_columns()
         {
             Execute(
-                source => source.Entity(
-                    "Jaguar",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Jaguar").Property<int>("Id"),
                 target => target.Entity(
                     "Jaguar",
                     x =>
@@ -2395,19 +3162,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Sort_adds_unique_constraint_after_column()
         {
             Execute(
-                source => source.Entity(
-                    "Panther",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Panther").Property<int>("Id"),
                 target => target.Entity(
                     "Panther",
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId");
                         }),
@@ -2426,17 +3186,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("AlternateId");
                             x.HasAlternateKey("AlternateId");
                         }),
-                target => target.Entity(
-                    "Bobcat",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                target => target.Entity("Bobcat").Property<int>("Id"),
                 operations => Assert.Collection(
                     operations,
                     o => Assert.IsType<DropUniqueConstraintOperation>(o),
@@ -2447,19 +3200,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Sort_creates_index_after_column()
         {
             Execute(
-                source => source.Entity(
-                    "Coyote",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Coyote").Property<int>("Id"),
                 target => target.Entity(
                     "Coyote",
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value");
                         }),
@@ -2478,17 +3224,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("Value");
                             x.HasIndex("Value");
                         }),
-                target => target.Entity(
-                    "Wolf",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                target => target.Entity("Wolf").Property<int>("Id"),
                 operations => Assert.Collection(
                     operations,
                     o => Assert.IsType<DropIndexOperation>(o),
@@ -2499,19 +3238,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Sort_adds_foreign_key_after_column()
         {
             Execute(
-                source => source.Entity(
-                    "Algae",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Algae").Property<int>("Id"),
                 target => target.Entity(
                     "Algae",
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Algae").WithMany().HasForeignKey("ParentId");
                         }),
@@ -2531,17 +3263,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Bacteria").WithMany().HasForeignKey("ParentId");
                         }),
-                target => target.Entity(
-                    "Bacteria",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
+                target => target.Entity("Bacteria").Property<int>("Id"),
                 operations => Assert.Collection(
                     operations,
                     o => Assert.IsType<DropForeignKeyOperation>(o),
@@ -2558,24 +3283,16 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("MakerId");
                         }),
                 target =>
                     {
-                        target.Entity(
-                            "Maker",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        target.Entity("Maker").Property<int>("Id");
                         target.Entity(
                             "Car",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                     x.HasOne("Maker").WithMany().HasForeignKey("MakerId");
                                 });
@@ -2593,19 +3310,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        source.Entity(
-                            "Maker",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        source.Entity("Maker").Property<int>("Id");
                         source.Entity(
                             "Boat",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                     x.HasOne("Maker").WithMany().HasForeignKey("MakerId");
                                 });
@@ -2615,7 +3325,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("MakerId");
                         }),
                 operations => Assert.Collection(
@@ -2631,19 +3340,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        source.Entity(
-                            "Maker",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        source.Entity("Maker").Property<int>("Id");
                         source.Entity(
                             "Airplane",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                 });
                     },
@@ -2654,7 +3356,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("AlternateId");
                                 });
                         target.Entity(
@@ -2662,7 +3363,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                     x.HasOne("Maker").WithMany().HasForeignKey("MakerId").HasPrincipalKey("AlternateId");
                                 });
@@ -2686,7 +3386,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("AlternateId");
                                 });
                         source.Entity(
@@ -2694,26 +3393,18 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                     x.HasOne("Maker").WithMany().HasForeignKey("MakerId").HasPrincipalKey("AlternateId");
                                 });
                     },
                 target =>
                     {
-                        target.Entity(
-                            "Maker",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        target.Entity("Maker").Property<int>("Id");
                         target.Entity(
                             "Submarine",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                 });
                     },
@@ -2732,19 +3423,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        modelBuilder.Entity(
-                            "Maker",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        modelBuilder.Entity("Maker").Property<int>("Id");
                         modelBuilder.Entity(
                             "Helicopter",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                     x.HasOne("Maker").WithMany().HasForeignKey("MakerId");
                                 });
@@ -2760,6 +3444,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                         Assert.Equal("Helicopter", operation2.Name);
 
                         var operation3 = Assert.IsType<CreateIndexOperation>(operations[2]);
+                        Assert.Equal("IX_Helicopter_MakerId", operation3.Name);
                     });
         }
 
@@ -2769,19 +3454,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 modelBuilder =>
                     {
-                        modelBuilder.Entity(
-                            "Maker",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        modelBuilder.Entity("Maker").Property<int>("Id");
                         modelBuilder.Entity(
                             "Glider",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("MakerId");
                                     x.HasOne("Maker").WithMany().HasForeignKey("MakerId");
                                 });
@@ -2803,20 +3481,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Rename_column_with_primary_key()
         {
             Execute(
-                source => source.Entity(
-                    "Hornet",
-                    x =>
-                        {
-                            x.Property<int>("Id");
-                            x.HasKey("Id");
-                        }),
-                target => target.Entity(
-                    "Hornet",
-                    x =>
-                        {
-                            x.Property<int>("Id").HasColumnName("HornetId");
-                            x.HasKey("Id");
-                        }),
+                source => source.Entity("Hornet").Property<int>("Id"),
+                target => target.Entity("Hornet").Property<int>("Id").HasColumnName("HornetId"),
                 operations =>
                     {
                         Assert.Equal(1, operations.Count);
@@ -2834,7 +3500,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name");
                             x.HasAlternateKey("Name");
                         }),
@@ -2843,7 +3508,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name").HasColumnName("WaspName");
                             x.HasAlternateKey("Name");
                         }),
@@ -2866,7 +3530,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name");
                             x.HasIndex("Name");
                         }),
@@ -2875,7 +3538,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name").HasColumnName("BeeName");
                             x.HasIndex("Name");
                         }),
@@ -2897,7 +3559,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name");
                             x.HasAlternateKey("Name");
                         }),
@@ -2928,7 +3589,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name");
                             x.HasIndex("Name");
                         }),
@@ -2959,7 +3619,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name");
                             x.HasAlternateKey("Name");
                         }),
@@ -2989,7 +3648,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<string>("Name");
                             x.HasIndex("Name");
                         }),
@@ -3019,7 +3677,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Yeast").WithMany().HasForeignKey("ParentId");
                         }),
@@ -3028,7 +3685,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId").HasColumnName("ParentYeastId");
                             x.HasOne("Yeast").WithMany().HasForeignKey("ParentId");
                         }),
@@ -3052,7 +3708,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Mucor").WithMany().HasForeignKey("ParentId");
                         }),
@@ -3061,7 +3716,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id").HasColumnName("MucorId");
-                            x.HasKey("Id");
                             x.Property<int>("ParentId");
                             x.HasOne("Mucor").WithMany().HasForeignKey("ParentId");
                         }),
@@ -3078,32 +3732,19 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        source.Entity(
-                            "Zebra",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        source.Entity("Zebra").Property<int>("Id");
                         source.Entity(
                             "Zonkey",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("ParentId");
                                     x.HasOne("Zebra").WithMany().HasForeignKey("ParentId");
                                 });
                     },
                 target =>
                     {
-                        target.Entity(
-                            "Zebra",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        target.Entity("Zebra").Property<int>("Id");
                         target.Entity(
                             "Zonkey",
                             x =>
@@ -3129,19 +3770,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        source.Entity(
-                            "Jaguar",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        source.Entity("Jaguar").Property<int>("Id");
                         source.Entity(
                             "Jaglion",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("ParentId");
                                     x.HasOne("Jaguar").WithMany().HasForeignKey("ParentId");
                                 });
@@ -3161,7 +3795,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("ParentId");
                                     x.HasOne("Jaguar").WithMany().HasForeignKey("ParentId")
                                         .HasConstraintName("FK_Jaglion_Jaguar_ParentId");
@@ -3181,27 +3814,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        IMutableEntityType animal = null;
-                        modelBuilder.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        modelBuilder.Entity(
-                            "Fish",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Fish";
-                                });
+                        modelBuilder.Entity("Animal").Property<int>("Id");
+                        modelBuilder.Entity("Fish").HasBaseType("Animal").Property<string>("Name");
                     },
                 operations =>
                     {
@@ -3222,27 +3836,8 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        IMutableEntityType animal = null;
-                        modelBuilder.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        modelBuilder.Entity(
-                            "Whale",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<int>("Value");
-                                    x.Metadata.Relational().DiscriminatorValue = "Whale";
-                                });
+                        modelBuilder.Entity("Animal").Property<int>("Id");
+                        modelBuilder.Entity("Whale").HasBaseType("Animal").Property<int>("Value");
                     },
                 operations =>
                     {
@@ -3257,57 +3852,58 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
+        public void Create_table_with_seed_data()
+        {
+            Execute(
+                _ => { },
+                _ => { },
+                target => target.Entity(
+                    "Zebra",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<string>("Name").HasColumnType("nvarchar(30)");
+                        x.SeedData(
+                            new { Id = 42, Name = "equal" });
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<CreateTableOperation>(o);
+                        Assert.Null(operation.Schema);
+                        Assert.Equal("Zebra", operation.Name);
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        Assert.Null(m.Schema);
+                        Assert.Equal("Zebra", m.Table);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(42, v),
+                            v => Assert.Equal("equal", v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<DropTableOperation>(o);
+                        Assert.Null(operation.Schema);
+                        Assert.Equal("Zebra", operation.Name);
+                    }));
+        }
+
+        [Fact]
         public void Add_property_on_subtype()
         {
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        source.Entity(
-                            "Shark",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Metadata.Relational().DiscriminatorValue = "Shark";
-                                });
+                        source.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        source.Entity("Shark").HasBaseType("Animal");
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "Shark",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Shark";
-                                });
+                        target.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        target.Entity("Shark").HasBaseType("Animal").Property<string>("Name");
                     },
                 operations =>
                     {
@@ -3326,50 +3922,13 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        source.Entity(
-                            "Marlin",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Metadata.Relational().DiscriminatorValue = "Marlin";
-                                });
+                        source.Entity("Animal").Property<int>("Id");
+                        source.Entity("Marlin").HasBaseType("Animal");
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "Marlin",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<int>("Value");
-                                    x.Metadata.Relational().DiscriminatorValue = "Marlin";
-                                });
+                        target.Entity("Animal").Property<int>("Id");
+                        target.Entity("Marlin").HasBaseType("Animal").Property<int>("Value");
                     },
                 operations =>
                     {
@@ -3388,52 +3947,13 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        source.Entity(
-                            "Blowfish",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Blowfish";
-                                });
+                        source.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        source.Entity("Blowfish").HasBaseType("Animal").Property<string>("Name");
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "Blowfish",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Metadata.Relational().DiscriminatorValue = "Blowfish";
-                                });
+                        target.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        target.Entity("Blowfish").HasBaseType("Animal");
                     },
                 operations =>
                     {
@@ -3452,53 +3972,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        source.Entity(
-                            "Barracuda",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Barracuda";
-                                });
+                        source.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        source.Entity("Barracuda").HasBaseType("Animal").Property<string>("Name");
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "Barracuda",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name").HasColumnType("varchar(30)");
-                                    x.Metadata.Relational().DiscriminatorValue = "Barracuda";
-                                });
+                        target.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        target.Entity("Barracuda").HasBaseType("Animal").Property<string>("Name")
+                            .HasColumnType("varchar(30)");
                     },
                 operations =>
                     {
@@ -3518,53 +3999,19 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        source.Entity(
-                            "Minnow",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Minnow";
-                                });
+                        source.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        source.Entity("Minnow").HasBaseType("Animal").Property<string>("Name");
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        target.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
                         target.Entity(
                             "Minnow",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<string>("Name");
                                     x.HasIndex("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Minnow";
                                 });
                     },
                 operations =>
@@ -3585,54 +4032,26 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        source.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
                         source.Entity(
                             "Pike",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<string>("Name");
                                     x.HasIndex("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Pike";
                                 });
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        target.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
                         target.Entity(
                             "Pike",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<string>("Name");
                                     x.HasIndex("Name").HasName("IX_Animal_Pike_Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Pike";
                                 });
                     },
                 operations =>
@@ -3653,54 +4072,20 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        source.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
                         source.Entity(
                             "Catfish",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<string>("Name");
                                     x.HasIndex("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Catfish";
                                 });
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.ToTable("Animal", "dbo");
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "Catfish",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<string>("Name");
-                                    x.Metadata.Relational().DiscriminatorValue = "Catfish";
-                                });
+                        target.Entity("Animal").ToTable("Animal", "dbo").Property<int>("Id");
+                        target.Entity("Catfish").HasBaseType("Animal").Property<string>("Name");
                     },
                 operations =>
                     {
@@ -3720,19 +4105,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        modelBuilder.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        modelBuilder.Entity("Person").Property<int>("Id");
                         modelBuilder.Entity(
                             "Animal",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("HandlerId");
                                     x.HasOne("Person").WithMany().HasForeignKey("HandlerId");
                                 });
@@ -3767,34 +4145,15 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        modelBuilder.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
-                        IMutableEntityType animal = null;
-                        modelBuilder.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        modelBuilder.Entity("Person").Property<int>("Id");
+                        modelBuilder.Entity("Animal").Property<int>("Id");
                         modelBuilder.Entity(
                             "Stag",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<int>("HandlerId");
                                     x.HasOne("Person").WithMany().HasForeignKey("HandlerId");
-                                    x.Metadata.Relational().DiscriminatorValue = "Stag";
                                 });
                     },
                 operations =>
@@ -3827,32 +4186,13 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        IMutableEntityType animal = null;
-                        modelBuilder.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        modelBuilder.Entity(
-                            "DomesticAnimal",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Metadata.Relational().DiscriminatorValue = "DomesticAnimal";
-                                });
+                        modelBuilder.Entity("Animal").Property<int>("Id");
+                        modelBuilder.Entity("DomesticAnimal").HasBaseType("Animal");
                         modelBuilder.Entity(
                             "Person",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("PetId");
                                     x.HasOne("DomesticAnimal").WithMany().HasForeignKey("PetId");
                                 });
@@ -3887,27 +4227,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                 _ => { },
                 modelBuilder =>
                     {
-                        IMutableEntityType animal = null;
-                        modelBuilder.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        modelBuilder.Entity("Animal").Property<int>("Id");
                         modelBuilder.Entity(
                             "Predator",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<int>("PreyId");
                                     x.HasOne("Animal").WithMany().HasForeignKey("PreyId");
-                                    x.Metadata.Relational().DiscriminatorValue = "Predator";
                                 });
                     },
                 operations =>
@@ -3931,23 +4258,43 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
-        public void Create_table_with_overlapping_columns_in_hierarchy()
+        public void Add_subtype_with_shared_column_with_seed_data()
         {
             Execute(
-                _ => { },
                 modelBuilder =>
                     {
                         modelBuilder.Entity("Animal").Property<int>("Id");
-                        modelBuilder.Entity("Cat").HasBaseType("Animal").Property<int>("BreederId");
-                        modelBuilder.Entity("Dog").HasBaseType("Animal").Property<int>("BreederId");
+                        modelBuilder.Entity("Cat", x =>
+                            {
+                                x.HasBaseType("Animal").Property<string>("BreederId").HasColumnName("BreederId");
+                                x.SeedData(new { Id = 42, BreederId = "42" });
+                            });
                     },
-                operations =>
+                _ => { },
+                modelBuilder =>
                     {
-                        Assert.Equal(1, operations.Count);
-
-                        var createTableOperation = Assert.IsType<CreateTableOperation>(operations[0]);
-                        Assert.Equal(3, createTableOperation.Columns.Count);
-                    });
+                        modelBuilder.Entity("Dog", x =>
+                            {
+                                x.HasBaseType("Animal").Property<string>("BreederId").HasColumnName("BreederId");
+                                x.SeedData(new { Id = 43, BreederId = "43" });
+                            });
+                    },
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<InsertDataOperation>(o);
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal(43, v),
+                                v => Assert.Equal("Dog", v),
+                                v => Assert.Equal("43", v));
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var m = Assert.IsType<DeleteDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(43, v));
+                        }));
         }
 
         [Fact]
@@ -3956,38 +4303,24 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 modelBuilder =>
                     {
-                        modelBuilder.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        modelBuilder.Entity("Person").Property<int>("Id");
                         modelBuilder.Entity(
                             "Animal",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("HandlerId");
                                 });
                         modelBuilder.Entity("Drakee").HasBaseType("Animal");
                     },
                 modelBuilder =>
                     {
-                        modelBuilder.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
+                        modelBuilder.Entity("Person").Property<int>("Id");
                         modelBuilder.Entity(
                             "Animal",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("HandlerId");
                                     x.HasOne("Person").WithMany().HasForeignKey("HandlerId");
                                 });
@@ -4017,42 +4350,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 common =>
                     {
-                        common.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
-                        IMutableEntityType animal = null;
-                        common.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        common.Entity(
-                            "GameAnimal",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<int>("HunterId");
-                                    x.Metadata.Relational().DiscriminatorValue = "GameAnimal";
-                                });
-                        common.Entity(
-                            "EndangeredAnimal",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<int>("HunterId");
-                                    x.Metadata.Relational().DiscriminatorValue = "EndangeredAnimal";
-                                });
+                        common.Entity("Person").Property<int>("Id");
+                        common.Entity("Animal").Property<int>("Id");
+                        common.Entity("GameAnimal").HasBaseType("Animal").Property<int>("HunterId");
+                        common.Entity("EndangeredAnimal").HasBaseType("Animal").Property<int>("HunterId");
                     },
                 source => { },
                 target =>
@@ -4083,68 +4384,57 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
+        public void Add_shared_property_with_foreign_key_on_subtypes()
+        {
+            Execute(
+                common =>
+                    {
+                        common.Entity("Person").Property<int>("Id");
+                        common.Entity("Animal").Property<int>("Id");
+                        common.Entity("GameAnimal").HasBaseType("Animal").Property<int>("HunterId");
+                        common.Entity(
+                            "GameAnimal",
+                            x => { x.HasOne("Person").WithMany().HasForeignKey("HunterId"); });
+                    },
+                source => { },
+                target =>
+                    {
+                        target.Entity("EndangeredAnimal").HasBaseType("Animal").Property<int>("HunterId");
+                        target.Entity(
+                            "EndangeredAnimal",
+                            x => { x.HasOne("Person").WithMany().HasForeignKey("HunterId"); });
+                    },
+                operations =>
+                    {
+                        Assert.Equal(0, operations.Count);
+                    });
+        }
+
+        [Fact]
         public void Add_foreign_key_to_subtype()
         {
             Execute(
                 source =>
                     {
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        source.Entity(
-                            "TrophyAnimal",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Metadata.Relational().DiscriminatorValue = "TrophyAnimal";
-                                });
+                        source.Entity("Animal").Property<int>("Id");
+                        source.Entity("TrophyAnimal").HasBaseType("Animal");
                         source.Entity(
                             "Person",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("TrophyId");
                                 });
                     },
                 target =>
                     {
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "TrophyAnimal",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Metadata.Relational().DiscriminatorValue = "TrophyAnimal";
-                                });
+                        target.Entity("Animal").Property<int>("Id");
+                        target.Entity("TrophyAnimal").HasBaseType("Animal");
                         target.Entity(
                             "Person",
                             x =>
                                 {
                                     x.Property<int>("Id");
-                                    x.HasKey("Id");
                                     x.Property<int>("TrophyId");
                                     x.HasOne("TrophyAnimal").WithMany().HasForeignKey("TrophyId");
                                 });
@@ -4173,66 +4463,22 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
             Execute(
                 source =>
                     {
-                        source.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
-                        IMutableEntityType animal = null;
-                        source.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
+                        source.Entity("Person").Property<int>("Id");
+                        source.Entity("Animal").Property<int>("Id");
                         source.Entity(
                             "MountAnimal",
                             x =>
                                 {
-                                    x.Metadata.BaseType = animal;
+                                    x.HasBaseType("Animal");
                                     x.Property<int>("RiderId");
                                     x.HasOne("Person").WithMany().HasForeignKey("RiderId");
-                                    x.Metadata.Relational().DiscriminatorValue = "MountAnimal";
                                 });
                     },
                 target =>
                     {
-                        target.Entity(
-                            "Person",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                });
-                        IMutableEntityType animal = null;
-                        target.Entity(
-                            "Animal",
-                            x =>
-                                {
-                                    x.Property<int>("Id");
-                                    x.HasKey("Id");
-                                    var discriminatorProperty = x.Property<string>("Discriminator").IsRequired().Metadata;
-
-                                    animal = x.Metadata;
-                                    animal.Relational().DiscriminatorProperty = discriminatorProperty;
-                                    animal.Relational().DiscriminatorValue = "Animal";
-                                });
-                        target.Entity(
-                            "MountAnimal",
-                            x =>
-                                {
-                                    x.Metadata.BaseType = animal;
-                                    x.Property<int>("RiderId");
-                                    x.Metadata.Relational().DiscriminatorValue = "MountAnimal";
-                                });
+                        target.Entity("Person").Property<int>("Id");
+                        target.Entity("Animal").Property<int>("Id");
+                        target.Entity("MountAnimal").HasBaseType("Animal").Property<int>("RiderId");
                     },
                 operations =>
                     {
@@ -4248,6 +4494,143 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     });
         }
 
+        [Fact]
+        public void Create_shared_table_with_two_entity_types()
+        {
+            Execute(
+                _ => { },
+                modelBuilder =>
+                    {
+                        modelBuilder.Entity("Order").ToTable("Orders").Property<int>("Id");
+                        modelBuilder.Entity(
+                            "OrderDetails", eb =>
+                                {
+                                    eb.Property<int>("Id");
+                                    eb.Property<DateTime>("Time");
+                                    eb.HasOne("Order").WithOne().HasForeignKey("OrderDetails", "Id");
+                                    eb.ToTable("Orders");
+                                });
+                    },
+                operations =>
+                    {
+                        Assert.Equal(1, operations.Count);
+
+                        var createTableOperation = Assert.IsType<CreateTableOperation>(operations[0]);
+                        Assert.Equal(2, createTableOperation.Columns.Count);
+                        var timeColumn = createTableOperation.Columns[1];
+                        Assert.Equal("Time", timeColumn.Name);
+                        Assert.False(timeColumn.IsNullable);
+                    });
+        }
+
+        [Fact]
+        public void Create_shared_table_with_inheritance_and_three_entity_types()
+        {
+            Execute(
+                _ => { },
+                modelBuilder =>
+                    {
+                        modelBuilder.Entity("OrderBase").ToTable("Orders").Property<int>("Id");
+                        modelBuilder.Entity("Order").HasBaseType("OrderBase").ToTable("Orders");
+                        modelBuilder.Entity(
+                            "OrderDetails",
+                            eb =>
+                                {
+                                    eb.Property<int>("Id");
+                                    eb.Property<DateTime>("Time");
+                                    eb.HasOne("Order").WithOne().HasForeignKey("OrderDetails", "Id");
+                                    eb.ToTable("Orders");
+                                });
+                    },
+                operations =>
+                    {
+                        Assert.Equal(1, operations.Count);
+
+                        var createTableOperation = Assert.IsType<CreateTableOperation>(operations[0]);
+                        Assert.Equal(3, createTableOperation.Columns.Count);
+                        var timeColumn = createTableOperation.Columns[2];
+                        Assert.Equal("Time", timeColumn.Name);
+                        Assert.True(timeColumn.IsNullable);
+                    });
+        }
+
+        [Fact]
+        public void Split_out_subtype_with_seed_data()
+        {
+            Execute(
+                common =>
+                    {
+                        common.Entity("Animal", x =>
+                            {
+                                x.Property<int>("Id");
+                                x.Property<string>("Name");
+                                x.ToTable("Animal", "dbo");
+                                x.SeedData(new { Id = 42 });
+                            });
+
+                        common.Entity("Eagle", x =>
+                            {
+                                x.HasBaseType("Animal");
+                                x.SeedData(new { Id = 41 });
+                            });
+                    },
+                source => source.Entity("Animal", x =>
+                    {
+                        x.SeedData(new { Id = 43, Name = "Bob" });
+                    }),
+                target => target.Entity("Shark", x =>
+                    {
+                        x.HasBaseType("Animal");
+                        x.SeedData(new { Id = 43, Name = "Bob" });
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<DeleteDataOperation>(o);
+                            Assert.Equal("Animal", operation.Table);
+                            Assert.Collection(operation.KeyColumns,
+                                v => Assert.Equal("Id", v));
+                            AssertMultidimensionalArray(operation.KeyValues,
+                                v => Assert.Equal(43, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<InsertDataOperation>(o);
+                            Assert.Equal("Animal", operation.Table);
+                            Assert.Collection(operation.Columns,
+                                v => Assert.Equal("Id", v),
+                                v => Assert.Equal("Discriminator", v),
+                                v => Assert.Equal("Name", v));
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(43, v),
+                                v => Assert.Equal("Shark", v),
+                                v => Assert.Equal("Bob", v));
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<DeleteDataOperation>(o);
+                            Assert.Equal("Animal", operation.Table);
+                            Assert.Collection(operation.KeyColumns,
+                                v => Assert.Equal("Id", v));
+                            AssertMultidimensionalArray(operation.KeyValues,
+                                v => Assert.Equal(43, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<InsertDataOperation>(o);
+                            Assert.Equal("Animal", operation.Table);
+                            Assert.Collection(operation.Columns,
+                                v => Assert.Equal("Id", v),
+                                v => Assert.Equal("Discriminator", v),
+                                v => Assert.Equal("Name", v));
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(43, v),
+                                v => Assert.Equal("Animal", v),
+                                v => Assert.Equal("Bob", v));
+                        }));
+        }
+
         [Fact] // See #2802
         public void Diff_IProperty_compares_values_not_references()
         {
@@ -4257,7 +4640,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<bool>("Value").HasDefaultValue(true);
                         }),
                 target => target.Entity(
@@ -4265,7 +4647,6 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                     x =>
                         {
                             x.Property<int>("Id");
-                            x.HasKey("Id");
                             x.Property<bool>("Value").HasDefaultValue(true);
                         }),
                 Assert.Empty);
@@ -4275,14 +4656,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Add_column_to_renamed_table()
         {
             Execute(
-                source => source
-                    .Entity(
-                        "Table",
-                        x =>
-                            {
-                                x.ToTable("Table", "old");
-                                x.Property<int>("Id");
-                            }),
+                source => source.Entity("Table").ToTable("Table", "old").Property<int>("Id"),
                 target => target
                     .Entity(
                         "Table",
@@ -4394,13 +4768,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         {
             Execute(
                 source => source
-                    .Entity(
-                        "ReferencedTable",
-                        x =>
-                            {
-                                x.ToTable("ReferencedTable", "old");
-                                x.Property<int>("Id");
-                            })
+                    .Entity("ReferencedTable", x => x.ToTable("ReferencedTable", "old").Property<int>("Id"))
                     .Entity(
                         "Table",
                         x =>
@@ -4442,10 +4810,10 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
-        public void Add_foreign_key_referencing_renamed_column()
+        public void Add_foreign_key_referencing_renamed_column_with_seed_data()
         {
             Execute(
-                source => source
+                common => common
                     .Entity("ReferencedTable", x => x.Property<int>("Id"))
                     .Entity(
                         "Table",
@@ -4455,39 +4823,95 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 x.Property<int>("ForeignId");
                                 x.HasIndex("ForeignId");
                             }),
-                target => target
-                    .Entity("ReferencedTable", x => x.Property<int>("Id").HasColumnName("ReferencedTableId"))
+                source => source
                     .Entity(
                         "Table",
                         x =>
                             {
-                                x.Property<int>("Id");
-                                x.Property<int>("ForeignId");
-                                x.HasOne("ReferencedTable").WithMany().HasForeignKey("ForeignId");
+                                x.HasIndex("ForeignId");
+                                x.SeedData(new { Id = 43 });
                             }),
-                operations =>
-                    {
-                        Assert.Equal(2, operations.Count);
-
-                        Assert.IsType<RenameColumnOperation>(operations[0]);
-
-                        var addForeignKeyOperation = Assert.IsType<AddForeignKeyOperation>(operations[1]);
-                        Assert.Equal(new[] { "ReferencedTableId" }, addForeignKeyOperation.PrincipalColumns);
-                        Assert.Equal("FK_Table_ReferencedTable_ForeignId", addForeignKeyOperation.Name);
-                    });
+                target => target
+                    .Entity("ReferencedTable", x =>
+                        {
+                            x.Property<int>("Id").HasColumnName("ReferencedTableId");
+                            x.SeedData(new { Id = 42 });
+                        })
+                    .Entity(
+                        "Table",
+                        x =>
+                            {
+                                x.HasOne("ReferencedTable").WithMany().HasForeignKey("ForeignId");
+                                x.SeedData(new { Id = 43, ForeignId = 42 });
+                            }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<RenameColumnOperation>(o);
+                            Assert.Equal("ReferencedTable", operation.Table);
+                            Assert.Equal("Id", operation.Name);
+                            Assert.Equal("ReferencedTableId", operation.NewName);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<InsertDataOperation>(o);
+                            Assert.Equal("ReferencedTable", operation.Table);
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(42, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<UpdateDataOperation>(o);
+                            Assert.Equal("Table", operation.Table);
+                            AssertMultidimensionalArray(operation.KeyValues,
+                                v => Assert.Equal(43, v));
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(42, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<AddForeignKeyOperation>(o);
+                            Assert.Equal(new[] { "ReferencedTableId" }, operation.PrincipalColumns);
+                            Assert.Equal("FK_Table_ReferencedTable_ForeignId", operation.Name);
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<DropForeignKeyOperation>(o);
+                            Assert.Equal("FK_Table_ReferencedTable_ForeignId", operation.Name);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<DeleteDataOperation>(o);
+                            Assert.Equal("ReferencedTable", operation.Table);
+                            Assert.Collection(operation.KeyColumns,
+                                v => Assert.Equal("ReferencedTableId", v));
+                            AssertMultidimensionalArray(operation.KeyValues,
+                                v => Assert.Equal(42, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<RenameColumnOperation>(o);
+                            Assert.Equal("ReferencedTable", operation.Table);
+                            Assert.Equal("ReferencedTableId", operation.Name);
+                            Assert.Equal("Id", operation.NewName);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<UpdateDataOperation>(o);
+                            Assert.Equal("Table", operation.Table);
+                            AssertMultidimensionalArray(operation.KeyValues,
+                                v => Assert.Equal(43, v));
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(0, v));
+                        }));
         }
 
         [Fact]
         public void Create_table_with_foreign_key_referencing_renamed_table()
         {
             Execute(
-                source => source.Entity(
-                    "ReferencedTable",
-                    x =>
-                        {
-                            x.ToTable("ReferencedTable", "old");
-                            x.Property<int>("Id");
-                        }),
+                source => source.Entity("ReferencedTable").ToTable("ReferencedTable", "old").Property<int>("Id"),
                 target => target
                     .Entity(
                         "ReferencedTable",
@@ -4529,8 +4953,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Create_table_with_foreign_key_referencing_renamed_column()
         {
             Execute(
-                source => source
-                    .Entity("ReferencedTable", x => x.Property<int>("Id")),
+                source => source.Entity("ReferencedTable").Property<int>("Id"),
                 target => target
                     .Entity("ReferencedTable", x => x.Property<int>("Id").HasColumnName("ReferencedTableId"))
                     .Entity(
@@ -5086,10 +5509,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         public void Add_alternate_key_on_added_column()
         {
             Execute(
-                source => source
-                    .Entity(
-                        "Table",
-                        x => { x.Property<int>("Id"); }),
+                source => source.Entity("Table").Property<int>("Id"),
                 target => target
                     .Entity(
                         "Table",
@@ -5109,33 +5529,25 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
         }
 
         [Fact]
-        public void Add_foreign_key_referencing_added_alternate_key()
+        public void Add_foreign_key_referencing_added_alternate_key_with_seed_data()
         {
             Execute(
-                source => source
+                common => common
                     .Entity(
                         "Table",
                         x =>
                             {
                                 x.Property<int>("Id");
                                 x.Property<int>("AlternateId");
-                            })
-                    .Entity(
-                        "ReferencingTable",
-                        x =>
-                            {
-                                x.Property<int>("Id");
-                                x.Property<int>("ReferencedAlternateId");
-                                x.HasIndex("ReferencedAlternateId");
                             }),
+                source => { },
                 target => target
                     .Entity(
                         "Table",
                         x =>
                             {
-                                x.Property<int>("Id");
-                                x.Property<int>("AlternateId");
                                 x.HasAlternateKey("AlternateId");
+                                x.SeedData(new { Id = 42, AlternateId = 4242 });
                             })
                     .Entity(
                         "ReferencingTable",
@@ -5146,14 +5558,550 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Migrations.Internal
                                 x.HasOne("Table").WithMany()
                                     .HasForeignKey("ReferencedAlternateId")
                                     .HasPrincipalKey("AlternateId");
+                                x.SeedData(new { Id = 43, ReferencedAlternateId = 4242 });
                             }),
-                operations =>
-                    {
-                        Assert.Equal(2, operations.Count);
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<AddUniqueConstraintOperation>(o);
+                            Assert.Equal("Table", operation.Table);
+                            Assert.Equal(new[] { "AlternateId" }, operation.Columns);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<CreateTableOperation>(o);
+                            Assert.Equal("ReferencingTable", operation.Name);
+                            Assert.Equal(1, operation.ForeignKeys.Count);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<InsertDataOperation>(o);
+                            Assert.Equal("Table", operation.Table);
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(42, v),
+                                v => Assert.Equal(4242, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<InsertDataOperation>(o);
+                            Assert.Equal("ReferencingTable", operation.Table);
+                            AssertMultidimensionalArray(operation.Values,
+                                v => Assert.Equal(43, v),
+                                v => Assert.Equal(4242, v));
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<CreateIndexOperation>(o);
+                            Assert.Equal("ReferencingTable", operation.Table);
+                            Assert.Equal(new[] { "ReferencedAlternateId" }, operation.Columns);
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<DropTableOperation>(o);
+                            Assert.Equal("ReferencingTable", operation.Name);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<DropUniqueConstraintOperation>(o);
+                            Assert.Equal("Table", operation.Table);
+                        },
+                    o =>
+                        {
+                            var operation = Assert.IsType<DeleteDataOperation>(o);
+                            Assert.Equal("Table", operation.Table);
+                            AssertMultidimensionalArray(operation.KeyValues,
+                                v => Assert.Equal(42, v));
+                        }));
+        }
 
-                        Assert.IsType<AddUniqueConstraintOperation>(operations[0]);
-                        Assert.IsType<AddForeignKeyOperation>(operations[1]);
-                    });
+        [Fact]
+        public void SeedData_add_on_existing_table()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                    }),
+                target => target.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(new { Id = 42, Value1 = 32 });
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(42, v),
+                            v => Assert.Equal(32, v),
+                            Assert.Null);
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                    }));
+        }
+
+        [Fact]
+        public void SeedData_remove()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(new { Id = 42, Value1 = 32 });
+                    }),
+                target => target.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(42, v),
+                            v => Assert.Equal(32, v),
+                            v => Assert.Null(v));
+                    }));
+        }
+
+        [Fact]
+        public void SeedData_update_with_table_rename()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.ToTable("Cat", "dbo");
+                        x.Property<int>("Id");
+                        x.HasKey("Id").HasName("PK_Cat");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 42, Value1 = 32, Value2 = "equal" }, // modified
+                            new { Id = 24, Value1 = 72, Value2 = "not equal1" }); // modified
+                    }),
+                target => target.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.ToTable("Cats", "dbo");
+                        x.Property<int>("Id");
+                        x.HasKey("Id").HasName("PK_Cat");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 42, Value1 = 27, Value2 = "equal" }, // modified
+                            new { Id = 24, Value1 = 99, Value2 = "not equal2" }); // modified
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<RenameTableOperation>(o);
+                        Assert.Equal("Cat", operation.Name);
+                        Assert.Equal("dbo", operation.Schema);
+                        Assert.Equal("Cats", operation.NewName);
+                        Assert.Null(operation.NewSchema);
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Cats", m.Table);
+                        Assert.Equal("dbo", m.Schema);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(99, v),
+                            v => Assert.Equal("not equal2", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Cats", m.Table);
+                        Assert.Equal("dbo", m.Schema);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(27, v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var operation = Assert.IsType<RenameTableOperation>(o);
+                        Assert.Equal("Cats", operation.Name);
+                        Assert.Equal("dbo", operation.Schema);
+                        Assert.Equal("Cat", operation.NewName);
+                        Assert.Null(operation.NewSchema);
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Cat", m.Table);
+                        Assert.Equal("dbo", m.Schema);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(72, v),
+                            v => Assert.Equal("not equal1", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Cat", m.Table);
+                        Assert.Equal("dbo", m.Schema);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(32, v));
+                    }));
+        }
+
+        [Fact]
+        public void SeedData_all_operations()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 99999, Value1 = 0, Value2 = "" }, // deleted
+                            new { Id = 42, Value1 = 32, Value2 = "equal", InvalidProperty = "is ignored" }, // modified
+                            new { Id = 8, Value1 = 100, Value2 = "equal" }, // unchanged
+                            new { Id = 24, Value1 = 72, Value2 = "not equal1" }); // modified
+                    }),
+                target => target.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 11111, Value1 = 0, Value2 = "" }, // added
+                            new { Id = 42, Value1 = 27, Value2 = "equal", InvalidProperty = "is ignored here too" }, // modified
+                            new { Id = 8, Value1 = 100, Value2 = "equal" }, // unchanged
+                            new { Id = 24, Value1 = 99, Value2 = "not equal2" }); // modified
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(99999, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(99, v),
+                            v => Assert.Equal("not equal2", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(27, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(11111, v),
+                            v => Assert.Equal(0, v),
+                            v => Assert.Equal("", v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(11111, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(72, v),
+                            v => Assert.Equal("not equal1", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(32, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(99999, v),
+                            v => Assert.Equal(0, v),
+                            v => Assert.Equal("", v));
+                    }));
+        }
+
+        [Fact]
+        public void SeedData_with_shadow_navigation_properties()
+        {
+            SeedData_with_navigation_properties(
+                target =>
+                {
+                    target.Entity(
+                        "Blog",
+                        x =>
+                        {
+                            x.Property<int>("BlogId");
+                            x.Property<string>("Url");
+                            x.SeedData(
+                                new { BlogId = 32, Url = "updated.url" },
+                                new { BlogId = 38, Url = "newblog.url" },
+                                new { BlogId = 316, Url = "nowitexists.blog" });
+                        });
+                    target.Entity(
+                        "Post",
+                        x =>
+                        {
+                            x.Property<int>("PostId");
+                            x.Property<string>("Title");
+                            x.HasOne("Blog", "Blog")
+                                .WithMany("Posts")
+                                .HasForeignKey("BlogId")
+                                .OnDelete(DeleteBehavior.Cascade);
+                            x.SeedData(
+                                new { PostId = 416, Title = "Post To Non-existent BlogId", BlogId = 316 },
+                                new { PostId = 545, Title = "Updated Title", BlogId = 38 },
+                                new { PostId = 546, Title = "New Post", BlogId = 32 });
+                        });
+                });
+        }
+
+        [Fact]
+        public void SeedData_with_CLR_navigation_properties()
+        {
+            SeedData_with_navigation_properties(
+                target =>
+                {
+                    target.Entity<Blog>(
+                        x =>
+                        {
+                            x.Property<int>("BlogId");
+                            x.Property<string>("Url");
+                            x.SeedData(
+                                new { BlogId = 32, Url = "updated.url" },
+                                new { BlogId = 38, Url = "newblog.url" },
+                                new { BlogId = 316, Url = "nowitexists.blog" });
+                        });
+                    target.Entity<Post>(
+                        x =>
+                        {
+                            x.Property<int>("PostId");
+                            x.Property<string>("Title");
+                            x.HasOne(p => p.Blog)
+                                .WithMany("Posts")
+                                .HasForeignKey("BlogId")
+                                .OnDelete(DeleteBehavior.Cascade);
+                            x.SeedData(
+                                new { PostId = 416, Title = "Post To Non-existent BlogId", BlogId = 316 },
+                                new { PostId = 545, Title = "Updated Title", BlogId = 38 },
+                                new { PostId = 546, Title = "New Post", BlogId = 32 });
+                        });
+                });
+        }
+
+        private void SeedData_with_navigation_properties(Action<ModelBuilder> buildTargetAction)
+        {
+            Execute(
+                _ => { },
+                source =>
+                {
+                    source.Entity(
+                        "Blog",
+                        x =>
+                        {
+                            x.Property<int>("BlogId");
+                            x.Property<string>("Url");
+                            x.SeedData(
+                                new { BlogId = 32, Url = "original.url" });
+                        });
+                    source.Entity(
+                        "Post",
+                        x =>
+                        {
+                            x.Property<int>("PostId");
+                            x.Property<string>("Title");
+                            x.HasOne("Blog", "Blog")
+                                .WithMany("Posts")
+                                .HasForeignKey("BlogId")
+                                .OnDelete(DeleteBehavior.Cascade);
+                            x.SeedData(
+                                new { PostId = 545, Title = "Original Title", BlogId = 32 },
+                                new { PostId = 416, Title = "Post To Non-existent BlogId", BlogId = 316 },
+                                new { PostId = 390, Title = "Post To Be Removed", BlogId = 32 });
+                        });
+                },
+                buildTargetAction,
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        Assert.Equal("Post", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(390, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Blog", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(32, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal("updated.url", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        Assert.Equal("Blog", m.Table);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(38, v),
+                            v => Assert.Equal("newblog.url", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        Assert.Equal("Blog", m.Table);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(316, v),
+                            v => Assert.Equal("nowitexists.blog", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        Assert.Equal("Post", m.Table);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(546, v),
+                            v => Assert.Equal(32, v),
+                            v => Assert.Equal("New Post", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Post", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(545, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(38, v),
+                            v => Assert.Equal("Updated Title", v));
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        Assert.Equal("Blog", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(38, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        Assert.Equal("Blog", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(316, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        Assert.Equal("Post", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(546, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Blog", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(32, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal("original.url", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        Assert.Equal("Post", m.Table);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(545, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(32, v),
+                            v => Assert.Equal("Original Title", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        Assert.Equal("Post", m.Table);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(390, v),
+                            v => Assert.Equal(32, v),
+                            v => Assert.Equal("Post To Be Removed", v));
+                    }));
+        }
+
+        private class Blog
+        {
+            public int BlogId { get; set; }
+            public string Url { get; set; }
+            public ICollection<Post> Posts { get; set; }
+        }
+
+        private class Post
+        {
+            public int PostId { get; set; }
+            public string Title { get; set; }
+            public int? BlogId { get; set; }
+            public Blog Blog { get; set; }
         }
 
         protected override ModelBuilder CreateModelBuilder() => RelationalTestHelpers.Instance.CreateConventionBuilder();

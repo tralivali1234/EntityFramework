@@ -8,10 +8,10 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Moq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class DbContextOptionsTest
     {
@@ -44,7 +44,7 @@ namespace Microsoft.EntityFrameworkCore.Tests
             var optionsBuilder = new DbContextOptionsBuilder().UseModel(model).EnableSensitiveDataLogging();
 
             Assert.Same(model, optionsBuilder.Options.FindExtension<CoreOptionsExtension>().Model);
-            Assert.True(optionsBuilder.Options.FindExtension<CoreOptionsExtension>().SensitiveDataLoggingEnabled);
+            Assert.True(optionsBuilder.Options.FindExtension<CoreOptionsExtension>().IsSensitiveDataLoggingEnabled);
         }
 
         [Fact]
@@ -110,6 +110,8 @@ namespace Microsoft.EntityFrameworkCore.Tests
             public virtual void Validate(IDbContextOptions options)
             {
             }
+
+            public virtual string LogFragment => "";
         }
 
         private class FakeDbContextOptionsExtension2 : IDbContextOptionsExtension
@@ -121,6 +123,8 @@ namespace Microsoft.EntityFrameworkCore.Tests
             public virtual void Validate(IDbContextOptions options)
             {
             }
+
+            public virtual string LogFragment => "";
         }
 
         [Fact]
@@ -146,21 +150,34 @@ namespace Microsoft.EntityFrameworkCore.Tests
         [Fact]
         public void UseMemoryCache_on_generic_builder_returns_generic_builder()
         {
-            var memoryCache = Mock.Of<IMemoryCache>();
+            var memoryCache = new FakeMemoryCache();
 
             var optionsBuilder = GenericCheck(new DbContextOptionsBuilder<UnkoolContext>().UseMemoryCache(memoryCache));
 
             Assert.Same(memoryCache, optionsBuilder.Options.FindExtension<CoreOptionsExtension>().MemoryCache);
         }
 
+        private class FakeMemoryCache : IMemoryCache
+        {
+            public void Dispose() => throw new NotImplementedException();
+            public bool TryGetValue(object key, out object value) => throw new NotImplementedException();
+            public ICacheEntry CreateEntry(object key) => throw new NotImplementedException();
+            public void Remove(object key) => throw new NotImplementedException();
+        }
+
         [Fact]
         public void UseInternalServiceProvider_on_generic_builder_returns_generic_builder()
         {
-            var serviceProvider = Mock.Of<IServiceProvider>();
+            var serviceProvider = new FakeServiceProvider();
 
             var optionsBuilder = GenericCheck(new DbContextOptionsBuilder<UnkoolContext>().UseInternalServiceProvider(serviceProvider));
 
             Assert.Same(serviceProvider, optionsBuilder.Options.FindExtension<CoreOptionsExtension>().InternalServiceProvider);
+        }
+
+        private class FakeServiceProvider : IServiceProvider
+        {
+            public object GetService(Type serviceType) => throw new NotImplementedException();
         }
 
         [Fact]

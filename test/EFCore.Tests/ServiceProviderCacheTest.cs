@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class ServiceProviderCacheTest
     {
@@ -87,6 +87,8 @@ namespace Microsoft.EntityFrameworkCore.Tests
             public virtual void Validate(IDbContextOptions options)
             {
             }
+
+            public virtual string LogFragment => "";
         }
 
         private class FakeDbContextOptionsExtension2 : IDbContextOptionsExtension
@@ -98,6 +100,8 @@ namespace Microsoft.EntityFrameworkCore.Tests
             public virtual void Validate(IDbContextOptions options)
             {
             }
+
+            public virtual string LogFragment => "";
         }
     }
 }

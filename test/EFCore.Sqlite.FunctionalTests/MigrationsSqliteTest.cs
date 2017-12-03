@@ -7,16 +7,12 @@ using System.Data.Common;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class MigrationsSqliteTest : MigrationsTestBase<MigrationsSqliteFixture>
     {
-        private const string FileLineEnding = @"
-";
-
         public MigrationsSqliteTest(MigrationsSqliteFixture fixture)
             : base(fixture)
         {
@@ -33,7 +29,8 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
 );
 
 ",
-                Sql.Replace(Environment.NewLine, FileLineEnding));
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_no_migration_script()
@@ -47,7 +44,8 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
 );
 
 ",
-                Sql.Replace(Environment.NewLine, FileLineEnding));
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_up_scripts()
@@ -76,7 +74,8 @@ INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
 VALUES ('00000000000003_Migration3', '7.0.0-test');
 
 ",
-                Sql.Replace(Environment.NewLine, FileLineEnding));
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_one_up_script()
@@ -90,7 +89,8 @@ INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
 VALUES ('00000000000002_Migration2', '7.0.0-test');
 
 ",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_up_script_using_names()
@@ -104,7 +104,8 @@ INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
 VALUES ('00000000000002_Migration2', '7.0.0-test');
 
 ",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_idempotent_up_scripts()
@@ -128,7 +129,8 @@ DELETE FROM ""__EFMigrationsHistory""
 WHERE ""MigrationId"" = '00000000000001_Migration1';
 
 ",
-                Sql.Replace(Environment.NewLine, FileLineEnding));
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_one_down_script()
@@ -142,7 +144,8 @@ DELETE FROM ""__EFMigrationsHistory""
 WHERE ""MigrationId"" = '00000000000002_Migration2';
 
 ",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_down_script_using_names()
@@ -156,7 +159,8 @@ DELETE FROM ""__EFMigrationsHistory""
 WHERE ""MigrationId"" = '00000000000002_Migration2';
 
 ",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void Can_generate_idempotent_down_scripts()
@@ -181,7 +185,8 @@ CreatedTable
     ColumnWithDefaultToDrop INTEGER NULL DEFAULT 0
     ColumnWithDefaultToAlter INTEGER NULL DEFAULT 1
 ",
-                sql.Replace(Environment.NewLine, FileLineEnding));
+                sql,
+                ignoreLineEndingDifferences: true);
         }
 
         protected override void BuildSecondMigration(MigrationBuilder migrationBuilder)
@@ -209,66 +214,69 @@ CreatedTable
     ColumnWithDefaultToDrop INTEGER NULL DEFAULT 0
     ColumnWithDefaultToAlter INTEGER NULL DEFAULT 1
 ",
-                sql.Replace(Environment.NewLine, FileLineEnding));
+                sql,
+                ignoreLineEndingDifferences: true);
         }
 
         private string GetDatabaseSchemaAsync(DbConnection connection)
         {
             var builder = new IndentedStringBuilder();
 
-            var command = connection.CreateCommand();
-            command.CommandText = @"
-                SELECT name
-                FROM sqlite_master
-                WHERE type = 'table'
-                ORDER BY name;";
-
-            var tables = new List<string>();
-            using (var reader = command.ExecuteReader())
+            using (var command = connection.CreateCommand())
             {
-                while (reader.Read())
-                {
-                    tables.Add(reader.GetString(0));
-                }
-            }
+                command.CommandText = @"
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                    ORDER BY name;";
 
-            var first = true;
-            foreach (var table in tables)
-            {
-                if (first)
-                {
-                    first = false;
-                }
-                else
-                {
-                    builder.DecrementIndent();
-                }
-
-                builder
-                    .AppendLine()
-                    .AppendLine(table)
-                    .IncrementIndent();
-
-                command.CommandText = "PRAGMA table_info(" + table + ");";
+                var tables = new List<string>();
                 using (var reader = command.ExecuteReader())
                 {
                     while (reader.Read())
                     {
-                        builder
-                            .Append(reader[1]) // Name
-                            .Append(" ")
-                            .Append(reader[2]) // Type
-                            .Append(" ")
-                            .Append(reader.GetBoolean(3) ? "NOT NULL" : "NULL");
+                        tables.Add(reader.GetString(0));
+                    }
+                }
 
-                        if (!reader.IsDBNull(4))
+                var first = true;
+                foreach (var table in tables)
+                {
+                    if (first)
+                    {
+                        first = false;
+                    }
+                    else
+                    {
+                        builder.DecrementIndent();
+                    }
+
+                    builder
+                        .AppendLine()
+                        .AppendLine(table)
+                        .IncrementIndent();
+
+                    command.CommandText = "PRAGMA table_info(" + table + ");";
+                    using (var reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
                         {
                             builder
-                                .Append(" DEFAULT ")
-                                .Append(reader[4]);
-                        }
+                                .Append(reader[1]) // Name
+                                .Append(" ")
+                                .Append(reader[2]) // Type
+                                .Append(" ")
+                                .Append(reader.GetBoolean(3) ? "NOT NULL" : "NULL");
 
-                        builder.AppendLine();
+                            if (!reader.IsDBNull(4))
+                            {
+                                builder
+                                    .Append(" DEFAULT ")
+                                    .Append(reader[4]);
+                            }
+
+                            builder.AppendLine();
+                        }
                     }
                 }
             }

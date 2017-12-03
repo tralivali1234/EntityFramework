@@ -3,7 +3,7 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -59,8 +59,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         /// <param name="options"> Options for the current context instance. </param>
         /// <param name="modelDiffer"> The model differ. </param>
         /// <param name="migrationsSqlGenerator"> The SQL generator for Migrations operations. </param>
-        /// <param name="annotations"> Access to relational metadata for the model. </param>
         /// <param name="sqlGenerationHelper"> Helpers for generating update SQL. </param>
+        /// <param name="coreConventionSetBuilder"> The core convention set to use when creating the model. </param>
+        /// <param name="conventionSetBuilder"> The convention set to use when creating the model. </param>
         public HistoryRepositoryDependencies(
             [NotNull] IRelationalDatabaseCreator databaseCreator,
             [NotNull] IRawSqlCommandBuilder rawSqlCommandBuilder,
@@ -68,8 +69,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             [NotNull] IDbContextOptions options,
             [NotNull] IMigrationsModelDiffer modelDiffer,
             [NotNull] IMigrationsSqlGenerator migrationsSqlGenerator,
-            [NotNull] IRelationalAnnotationProvider annotations,
-            [NotNull] ISqlGenerationHelper sqlGenerationHelper)
+            [NotNull] ISqlGenerationHelper sqlGenerationHelper,
+            [NotNull] ICoreConventionSetBuilder coreConventionSetBuilder,
+            [NotNull] IConventionSetBuilder conventionSetBuilder)
         {
             Check.NotNull(databaseCreator, nameof(databaseCreator));
             Check.NotNull(rawSqlCommandBuilder, nameof(rawSqlCommandBuilder));
@@ -77,8 +79,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(options, nameof(options));
             Check.NotNull(modelDiffer, nameof(modelDiffer));
             Check.NotNull(migrationsSqlGenerator, nameof(migrationsSqlGenerator));
-            Check.NotNull(annotations, nameof(annotations));
             Check.NotNull(sqlGenerationHelper, nameof(sqlGenerationHelper));
+            Check.NotNull(coreConventionSetBuilder, nameof(coreConventionSetBuilder));
+            Check.NotNull(conventionSetBuilder, nameof(conventionSetBuilder));
 
             DatabaseCreator = databaseCreator;
             RawSqlCommandBuilder = rawSqlCommandBuilder;
@@ -86,8 +89,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Options = options;
             ModelDiffer = modelDiffer;
             MigrationsSqlGenerator = migrationsSqlGenerator;
-            Annotations = annotations;
             SqlGenerationHelper = sqlGenerationHelper;
+            CoreConventionSetBuilder = coreConventionSetBuilder;
+            ConventionSetBuilder = conventionSetBuilder;
         }
 
         /// <summary>
@@ -121,14 +125,19 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         public IMigrationsSqlGenerator MigrationsSqlGenerator { get; }
 
         /// <summary>
-        ///     Access to relational metadata for the model.
-        /// </summary>
-        public IRelationalAnnotationProvider Annotations { get; }
-
-        /// <summary>
         ///     Helpers for generating update SQL.
         /// </summary>
         public ISqlGenerationHelper SqlGenerationHelper { get; }
+
+        /// <summary>
+        ///     The core convention set to use when creating the model.
+        /// </summary>
+        public ICoreConventionSetBuilder CoreConventionSetBuilder { get; }
+
+        /// <summary>
+        ///     The convention set to use when creating the model.
+        /// </summary>
+        public IConventionSetBuilder ConventionSetBuilder { get; }
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -143,8 +152,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 Options,
                 ModelDiffer,
                 MigrationsSqlGenerator,
-                Annotations,
-                SqlGenerationHelper);
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -159,8 +169,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 Options,
                 ModelDiffer,
                 MigrationsSqlGenerator,
-                Annotations,
-                SqlGenerationHelper);
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -175,8 +186,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 Options,
                 ModelDiffer,
                 MigrationsSqlGenerator,
-                Annotations,
-                SqlGenerationHelper);
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -191,8 +203,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 options,
                 ModelDiffer,
                 MigrationsSqlGenerator,
-                Annotations,
-                SqlGenerationHelper);
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -207,8 +220,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 Options,
                 modelDiffer,
                 MigrationsSqlGenerator,
-                Annotations,
-                SqlGenerationHelper);
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -223,24 +237,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 Options,
                 ModelDiffer,
                 migrationsSqlGenerator,
-                Annotations,
-                SqlGenerationHelper);
-
-        /// <summary>
-        ///     Clones this dependency parameter object with one service replaced.
-        /// </summary>
-        /// <param name="annotations"> A replacement for the current dependency of this type. </param>
-        /// <returns> A new parameter object with the given service replaced. </returns>
-        public HistoryRepositoryDependencies With([NotNull] IRelationalAnnotationProvider annotations)
-            => new HistoryRepositoryDependencies(
-                DatabaseCreator,
-                RawSqlCommandBuilder,
-                Connection,
-                Options,
-                ModelDiffer,
-                MigrationsSqlGenerator,
-                annotations,
-                SqlGenerationHelper);
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -255,7 +254,42 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 Options,
                 ModelDiffer,
                 MigrationsSqlGenerator,
-                Annotations,
-                sqlGenerationHelper);
+                sqlGenerationHelper,
+                CoreConventionSetBuilder,
+                ConventionSetBuilder);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="coreConventionSetBuilder"> The core convention set to use when creating the model. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public HistoryRepositoryDependencies With([NotNull] ICoreConventionSetBuilder coreConventionSetBuilder)
+            => new HistoryRepositoryDependencies(
+                DatabaseCreator,
+                RawSqlCommandBuilder,
+                Connection,
+                Options,
+                ModelDiffer,
+                MigrationsSqlGenerator,
+                SqlGenerationHelper,
+                coreConventionSetBuilder,
+                ConventionSetBuilder);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="conventionSetBuilder"> The convention set to use when creating the model. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public HistoryRepositoryDependencies With([NotNull] IConventionSetBuilder conventionSetBuilder)
+            => new HistoryRepositoryDependencies(
+                DatabaseCreator,
+                RawSqlCommandBuilder,
+                Connection,
+                Options,
+                ModelDiffer,
+                MigrationsSqlGenerator,
+                SqlGenerationHelper,
+                CoreConventionSetBuilder,
+                conventionSetBuilder);
     }
 }

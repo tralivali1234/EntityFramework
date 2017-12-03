@@ -3,10 +3,12 @@
 
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class SqliteDatabaseCreatorTest
     {
@@ -21,7 +23,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
         [Fact]
         public void Exists_returns_true_when_database_exists()
         {
-            using (var testStore = SqliteTestStore.CreateScratch())
+            using (var testStore = SqliteTestStore.GetOrCreateInitialized("Empty"))
             {
                 var creator = GetDatabaseCreator(testStore.ConnectionString);
 
@@ -30,12 +32,13 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests
         }
 
         private IRelationalDatabaseCreator GetDatabaseCreator(string connectionString)
-            => new DbContext(new DbContextOptionsBuilder()
-                    .UseSqlite(connectionString)
-                    .UseInternalServiceProvider(new ServiceCollection()
-                        .AddEntityFrameworkSqlite()
-                        .BuildServiceProvider())
-                    .Options)
+            => new DbContext(
+                    new DbContextOptionsBuilder()
+                        .UseSqlite(connectionString)
+                        .UseInternalServiceProvider(
+                            SqliteTestStoreFactory.Instance.AddProviderServices(new ServiceCollection())
+                                .BuildServiceProvider(validateScopes: true))
+                        .Options)
                 .GetService<IRelationalDatabaseCreator>();
     }
 }

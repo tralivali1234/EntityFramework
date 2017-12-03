@@ -1,7 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
@@ -57,15 +56,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         protected override Expression VisitLambda<T>(Expression<T> node)
         {
             var newBody = Visit(node.Body);
-            var newParameters = VisitAndConvert(node.Parameters, callerName: "VisitLambda");
-
-            if (newBody == node.Body
-                && newParameters == node.Parameters)
-            {
-                return node;
-            }
-
-            return Expression.Lambda(newBody, node.Name, node.TailCall, newParameters);
+            
+            return newBody == node.Body 
+                ? node 
+                : Expression.Lambda(newBody, node.Name, node.TailCall, node.Parameters);
         }
     }
 }

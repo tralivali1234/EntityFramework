@@ -4,22 +4,28 @@
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Migrations
+namespace Microsoft.EntityFrameworkCore.Migrations
 {
     public class SqliteMigrationAnnotationProviderTest
     {
         private readonly ModelBuilder _modelBuilder;
         private readonly SqliteMigrationsAnnotationProvider _provider;
 
-        private readonly Annotation _autoincrement = new Annotation(SqliteFullAnnotationNames.Instance.Autoincrement, true);
+        private readonly Annotation _autoincrement = new Annotation(SqliteAnnotationNames.Autoincrement, true);
 
         public SqliteMigrationAnnotationProviderTest()
         {
-            _modelBuilder = new ModelBuilder(new CoreConventionSetBuilder().CreateConventionSet());
+            _modelBuilder
+                = new ModelBuilder(
+                    new CoreConventionSetBuilder(
+                            new CoreConventionSetBuilderDependencies(
+                                new CoreTypeMapper(new CoreTypeMapperDependencies())))
+                        .CreateConventionSet());
+
             _provider = new SqliteMigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies());
         }
 
@@ -35,6 +41,14 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Migrations
         public void Does_not_add_Autoincrement_for_OnAddOrUpdate_integer_property()
         {
             var property = _modelBuilder.Entity<Entity>().Property(e => e.IntProp).ValueGeneratedOnAddOrUpdate().Metadata;
+
+            Assert.DoesNotContain(_provider.For(property), a => a.Name == _autoincrement.Name);
+        }
+
+        [Fact]
+        public void Does_not_add_Autoincrement_for_OnUpdate_integer_property()
+        {
+            var property = _modelBuilder.Entity<Entity>().Property(e => e.IntProp).ValueGeneratedOnUpdate().Metadata;
 
             Assert.DoesNotContain(_provider.For(property), a => a.Name == _autoincrement.Name);
         }

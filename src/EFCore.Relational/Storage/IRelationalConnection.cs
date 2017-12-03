@@ -44,12 +44,14 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <summary>
         ///     Opens the connection to the database.
         /// </summary>
+        /// <param name="errorsExpected"> Indicate if the connection errors are expected and should be logged as debug message. </param>
         /// <returns> True if the underlying connection was actually opened; false otherwise. </returns>
-        bool Open();
+        bool Open(bool errorsExpected = false);
 
         /// <summary>
         ///     Asynchronously opens the connection to the database.
         /// </summary>
+        /// <param name="errorsExpected"> Indicate if the connection errors are expected and should be logged as debug message. </param>
         /// <param name="cancellationToken">
         ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
         /// </param>
@@ -57,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///     A task that represents the asynchronous operation, with a value of true if the connection
         ///     was actually opened.
         /// </returns>
-        Task<bool> OpenAsync(CancellationToken cancellationToken = default(CancellationToken));
+        Task<bool> OpenAsync(CancellationToken cancellationToken, bool errorsExpected = false);
 
         /// <summary>
         ///     Closes the connection to the database.
@@ -71,13 +73,32 @@ namespace Microsoft.EntityFrameworkCore.Storage
         bool IsMultipleActiveResultSetsEnabled { get; }
 
         /// <summary>
-        ///     Gets or sets the active cursor.
-        /// </summary>
-        IValueBufferCursor ActiveCursor { get; [param: CanBeNull] set; }
-
-        /// <summary>
         ///     Gets the current transaction.
         /// </summary>
         new IDbContextTransaction CurrentTransaction { get; }
+
+        /// <summary>
+        ///     Gets a semaphore used to serialize access to this connection.
+        /// </summary>
+        /// <value>
+        ///     The semaphore.
+        /// </value>
+        SemaphoreSlim Semaphore { get; }
+
+        /// <summary>
+        ///     Registers a potentially bufferable active query.
+        /// </summary>
+        /// <param name="bufferable"> The bufferable query. </param>
+        void RegisterBufferable([NotNull] IBufferable bufferable);
+
+        /// <summary>
+        ///     Asynchronously registers a potentially bufferable active query.
+        /// </summary>
+        /// <param name="bufferable"> The bufferable query. </param>
+        /// <param name="cancellationToken"> The cancellation token. </param>
+        /// <returns>
+        ///     A Task.
+        /// </returns>
+        Task RegisterBufferableAsync([NotNull] IBufferable bufferable, CancellationToken cancellationToken);
     }
 }

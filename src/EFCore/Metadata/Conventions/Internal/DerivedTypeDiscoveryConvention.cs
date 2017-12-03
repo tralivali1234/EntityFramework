@@ -11,7 +11,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class DerivedTypeDiscoveryConvention : InheritanceDiscoveryConventionBase, IEntityTypeConvention
+    public class DerivedTypeDiscoveryConvention : InheritanceDiscoveryConventionBase, IEntityTypeAddedConvention
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -22,16 +22,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var entityType = entityTypeBuilder.Metadata;
             var clrType = entityType.ClrType;
             if (clrType == null
-                || entityType.HasDelegatedIdentity())
+                || entityType.HasDefiningNavigation())
             {
                 return entityTypeBuilder;
             }
 
-            var directlyDerivedTypes = entityType.Model.GetEntityTypes().Where(t =>
-                t != entityType
-                && t.HasClrType()
-                && ((t.BaseType == null && clrType.GetTypeInfo().IsAssignableFrom(t.ClrType.GetTypeInfo()))
-                    || (t.BaseType == entityType.BaseType && FindClosestBaseType(t) == entityType)))
+            var directlyDerivedTypes = entityType.Model.GetEntityTypes().Where(
+                    t =>
+                        t != entityType
+                        && t.HasClrType()
+                        && ((t.BaseType == null && clrType.GetTypeInfo().IsAssignableFrom(t.ClrType.GetTypeInfo()))
+                            || (t.BaseType == entityType.BaseType && FindClosestBaseType(t) == entityType)))
                 .ToList();
 
             foreach (var directlyDerivedType in directlyDerivedTypes)

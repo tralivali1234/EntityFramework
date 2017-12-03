@@ -1,13 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
+#if NET461
 
 using System;
 using System.Collections;
 using System.IO;
-using System.Linq;
-using Microsoft.EntityFrameworkCore.Relational.Design.Specification.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Tools.TestUtilities;
 using Xunit;
 
@@ -96,32 +95,27 @@ namespace Microsoft.EntityFrameworkCore.Tools
         }
 
         [Fact]
-        public void GetContextType()
-        {
-            var contextTypeName = _project.Executor.GetContextType("SimpleContext");
-            Assert.StartsWith("SimpleProject.SimpleContext, ", contextTypeName);
-        }
-
-        [Fact]
         public void GetContextTypes()
         {
             var contextTypes = _project.Executor.GetContextTypes();
-            Assert.Equal(1, contextTypes.Count());
+            Assert.Single(contextTypes);
         }
 
         [Fact]
         public void GetMigrations()
         {
             var migrations = _project.Executor.GetMigrations("SimpleContext");
-            Assert.Equal(1, migrations.Count());
+            Assert.Single(migrations);
         }
 
         [Fact]
         public void GetContextInfo_returns_connection_string()
         {
             var info = _project.Executor.GetContextInfo("SimpleContext");
+            Assert.Equal("Microsoft.EntityFrameworkCore.SqlServer", info["ProviderName"]);
             Assert.Equal(@"(localdb)\MSSQLLocalDB", info["DataSource"]);
             Assert.Equal("SimpleProject.SimpleContext", info["DatabaseName"]);
+            Assert.Equal("None", info["Options"]);
         }
 
         public class SimpleProject : IDisposable
@@ -135,14 +129,13 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     TargetDir = TargetDir,
                     References =
                     {
+                        BuildReference.ByName("System.Collections.Immutable", true),
                         BuildReference.ByName("System.Diagnostics.DiagnosticSource", true),
                         BuildReference.ByName("System.Interactive.Async", true),
-                        BuildReference.ByName("System.Data, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089"),
-                        BuildReference.ByName("System.ValueTuple, Version=4.0.1.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51", true),
+                        BuildReference.ByName("System.Data.SqlClient", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational", true),
-                        BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.SqlServer", true),
                         BuildReference.ByName("Microsoft.Extensions.Caching.Abstractions", true),
                         BuildReference.ByName("Microsoft.Extensions.Caching.Memory", true),
@@ -152,9 +145,12 @@ namespace Microsoft.EntityFrameworkCore.Tools
                         BuildReference.ByName("Microsoft.Extensions.Logging", true),
                         BuildReference.ByName("Microsoft.Extensions.Logging.Abstractions", true),
                         BuildReference.ByName("Microsoft.Extensions.Options", true),
+                        BuildReference.ByName("Microsoft.Extensions.Primitives", true),
                         BuildReference.ByName("Remotion.Linq", true)
                     },
-                    Sources = { @"
+                    Sources =
+                    {
+                        @"
                             using Microsoft.EntityFrameworkCore;
                             using Microsoft.EntityFrameworkCore.Infrastructure;
                             using Microsoft.EntityFrameworkCore.Migrations;
@@ -180,14 +176,18 @@ namespace Microsoft.EntityFrameworkCore.Tools
                                         }
                                     }
                                 }
-                            }" }
+                            }"
+                    }
                 };
                 var build = source.Build();
-                Executor = new AppDomainOperationExecutor(build.TargetPath,
+                File.Copy(AppDomain.CurrentDomain.SetupInformation.ConfigurationFile, build.TargetPath + ".config");
+                Executor = new AppDomainOperationExecutor(
+                    build.TargetPath,
                     build.TargetPath,
                     build.TargetDir,
                     build.TargetDir,
-                    "SimpleProject");
+                    "SimpleProject",
+                    "C#");
             }
 
             public string TargetDir => _directory.Path;
@@ -202,7 +202,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
         }
     }
 }
-#elif NETCOREAPP2_0
+#elif NETCOREAPP2_0 || NETCOREAPP2_1
 #else
 #error target frameworks need to be updated.
 #endif

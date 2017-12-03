@@ -2,12 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Linq;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions;
-using Microsoft.EntityFrameworkCore.Tests.Metadata.Conventions;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Metadata.Conventions
+namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 {
     public class SqliteConventionSetBuilderTests : ConventionSetBuilderTests
     {
@@ -15,7 +12,7 @@ namespace Microsoft.EntityFrameworkCore.Sqlite.Tests.Metadata.Conventions
         {
             var model = base.Can_build_a_model_with_default_conventions_without_DI();
 
-            Assert.Equal("ProductTable", model.GetEntityTypes().Single().Sqlite().TableName);
+            Assert.Equal("ProductTable", model.GetEntityTypes().Single().Relational().TableName);
 
             return model;
         }

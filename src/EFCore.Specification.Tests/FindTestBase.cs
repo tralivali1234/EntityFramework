@@ -7,15 +7,21 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public abstract class FindTestBase<TTestStore, TFixture> : IClassFixture<TFixture>, IDisposable
-        where TTestStore : TestStore
-        where TFixture : FindTestBase<TTestStore, TFixture>.FindFixtureBase
+    public abstract class FindTestBase<TFixture> : IClassFixture<TFixture>
+        where TFixture : FindTestBase<TFixture>.FindFixtureBase
     {
-        protected abstract TEntity Find<TEntity>(DbContext context, params object[] keyValues) where TEntity : class;
+        protected FindTestBase(TFixture fixture) => Fixture = fixture;
 
-        protected abstract Task<TEntity> FindAsync<TEntity>(DbContext context, params object[] keyValues) where TEntity : class;
+        protected TFixture Fixture { get; }
+
+        protected abstract TEntity Find<TEntity>(DbContext context, params object[] keyValues)
+            where TEntity : class;
+
+        protected abstract Task<TEntity> FindAsync<TEntity>(DbContext context, params object[] keyValues)
+            where TEntity : class;
 
         [Fact]
         public virtual void Find_int_key_tracked()
@@ -43,6 +49,35 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             using (var context = CreateContext())
             {
                 Assert.Null(Find<IntKey>(context, 99));
+            }
+        }
+
+        [Fact]
+        public virtual void Find_nullable_int_key_tracked()
+        {
+            using (var context = CreateContext())
+            {
+                var entity = context.Attach(new NullableIntKey { Id = 88 }).Entity;
+
+                Assert.Same(entity, Find<NullableIntKey>(context, 88));
+            }
+        }
+
+        [Fact]
+        public virtual void Find_nullable_int_key_from_store()
+        {
+            using (var context = CreateContext())
+            {
+                Assert.Equal("Smokey", Find<NullableIntKey>(context, 77).Foo);
+            }
+        }
+
+        [Fact]
+        public virtual void Returns_null_for_nullable_int_key_not_in_store()
+        {
+            using (var context = CreateContext())
+            {
+                Assert.Null(Find<NullableIntKey>(context, 99));
             }
         }
 
@@ -242,7 +277,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal("keyValues",
+                Assert.Equal(
+                    "keyValues",
                     Assert.Throws<ArgumentNullException>(() => Find<CompositeKey>(context, null)).ParamName);
             }
         }
@@ -252,8 +288,20 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal("keyValues",
+                Assert.Equal(
+                    "keyValues",
                     Assert.Throws<ArgumentNullException>(() => Find<IntKey>(context, new object[] { null })).ParamName);
+            }
+        }
+
+        [Fact]
+        public virtual void Throws_for_null_nullable_key()
+        {
+            using (var context = CreateContext())
+            {
+                Assert.Equal(
+                    "keyValues",
+                    Assert.Throws<ArgumentNullException>(() => Find<NullableIntKey>(context, new object[] { null })).ParamName);
             }
         }
 
@@ -262,7 +310,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal("keyValues",
+                Assert.Equal(
+                    "keyValues",
                     Assert.Throws<ArgumentNullException>(() => Find<CompositeKey>(context, 77, null)).ParamName);
             }
         }
@@ -272,7 +321,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindNotCompositeKey("IntKey", 2),
+                Assert.Equal(
+                    CoreStrings.FindNotCompositeKey("IntKey", 2),
                     Assert.Throws<ArgumentException>(() => Find<IntKey>(context, 77, 88)).Message);
             }
         }
@@ -282,7 +332,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindValueCountMismatch("CompositeKey", 2, 1),
+                Assert.Equal(
+                    CoreStrings.FindValueCountMismatch("CompositeKey", 2, 1),
                     Assert.Throws<ArgumentException>(() => Find<CompositeKey>(context, 77)).Message);
             }
         }
@@ -292,7 +343,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindValueTypeMismatch(0, "IntKey", "string", "int"),
+                Assert.Equal(
+                    CoreStrings.FindValueTypeMismatch(0, "IntKey", "string", "int"),
                     Assert.Throws<ArgumentException>(() => Find<IntKey>(context, "77")).Message);
             }
         }
@@ -302,7 +354,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindValueTypeMismatch(1, "CompositeKey", "int", "string"),
+                Assert.Equal(
+                    CoreStrings.FindValueTypeMismatch(1, "CompositeKey", "int", "string"),
                     Assert.Throws<ArgumentException>(() => Find<CompositeKey>(context, 77, 88)).Message);
             }
         }
@@ -312,7 +365,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.InvalidSetType(nameof(Random)),
+                Assert.Equal(
+                    CoreStrings.InvalidSetType(nameof(Random)),
                     Assert.Throws<InvalidOperationException>(() => Find<Random>(context, 77)).Message);
             }
         }
@@ -343,6 +397,35 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             using (var context = CreateContext())
             {
                 Assert.Null(await FindAsync<IntKey>(context, 99));
+            }
+        }
+
+        [Fact]
+        public virtual async Task Find_nullable_int_key_tracked_async()
+        {
+            using (var context = CreateContext())
+            {
+                var entity = context.Attach(new NullableIntKey { Id = 88 }).Entity;
+
+                Assert.Same(entity, await FindAsync<NullableIntKey>(context, 88));
+            }
+        }
+
+        [Fact]
+        public virtual async Task Find_nullable_int_key_from_store_async()
+        {
+            using (var context = CreateContext())
+            {
+                Assert.Equal("Smokey", (await FindAsync<NullableIntKey>(context, 77)).Foo);
+            }
+        }
+
+        [Fact]
+        public virtual async Task Returns_null_for_nullable_int_key_not_in_store_async()
+        {
+            using (var context = CreateContext())
+            {
+                Assert.Null(await FindAsync<NullableIntKey>(context, 99));
             }
         }
 
@@ -542,7 +625,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal("keyValues",
+                Assert.Equal(
+                    "keyValues",
                     (await Assert.ThrowsAsync<ArgumentNullException>(() => FindAsync<CompositeKey>(context, null))).ParamName);
             }
         }
@@ -552,7 +636,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal("keyValues",
+                Assert.Equal(
+                    "keyValues",
                     (await Assert.ThrowsAsync<ArgumentNullException>(() => FindAsync<IntKey>(context, new object[] { null }))).ParamName);
             }
         }
@@ -562,7 +647,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal("keyValues",
+                Assert.Equal(
+                    "keyValues",
                     (await Assert.ThrowsAsync<ArgumentNullException>(() => FindAsync<CompositeKey>(context, 77, null))).ParamName);
             }
         }
@@ -572,7 +658,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindNotCompositeKey("IntKey", 2),
+                Assert.Equal(
+                    CoreStrings.FindNotCompositeKey("IntKey", 2),
                     (await Assert.ThrowsAsync<ArgumentException>(() => FindAsync<IntKey>(context, 77, 88))).Message);
             }
         }
@@ -582,7 +669,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindValueCountMismatch("CompositeKey", 2, 1),
+                Assert.Equal(
+                    CoreStrings.FindValueCountMismatch("CompositeKey", 2, 1),
                     (await Assert.ThrowsAsync<ArgumentException>(() => FindAsync<CompositeKey>(context, 77))).Message);
             }
         }
@@ -592,7 +680,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindValueTypeMismatch(0, "IntKey", "string", "int"),
+                Assert.Equal(
+                    CoreStrings.FindValueTypeMismatch(0, "IntKey", "string", "int"),
                     (await Assert.ThrowsAsync<ArgumentException>(() => FindAsync<IntKey>(context, "77"))).Message);
             }
         }
@@ -602,7 +691,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.FindValueTypeMismatch(1, "CompositeKey", "int", "string"),
+                Assert.Equal(
+                    CoreStrings.FindValueTypeMismatch(1, "CompositeKey", "int", "string"),
                     (await Assert.ThrowsAsync<ArgumentException>(() => FindAsync<CompositeKey>(context, 77, 88))).Message);
             }
         }
@@ -612,7 +702,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(CoreStrings.InvalidSetType(nameof(Random)),
+                Assert.Equal(
+                    CoreStrings.InvalidSetType(nameof(Random)),
                     (await Assert.ThrowsAsync<InvalidOperationException>(() => FindAsync<Random>(context, 77))).Message);
             }
         }
@@ -638,6 +729,14 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             public string Foo { get; set; }
         }
 
+        protected class NullableIntKey
+        {
+            [DatabaseGenerated(DatabaseGeneratedOption.None)]
+            public int? Id { get; set; }
+
+            public string Foo { get; set; }
+        }
+
         protected class StringKey
         {
             public string Id { get; set; }
@@ -657,62 +756,38 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             public string Foo { get; set; }
         }
 
-        protected class FindContext : DbContext
+        protected DbContext CreateContext() => Fixture.CreateContext();
+
+        public abstract class FindFixtureBase : SharedStoreFixtureBase<DbContext>
         {
-            public FindContext(DbContextOptions options)
-                : base(options)
+            protected override string StoreName { get; } = "FindTest";
+
+            protected override void OnModelCreating(ModelBuilder modelBuilder, DbContext context)
             {
-            }
-
-            public DbSet<IntKey> IntKeys { get; set; }
-            public DbSet<StringKey> StringKeys { get; set; }
-            public DbSet<CompositeKey> CompositeKeys { get; set; }
-            public DbSet<BaseType> BaseTypes { get; set; }
-            public DbSet<DerivedType> DerivedTypes { get; set; }
-            public DbSet<ShadowKey> ShadowKeys { get; set; }
-        }
-
-        protected FindTestBase(TFixture fixture)
-        {
-            Fixture = fixture;
-
-            TestStore = Fixture.CreateTestStore();
-        }
-
-        protected FindContext CreateContext() => (FindContext)Fixture.CreateContext(TestStore);
-
-        protected TFixture Fixture { get; }
-        protected TTestStore TestStore { get; }
-
-        public virtual void Dispose() => TestStore.Dispose();
-
-        public abstract class FindFixtureBase
-        {
-            public abstract TTestStore CreateTestStore();
-
-            public abstract DbContext CreateContext(TTestStore testStore);
-
-            protected virtual void OnModelCreating(ModelBuilder modelBuilder)
-            {
+                modelBuilder.Entity<IntKey>();
+                modelBuilder.Entity<NullableIntKey>();
+                modelBuilder.Entity<StringKey>();
                 modelBuilder.Entity<CompositeKey>().HasKey(e => new { e.Id1, e.Id2 });
+                modelBuilder.Entity<BaseType>();
+                modelBuilder.Entity<DerivedType>();
                 modelBuilder.Entity<ShadowKey>().Property(typeof(int), "Id").ValueGeneratedNever();
             }
 
-            protected virtual void Seed(DbContext context)
+            protected override void Seed(DbContext context)
             {
-                var findContext = (FindContext)context;
-                findContext.AddRange(
+                context.AddRange(
                     new IntKey { Id = 77, Foo = "Smokey" },
+                    new NullableIntKey { Id = 77, Foo = "Smokey" },
                     new StringKey { Id = "Cat", Foo = "Alice" },
                     new CompositeKey { Id1 = 77, Id2 = "Dog", Foo = "Olive" },
                     new BaseType { Id = 77, Foo = "Baxter" },
                     new DerivedType { Id = 78, Foo = "Strawberry", Boo = "Cheesecake" });
 
-                var entry = findContext.Entry(new ShadowKey { Foo = "Clippy" });
+                var entry = context.Entry(new ShadowKey { Foo = "Clippy" });
                 entry.Property("Id").CurrentValue = 77;
                 entry.State = EntityState.Added;
 
-                findContext.SaveChanges();
+                context.SaveChanges();
             }
         }
     }

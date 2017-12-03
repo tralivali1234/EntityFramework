@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -17,8 +19,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
     ///         Objects of this type can be obtained from <see cref="EntityEntry.CurrentValues" />,
     ///         <see cref="EntityEntry.OriginalValues" />,  <see cref="EntityEntry.GetDatabaseValues" />,
     ///         or <see cref="EntityEntry.GetDatabaseValuesAsync" />.
-    ///         Once obtained, the objects are usually used in various combinations to resolve optimitisic
-    ///         concurrency exceptions signalled by the throwing of a <see cref="DbUpdateConcurrencyException" />.
+    ///         Once obtained, the objects are usually used in various combinations to resolve optimistic
+    ///         concurrency exceptions signaled by the throwing of a <see cref="DbUpdateConcurrencyException" />.
     ///     </para>
     /// </summary>
     public abstract class PropertyValues
@@ -36,7 +38,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual InternalEntityEntry InternalEntry { get; }
+        protected virtual InternalEntityEntry InternalEntry { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     Creates an instance of the entity type and sets all its properties using the
@@ -76,7 +78,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///         from the type for this object.
         ///     </para>
         /// </summary>
-        /// <param name="propertyValues"> The object from which values should be coiped. </param>
+        /// <param name="propertyValues"> The object from which values should be copied. </param>
         public abstract void SetValues([NotNull] PropertyValues propertyValues);
 
         /// <summary>
@@ -95,8 +97,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
             foreach (var property in Properties)
             {
-                object value;
-                if (values.TryGetValue(property.Name, out value))
+                if (values.TryGetValue(property.Name, out var value))
                 {
                     this[property] = value;
                 }
@@ -112,7 +113,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <summary>
         ///     Gets the underlying entity type for which this object is storing values.
         /// </summary>
-        public virtual IEntityType EntityType => InternalEntry.EntityType;
+        public virtual IEntityType EntityType
+        {
+            [DebuggerStepThrough] get => InternalEntry.EntityType;
+        }
 
         /// <summary>
         ///     Gets or sets the value of the property with the specified property name.
@@ -145,5 +149,31 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <param name="property"> The property. </param>
         /// <returns> The value of the property. </returns>
         public abstract TValue GetValue<TValue>([NotNull] IProperty property);
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

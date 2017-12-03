@@ -2,23 +2,23 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.SqlAzure.Model;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.SqlAzure.Model;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.SqlAzure
+namespace Microsoft.EntityFrameworkCore.SqlAzure
 {
     [SqlServerCondition(SqlServerCondition.IsSqlAzure)]
     public class SqlAzureBatchingTest : IClassFixture<BatchingSqlAzureFixture>
     {
-        private readonly BatchingSqlAzureFixture _fixture;
-
         public SqlAzureBatchingTest(BatchingSqlAzureFixture fixture, ITestOutputHelper output)
         {
-            _fixture = fixture;
+            Fixture = fixture;
         }
+
+        public BatchingSqlAzureFixture Fixture { get; }
 
         [ConditionalTheory]
         [InlineData(1)]
@@ -27,27 +27,29 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.SqlAzure
         [InlineData(1000)]
         public void AddWithBatchSize(int batchSize)
         {
-            using (var context = _fixture.CreateContext(batchSize))
+            using (var context = Fixture.CreateContext(batchSize))
             {
-                context.Database.CreateExecutionStrategy().Execute(contextScoped =>
-                    {
-                        using (contextScoped.Database.BeginTransaction())
+                context.Database.CreateExecutionStrategy().Execute(
+                    context, contextScoped =>
                         {
-                            for (var i = 0; i < batchSize; i++)
+                            using (contextScoped.Database.BeginTransaction())
                             {
-                                var uuid = Guid.NewGuid().ToString();
-                                contextScoped.Products.Add(new Product
+                                for (var i = 0; i < batchSize; i++)
                                 {
-                                    Name = uuid,
-                                    ProductNumber = uuid.Substring(0, 25),
-                                    Weight = 1000,
-                                    SellStartDate = DateTime.Now
-                                });
-                            }
+                                    var uuid = Guid.NewGuid().ToString();
+                                    contextScoped.Products.Add(
+                                        new Product
+                                        {
+                                            Name = uuid,
+                                            ProductNumber = uuid.Substring(0, 25),
+                                            Weight = 1000,
+                                            SellStartDate = DateTime.Now
+                                        });
+                                }
 
-                            Assert.Equal(batchSize, contextScoped.SaveChanges());
-                        }
-                    }, context);
+                                Assert.Equal(batchSize, contextScoped.SaveChanges());
+                            }
+                        });
             }
         }
     }

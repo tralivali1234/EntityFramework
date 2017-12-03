@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.NullSemanticsModel
+namespace Microsoft.EntityFrameworkCore.TestModels.NullSemanticsModel
 {
     public class NullSemanticsData
     {
@@ -95,7 +95,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.NullSeman
             _entities2 = entities2.ToArray();
         }
 
-        public IQueryable<TEntity> Set<TEntity>() where TEntity : NullSemanticsEntityBase
+        public IQueryable<TEntity> Set<TEntity>()
+            where TEntity : NullSemanticsEntityBase
         {
             if (typeof(TEntity) == typeof(NullSemanticsEntity1))
             {

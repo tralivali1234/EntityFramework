@@ -2,30 +2,56 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
+using System.Reflection;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Moq;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class PropertyTest
     {
         [Fact]
         public void Use_of_custom_IProperty_throws()
         {
+            var property = new FakeProperty();
+
             Assert.Equal(
-                CoreStrings.CustomMetadata(nameof(Use_of_custom_IProperty_throws), nameof(IProperty), "IPropertyProxy"),
-                Assert.Throws<NotSupportedException>(() => Mock.Of<IProperty>().AsProperty()).Message);
+                CoreStrings.CustomMetadata(nameof(Use_of_custom_IProperty_throws), nameof(IProperty), nameof(FakeProperty)),
+                Assert.Throws<NotSupportedException>(() => property.AsProperty()).Message);
         }
 
         [Fact]
         public void Use_of_custom_IPropertyBase_throws()
         {
+            var property = new FakeProperty();
+
             Assert.Equal(
-                CoreStrings.CustomMetadata(nameof(Use_of_custom_IPropertyBase_throws), nameof(IPropertyBase), "IPropertyBaseProxy"),
-                Assert.Throws<NotSupportedException>(() => Mock.Of<IPropertyBase>().AsPropertyBase()).Message);
+                CoreStrings.CustomMetadata(nameof(Use_of_custom_IPropertyBase_throws), nameof(IPropertyBase), nameof(FakeProperty)),
+                Assert.Throws<NotSupportedException>(() => property.AsPropertyBase()).Message);
+        }
+
+        private class FakeProperty : IProperty
+        {
+            public object this[string name] => throw new NotImplementedException();
+            public IAnnotation FindAnnotation(string name) => throw new NotImplementedException();
+            public IEnumerable<IAnnotation> GetAnnotations() => throw new NotImplementedException();
+            public string Name { get; }
+            public ITypeBase DeclaringType { get; }
+            public Type ClrType { get; }
+            public bool IsShadowProperty { get; }
+            public IEntityType DeclaringEntityType { get; }
+            public bool IsNullable { get; }
+            public PropertySaveBehavior BeforeSaveBehavior { get; }
+            public PropertySaveBehavior AfterSaveBehavior { get; }
+            public bool IsReadOnlyBeforeSave { get; }
+            public bool IsReadOnlyAfterSave { get; }
+            public bool IsStoreGeneratedAlways { get; }
+            public ValueGenerated ValueGenerated { get; }
+            public bool IsConcurrencyToken { get; }
+            public PropertyInfo PropertyInfo { get; }
+            public FieldInfo FieldInfo { get; }
         }
 
         [Fact]
@@ -76,8 +102,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             stringProperty.IsNullable = true;
             Assert.True(stringProperty.IsNullable);
 
-            Assert.Equal(CoreStrings.NullableKey(typeof(object).DisplayName(), stringProperty.Name),
-                Assert.Throws<InvalidOperationException>(() =>
+            Assert.Equal(
+                CoreStrings.NullableKey(typeof(object).DisplayName(), stringProperty.Name),
+                Assert.Throws<InvalidOperationException>(
+                    () =>
                         stringProperty.DeclaringEntityType.AddKey(stringProperty)).Message);
         }
 
@@ -145,6 +173,28 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
         }
 
         [Fact]
+        public void Marking_a_property_ValueGenerated_throws_if_part_of_a_key_and_inherited_foreign_key()
+        {
+            var model = new Model();
+            var baseType = model.AddEntityType(typeof(BaseType));
+            var idProperty = baseType.GetOrAddProperty(nameof(Customer.Id), typeof(int));
+            var idProperty2 = baseType.GetOrAddProperty("id2", typeof(int));
+            var key = baseType.GetOrAddKey(new[] { idProperty, idProperty2 });
+            IMutableEntityType entityType = model.AddEntityType(typeof(Customer));
+            entityType.BaseType = baseType;
+            var fkProperty = entityType.AddProperty("fk", typeof(int));
+            entityType.AddForeignKey(new[] { fkProperty, idProperty }, key, entityType);
+
+            Assert.Equal(
+                CoreStrings.ForeignKeyPropertyInKey(
+                    nameof(Customer.Id),
+                    typeof(Customer).Name,
+                    "{'" + nameof(Customer.Id) + "'" + ", 'id2'}",
+                    typeof(BaseType).Name),
+                Assert.Throws<InvalidOperationException>(() => idProperty.ValueGenerated = ValueGenerated.OnAdd).Message);
+        }
+
+        [Fact]
         public void Property_is_not_concurrency_token_by_default()
         {
             var entityType = new Model().AddEntityType(typeof(Entity));
@@ -172,6 +222,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             var entityType = new Model().AddEntityType(typeof(Entity));
             var property = entityType.AddProperty("Name", typeof(string));
 
+#pragma warning disable 618
             Assert.False(property.IsStoreGeneratedAlways);
 
             property.IsStoreGeneratedAlways = true;
@@ -179,6 +230,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             property.IsStoreGeneratedAlways = false;
             Assert.False(property.IsStoreGeneratedAlways);
+#pragma warning restore 618
         }
 
         [Fact]
@@ -187,10 +239,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             var entityType = new Model().AddEntityType(typeof(Entity));
             var property = entityType.AddProperty("Name", typeof(string));
 
+#pragma warning disable 618
             Assert.False(((IProperty)property).IsStoreGeneratedAlways);
 
             property.ValueGenerated = ValueGenerated.OnAddOrUpdate;
-            Assert.False(((IProperty)property).IsStoreGeneratedAlways);
+            Assert.True(((IProperty)property).IsStoreGeneratedAlways);
 
             property.IsConcurrencyToken = true;
             Assert.True(((IProperty)property).IsStoreGeneratedAlways);
@@ -203,6 +256,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             property.IsStoreGeneratedAlways = false;
             Assert.False(((IProperty)property).IsStoreGeneratedAlways);
+#pragma warning restore 618
         }
 
         [Fact]
@@ -211,8 +265,10 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             var entityType = new Model().AddEntityType(typeof(Entity));
             var property = entityType.AddProperty("Name", typeof(string));
 
+#pragma warning disable 618
             Assert.False(property.IsReadOnlyAfterSave);
             Assert.False(property.IsReadOnlyBeforeSave);
+#pragma warning restore 618
         }
 
         [Fact]
@@ -220,12 +276,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
         {
             var entityType = new Model().AddEntityType(typeof(Entity));
             var property = entityType.AddProperty("Name", typeof(string));
+#pragma warning disable 618
             property.IsReadOnlyBeforeSave = true;
 
             Assert.True(property.IsReadOnlyBeforeSave);
-
-            property.IsReadOnlyBeforeSave = false;
-            Assert.False(property.IsReadOnlyBeforeSave);
+#pragma warning restore 618
         }
 
         [Fact]
@@ -233,12 +288,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
         {
             var entityType = new Model().AddEntityType(typeof(Entity));
             var property = entityType.AddProperty("Name", typeof(string));
+#pragma warning disable 618
             property.IsReadOnlyAfterSave = true;
 
             Assert.True(property.IsReadOnlyAfterSave);
-
-            property.IsReadOnlyAfterSave = false;
-            Assert.False(property.IsReadOnlyAfterSave);
+#pragma warning restore 618
         }
 
         [Fact]
@@ -247,6 +301,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             var entityType = new Model().AddEntityType(typeof(Entity));
             var property = entityType.AddProperty("Name", typeof(string));
 
+#pragma warning disable 618
             Assert.False(property.IsReadOnlyBeforeSave);
             Assert.False(property.IsReadOnlyAfterSave);
 
@@ -255,12 +310,39 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
 
             Assert.True(property.IsReadOnlyBeforeSave);
             Assert.True(property.IsReadOnlyAfterSave);
+#pragma warning restore 618
         }
 
         private class Entity
         {
             public string Name { get; set; }
             public int? Id { get; set; }
+        }
+
+        private class BaseType
+        {
+            public int Id { get; set; }
+        }
+
+        private class Customer : BaseType
+        {
+            public int AlternateId { get; set; }
+            public Guid Unique { get; set; }
+            public string Name { get; set; }
+            public string Mane { get; set; }
+            public ICollection<Order> Orders { get; set; }
+
+            public IEnumerable<Order> EnumerableOrders { get; set; }
+            public Order NotCollectionOrders { get; set; }
+        }
+
+        private class Order : BaseType
+        {
+            public int CustomerId { get; set; }
+            public Guid CustomerUnique { get; set; }
+            public Customer Customer { get; set; }
+
+            public Order OrderCustomer { get; set; }
         }
     }
 }

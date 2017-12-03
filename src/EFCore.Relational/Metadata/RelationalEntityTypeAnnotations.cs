@@ -10,123 +10,168 @@ using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata
 {
+    /// <summary>
+    ///     Properties for relational-specific annotations accessed through
+    ///     <see cref="RelationalMetadataExtensions.Relational(IMutableEntityType)" />.
+    /// </summary>
     public class RelationalEntityTypeAnnotations : IRelationalEntityTypeAnnotations
     {
+        /// <summary>
+        ///     Constructs an instance for annotations of the given <see cref="IEntityType" />.
+        /// </summary>
+        /// <param name="entityType"> The <see cref="IEntityType" /> to use. </param>
         public RelationalEntityTypeAnnotations(
-            [NotNull] IEntityType entityType,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-            : this(new RelationalAnnotations(entityType), providerFullAnnotationNames)
+            [NotNull] IEntityType entityType)
+            : this(new RelationalAnnotations(entityType))
         {
         }
 
+        /// <summary>
+        ///     Constructs an instance for annotations of the <see cref="IEntityType" />
+        ///     represented by the given annotation helper.
+        /// </summary>
+        /// <param name="annotations">
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IEntityType" /> to annotate.
+        /// </param>
         protected RelationalEntityTypeAnnotations(
-            [NotNull] RelationalAnnotations annotations,
-            [CanBeNull] RelationalFullAnnotationNames providerFullAnnotationNames)
-        {
-            Annotations = annotations;
-            ProviderFullAnnotationNames = providerFullAnnotationNames;
-        }
+            [NotNull] RelationalAnnotations annotations) => Annotations = annotations;
 
-        public virtual RelationalFullAnnotationNames ProviderFullAnnotationNames { get; }
-
+        /// <summary>
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IEntityType" /> to annotate.
+        /// </summary>
         protected virtual RelationalAnnotations Annotations { get; }
+
+        /// <summary>
+        ///     The <see cref="IEntityType" /> to annotate.
+        /// </summary>
         protected virtual IEntityType EntityType => (IEntityType)Annotations.Metadata;
 
+        /// <summary>
+        ///     Gets a <see cref="RelationalModelAnnotations" /> instance for the given <see cref="IModel" />
+        ///     maintaining the <see cref="RelationalAnnotations" /> semantics being used by this instance to
+        ///     control setting annotations by convention.
+        /// </summary>
+        /// <param name="model"> The <see cref="IModel" /> to annotate. </param>
+        /// <returns> A new <see cref="RelationalModelAnnotations" /> instance. </returns>
         protected virtual RelationalModelAnnotations GetAnnotations([NotNull] IModel model)
-            => new RelationalModelAnnotations(model, ProviderFullAnnotationNames);
+            => new RelationalModelAnnotations(model);
 
+        /// <summary>
+        ///     Gets a <see cref="RelationalEntityTypeAnnotations" /> instance for the given <see cref="IEntityType" />
+        ///     maintaining the <see cref="RelationalAnnotations" /> semantics being used by this instance to
+        ///     control setting annotations by convention.
+        /// </summary>
+        /// <param name="entityType"> The <see cref="IEntityType" /> to annotate. </param>
+        /// <returns> A new <see cref="RelationalEntityTypeAnnotations" /> instance. </returns>
         protected virtual RelationalEntityTypeAnnotations GetAnnotations([NotNull] IEntityType entityType)
-            => new RelationalEntityTypeAnnotations(entityType, ProviderFullAnnotationNames);
+            => new RelationalEntityTypeAnnotations(entityType);
 
+        /// <summary>
+        ///     The name of the table to which the entity type is mapped..
+        /// </summary>
         public virtual string TableName
         {
-            get
-            {
-                if (EntityType.BaseType != null)
-                {
-                    var rootType = EntityType.RootType();
-                    return GetAnnotations(rootType).TableName;
-                }
+            get => EntityType.BaseType != null
+                ? GetAnnotations(EntityType.RootType()).TableName
+                : ((string)Annotations.Metadata[RelationalAnnotationNames.TableName]
+                   ?? GetDefaultTableName());
 
-                return (string)Annotations.GetAnnotation(
-                           RelationalFullAnnotationNames.Instance.TableName,
-                           ProviderFullAnnotationNames?.TableName)
-                       ?? GetDefaultTableName();
-            }
-            [param: CanBeNull] set { SetTableName(value); }
+            [param: CanBeNull] set => SetTableName(value);
         }
 
         private string GetDefaultTableName()
-            => EntityType.HasDelegatedIdentity()
+            => ConstraintNamer.Truncate(
+                EntityType.HasDefiningNavigation()
                 ? $"{GetAnnotations(EntityType.DefiningEntityType).TableName}_{EntityType.DefiningNavigationName}"
-                : EntityType.ShortName();
+                : EntityType.ShortName(),
+                null,
+                EntityType.Model.GetMaxIdentifierLength());
 
+        /// <summary>
+        ///     Attempts to set the <see cref="TableName" /> using the semantics of the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetTableName([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.TableName,
-                ProviderFullAnnotationNames?.TableName,
+                RelationalAnnotationNames.TableName,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     The database schema that contains the mapped table.
+        /// </summary>
         public virtual string Schema
         {
-            get
-            {
-                if (EntityType.BaseType != null)
-                {
-                    var rootType = EntityType.RootType();
-                    return GetAnnotations(rootType).Schema;
-                }
+            get => EntityType.BaseType != null
+                ? GetAnnotations(EntityType.RootType()).Schema
+                : ((string)Annotations.Metadata[RelationalAnnotationNames.Schema]
+                   ?? GetDefaultSchema());
 
-                return (string)Annotations.GetAnnotation(
-                           RelationalFullAnnotationNames.Instance.Schema,
-                           ProviderFullAnnotationNames?.Schema)
-                       ?? GetDefaultSchema();
-            }
-            [param: CanBeNull] set { SetSchema(value); }
+            [param: CanBeNull] set => SetSchema(value);
         }
 
         private string GetDefaultSchema()
-            => EntityType.HasDelegatedIdentity()
-            ? GetAnnotations(EntityType.DefiningEntityType).Schema
-            : GetAnnotations(EntityType.Model).DefaultSchema;
+            => EntityType.HasDefiningNavigation()
+                ? GetAnnotations(EntityType.DefiningEntityType).Schema
+                : GetAnnotations(EntityType.Model).DefaultSchema;
 
+        /// <summary>
+        ///     Attempts to set the <see cref="Schema" /> using the semantics of the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetSchema([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.Schema,
-                ProviderFullAnnotationNames?.Schema,
+                RelationalAnnotationNames.Schema,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     The <see cref="IProperty" /> that will be used for storing a discriminator value.
+        /// </summary>
         public virtual IProperty DiscriminatorProperty
         {
             get
             {
                 if (EntityType.BaseType != null)
                 {
-                    var rootType = EntityType.RootType();
-                    return GetAnnotations(rootType).DiscriminatorProperty;
+                    return GetAnnotations(EntityType.RootType()).DiscriminatorProperty;
                 }
 
-                var propertyName = (string)Annotations.GetAnnotation(
-                    RelationalFullAnnotationNames.Instance.DiscriminatorProperty,
-                    ProviderFullAnnotationNames?.DiscriminatorProperty);
+                var propertyName = (string)Annotations.Metadata[RelationalAnnotationNames.DiscriminatorProperty];
 
                 return propertyName == null ? null : EntityType.FindProperty(propertyName);
             }
-            [param: CanBeNull] set { SetDiscriminatorProperty(value); }
+            [param: CanBeNull] set => SetDiscriminatorProperty(value);
         }
 
+        /// <summary>
+        ///     Finds the <see cref="IProperty" /> set to be used for a discriminator on this type without
+        ///     traversing to base types.
+        /// </summary>
+        /// <returns> The property found, or <c>null</c> if no matching property was found. </returns>
         protected virtual IProperty GetNonRootDiscriminatorProperty()
         {
-            var propertyName = (string)Annotations.GetAnnotation(
-                RelationalFullAnnotationNames.Instance.DiscriminatorProperty,
-                ProviderFullAnnotationNames?.DiscriminatorProperty);
+            var propertyName = (string)Annotations.Metadata[RelationalAnnotationNames.DiscriminatorProperty];
 
             return propertyName == null ? null : EntityType.FindProperty(propertyName);
         }
 
+        /// <summary>
+        ///     Attempts to set the <see cref="DiscriminatorProperty" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetDiscriminatorProperty([CanBeNull] IProperty value)
             => SetDiscriminatorProperty(value, DiscriminatorProperty?.ClrType);
 
+        /// <summary>
+        ///     Attempts to set the <see cref="DiscriminatorProperty" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <param name="oldDiscriminatorType"> The type that was previously being used for discriminator values. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetDiscriminatorProperty([CanBeNull] IProperty value, [CanBeNull] Type oldDiscriminatorType)
         {
             if (value != null)
@@ -154,30 +199,34 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             }
 
             return Annotations.SetAnnotation(
-                RelationalFullAnnotationNames.Instance.DiscriminatorProperty,
-                ProviderFullAnnotationNames?.DiscriminatorProperty,
+                RelationalAnnotationNames.DiscriminatorProperty,
                 value?.Name);
         }
 
+        /// <summary>
+        ///     Gets the <see cref="ConfigurationSource" /> for the currently set <see cref="DiscriminatorProperty" />.
+        /// </summary>
+        /// <returns> The <see cref="ConfigurationSource" /> or <c>null</c> if no discriminator property has been set. </returns>
         protected virtual ConfigurationSource? GetDiscriminatorPropertyConfigurationSource()
-        {
-            var entityType = EntityType as EntityType;
-            var annotation = (ProviderFullAnnotationNames == null ? null : entityType?.FindAnnotation(ProviderFullAnnotationNames?.DiscriminatorProperty))
-                             ?? entityType?.FindAnnotation(RelationalFullAnnotationNames.Instance.DiscriminatorProperty);
-            return annotation?.GetConfigurationSource();
-        }
+            => (EntityType as EntityType)
+                ?.FindAnnotation(RelationalAnnotationNames.DiscriminatorProperty)
+                ?.GetConfigurationSource();
 
+        /// <summary>
+        ///     The discriminator value to use.
+        /// </summary>
         public virtual object DiscriminatorValue
         {
-            get
-            {
-                return Annotations.GetAnnotation(
-                    RelationalFullAnnotationNames.Instance.DiscriminatorValue,
-                    ProviderFullAnnotationNames?.DiscriminatorValue);
-            }
-            [param: CanBeNull] set { SetDiscriminatorValue(value); }
+            get => Annotations.Metadata[RelationalAnnotationNames.DiscriminatorValue];
+            [param: CanBeNull] set => SetDiscriminatorValue(value);
         }
 
+        /// <summary>
+        ///     Attempts to set the <see cref="DiscriminatorValue" /> using the semantics of
+        ///     the <see cref="RelationalAnnotations" /> in use.
+        /// </summary>
+        /// <param name="value"> The value to set. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetDiscriminatorValue([CanBeNull] object value)
         {
             if (value != null
@@ -190,22 +239,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             if (value != null
                 && !DiscriminatorProperty.ClrType.GetTypeInfo().IsAssignableFrom(value.GetType().GetTypeInfo()))
             {
-                throw new InvalidOperationException(RelationalStrings.DiscriminatorValueIncompatible(
-                    value, DiscriminatorProperty.Name, DiscriminatorProperty.ClrType));
+                throw new InvalidOperationException(
+                    RelationalStrings.DiscriminatorValueIncompatible(
+                        value, DiscriminatorProperty.Name, DiscriminatorProperty.ClrType));
             }
 
-            return Annotations.SetAnnotation
-            (RelationalFullAnnotationNames.Instance.DiscriminatorValue,
-                ProviderFullAnnotationNames?.DiscriminatorValue,
-                value);
+            return Annotations.SetAnnotation(RelationalAnnotationNames.DiscriminatorValue, value);
         }
 
+        /// <summary>
+        ///     Gets the <see cref="ConfigurationSource" /> for the currently set <see cref="DiscriminatorValue" />.
+        /// </summary>
+        /// <returns> The <see cref="ConfigurationSource" /> or <c>null</c> if no discriminator value has been set. </returns>
         protected virtual ConfigurationSource? GetDiscriminatorValueConfigurationSource()
-        {
-            var entityType = EntityType as EntityType;
-            var annotation = (ProviderFullAnnotationNames == null ? null : entityType?.FindAnnotation(ProviderFullAnnotationNames?.DiscriminatorValue))
-                             ?? entityType?.FindAnnotation(RelationalFullAnnotationNames.Instance.DiscriminatorValue);
-            return annotation?.GetConfigurationSource();
-        }
+            => (EntityType as EntityType)
+                ?.FindAnnotation(RelationalAnnotationNames.DiscriminatorValue)
+                ?.GetConfigurationSource();
     }
 }

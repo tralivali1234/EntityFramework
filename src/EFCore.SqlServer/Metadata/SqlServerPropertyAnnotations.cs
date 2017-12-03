@@ -9,42 +9,78 @@ using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata
 {
+    /// <summary>
+    ///     Properties for SQL Server-specific annotations accessed through
+    ///     <see cref="SqlServerMetadataExtensions.SqlServer(IMutableProperty)" />.
+    /// </summary>
     public class SqlServerPropertyAnnotations : RelationalPropertyAnnotations, ISqlServerPropertyAnnotations
     {
+        /// <summary>
+        ///     Constructs an instance for annotations of the given <see cref="IProperty" />.
+        /// </summary>
+        /// <param name="property"> The <see cref="IProperty" /> to use. </param>
         public SqlServerPropertyAnnotations([NotNull] IProperty property)
-            : base(property, SqlServerFullAnnotationNames.Instance)
+            : base(property)
         {
         }
 
+        /// <summary>
+        ///     Constructs an instance for annotations of the <see cref="IProperty" />
+        ///     represented by the given annotation helper.
+        /// </summary>
+        /// <param name="annotations">
+        ///     The <see cref="RelationalAnnotations" /> helper representing the <see cref="IProperty" /> to annotate.
+        /// </param>
         protected SqlServerPropertyAnnotations([NotNull] RelationalAnnotations annotations)
-            : base(annotations, SqlServerFullAnnotationNames.Instance)
+            : base(annotations)
         {
         }
 
+        /// <summary>
+        ///     Gets or sets the sequence name to use with
+        ///     <see cref="SqlServerPropertyBuilderExtensions.ForSqlServerUseSequenceHiLo" />
+        /// </summary>
         public virtual string HiLoSequenceName
         {
-            get { return (string)Annotations.GetAnnotation(SqlServerFullAnnotationNames.Instance.HiLoSequenceName, null); }
+            get { return (string)Annotations.Metadata[SqlServerAnnotationNames.HiLoSequenceName]; }
             [param: CanBeNull] set { SetHiLoSequenceName(value); }
         }
 
+        /// <summary>
+        ///     Sets the sequence name to use with <see cref="SqlServerPropertyBuilderExtensions.ForSqlServerUseSequenceHiLo" />.
+        /// </summary>
+        /// <param name="value"> The sequence name to use. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetHiLoSequenceName([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                SqlServerFullAnnotationNames.Instance.HiLoSequenceName,
-                null,
+                SqlServerAnnotationNames.HiLoSequenceName,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     Gets or sets the schema for the sequence to use with
+        ///     <see cref="SqlServerPropertyBuilderExtensions.ForSqlServerUseSequenceHiLo" />
+        /// </summary>
         public virtual string HiLoSequenceSchema
         {
-            get { return (string)Annotations.GetAnnotation(SqlServerFullAnnotationNames.Instance.HiLoSequenceSchema, null); }
+            get { return (string)Annotations.Metadata[SqlServerAnnotationNames.HiLoSequenceSchema]; }
             [param: CanBeNull] set { SetHiLoSequenceSchema(value); }
         }
 
+        /// <summary>
+        ///     Sets the schema for the sequence to use with <see cref="SqlServerPropertyBuilderExtensions.ForSqlServerUseSequenceHiLo" />.
+        /// </summary>
+        /// <param name="value"> The schema to use. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetHiLoSequenceSchema([CanBeNull] string value)
             => Annotations.SetAnnotation(
-                SqlServerFullAnnotationNames.Instance.HiLoSequenceSchema,
-                null,
+                SqlServerAnnotationNames.HiLoSequenceSchema,
                 Check.NullButNotEmpty(value, nameof(value)));
 
+        /// <summary>
+        ///     Finds the <see cref="ISequence" /> in the model to use with
+        ///     <see cref="SqlServerPropertyBuilderExtensions.ForSqlServerUseSequenceHiLo" />
+        /// </summary>
+        /// <returns> The sequence to use, or <c>null</c> if no sequence exists in the model. </returns>
         public virtual ISequence FindHiLoSequence()
         {
             var modelExtensions = Property.DeclaringEntityType.Model.SqlServer();
@@ -64,24 +100,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return modelExtensions.FindSequence(sequenceName, sequenceSchema);
         }
 
+        /// <summary>
+        ///     <para>
+        ///         Gets or sets the <see cref="SqlServerValueGenerationStrategy" /> to use for the property.
+        ///     </para>
+        ///     <para>
+        ///         If no strategy is set for the property, then the strategy to use will be taken from the <see cref="IModel" />
+        ///     </para>
+        /// </summary>
         public virtual SqlServerValueGenerationStrategy? ValueGenerationStrategy
         {
-            get { return GetSqlServerValueGenerationStrategy(fallbackToModel: true); }
-            [param: CanBeNull] set { SetValueGenerationStrategy(value); }
+            get => GetSqlServerValueGenerationStrategy(fallbackToModel: true);
+            set => SetValueGenerationStrategy(value);
         }
 
+        /// <summary>
+        ///     Gets or sets the <see cref="SqlServerValueGenerationStrategy" /> to use for the property.
+        /// </summary>
+        /// <param name="fallbackToModel">
+        ///     If <c>true</c>, then if no strategy is set for the property,
+        ///     then the strategy to use will be taken from the <see cref="IModel" />.
+        /// </param>
+        /// <returns> The strategy, or <c>null</c> if none was set. </returns>
         public virtual SqlServerValueGenerationStrategy? GetSqlServerValueGenerationStrategy(bool fallbackToModel)
         {
-            if (GetDefaultValue(false) != null
-                || GetDefaultValueSql(false) != null
-                || GetComputedColumnSql(false) != null)
-            {
-                return null;
-            }
-
-            var value = (SqlServerValueGenerationStrategy?)Annotations.GetAnnotation(
-                SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy,
-                null);
+            var value = (SqlServerValueGenerationStrategy?)Annotations.Metadata[SqlServerAnnotationNames.ValueGenerationStrategy];
 
             if (value != null)
             {
@@ -90,11 +133,22 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
             var relationalProperty = Property.Relational();
             if (!fallbackToModel
-                || Property.ValueGenerated != ValueGenerated.OnAdd
                 || relationalProperty.DefaultValue != null
                 || relationalProperty.DefaultValueSql != null
                 || relationalProperty.ComputedColumnSql != null)
             {
+                return null;
+            }
+
+            if (Property.ValueGenerated != ValueGenerated.OnAdd)
+            {
+                var sharedTablePrincipalPrimaryKeyProperty = Property.FindSharedTablePrincipalPrimaryKeyProperty();
+                if (sharedTablePrincipalPrimaryKeyProperty != null
+                    && sharedTablePrincipalPrimaryKeyProperty.SqlServer().ValueGenerationStrategy == SqlServerValueGenerationStrategy.IdentityColumn)
+                {
+                    return SqlServerValueGenerationStrategy.IdentityColumn;
+                }
+
                 return null;
             }
 
@@ -115,6 +169,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return null;
         }
 
+        /// <summary>
+        ///     Sets the <see cref="SqlServerValueGenerationStrategy" /> to use for the property.
+        /// </summary>
+        /// <param name="value"> The strategy to use. </param>
+        /// <returns> <c>True</c> if the annotation was set; <c>false</c> otherwise. </returns>
         protected virtual bool SetValueGenerationStrategy(SqlServerValueGenerationStrategy? value)
         {
             if (value != null)
@@ -126,8 +185,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 {
                     if (ShouldThrowOnInvalidConfiguration)
                     {
-                        throw new ArgumentException(SqlServerStrings.IdentityBadType(
-                            Property.Name, Property.DeclaringEntityType.DisplayName(), propertyType.ShortDisplayName()));
+                        throw new ArgumentException(
+                            SqlServerStrings.IdentityBadType(
+                                Property.Name, Property.DeclaringEntityType.DisplayName(), propertyType.ShortDisplayName()));
                     }
 
                     return false;
@@ -138,8 +198,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 {
                     if (ShouldThrowOnInvalidConfiguration)
                     {
-                        throw new ArgumentException(SqlServerStrings.SequenceBadType(
-                            Property.Name, Property.DeclaringEntityType.DisplayName(), propertyType.ShortDisplayName()));
+                        throw new ArgumentException(
+                            SqlServerStrings.SequenceBadType(
+                                Property.Name, Property.DeclaringEntityType.DisplayName(), propertyType.ShortDisplayName()));
                     }
 
                     return false;
@@ -158,9 +219,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 ClearAllServerGeneratedValues();
             }
 
-            return Annotations.SetAnnotation(SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy, null, value);
+            return Annotations.SetAnnotation(SqlServerAnnotationNames.ValueGenerationStrategy, value);
         }
 
+        /// <summary>
+        ///     Checks whether or not it is valid to set the given <see cref="SqlServerValueGenerationStrategy" />
+        ///     for the property.
+        /// </summary>
+        /// <param name="value"> The strategy to check. </param>
+        /// <returns> <c>True</c> if it is valid to set; <c>false</c> otherwise. </returns>
         protected virtual bool CanSetValueGenerationStrategy(SqlServerValueGenerationStrategy? value)
         {
             if (GetSqlServerValueGenerationStrategy(fallbackToModel: false) == value)
@@ -168,7 +235,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 return true;
             }
 
-            if (!Annotations.CanSetAnnotation(SqlServerFullAnnotationNames.Instance.ValueGenerationStrategy, null, value))
+            if (!Annotations.CanSetAnnotation(SqlServerAnnotationNames.ValueGenerationStrategy, value))
             {
                 return false;
             }
@@ -202,6 +269,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return true;
         }
 
+        /// <summary>
+        ///     Gets the default value set for the property.
+        /// </summary>
+        /// <param name="fallback">
+        ///     If <c>true</c>, and some SQL Server specific
+        ///     <see cref="ValueGenerationStrategy" /> has been set, then this method will always
+        ///     return <c>null</c> because these strategies do not use default values.
+        /// </param>
+        /// <returns> The default value, or <c>null</c> if none has been set. </returns>
         protected override object GetDefaultValue(bool fallback)
         {
             if (fallback
@@ -213,6 +289,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return base.GetDefaultValue(fallback);
         }
 
+        /// <summary>
+        ///     Checks whether or not it is valid to set a default value for the property.
+        /// </summary>
+        /// <param name="value"> The value to check. </param>
+        /// <returns> <c>True</c> if it is valid to set this value; <c>false</c> otherwise. </returns>
         protected override bool CanSetDefaultValue(object value)
         {
             if (ShouldThrowOnConflict)
@@ -232,6 +313,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return base.CanSetDefaultValue(value);
         }
 
+        /// <summary>
+        ///     Gets the default SQL expression set for the property.
+        /// </summary>
+        /// <param name="fallback">
+        ///     If <c>true</c>, and some SQL Server specific
+        ///     <see cref="ValueGenerationStrategy" /> has been set, then this method will always
+        ///     return <c>null</c> because these strategies do not use default expressions.
+        /// </param>
+        /// <returns> The default expression, or <c>null</c> if none has been set. </returns>
         protected override string GetDefaultValueSql(bool fallback)
         {
             if (fallback
@@ -243,6 +333,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return base.GetDefaultValueSql(fallback);
         }
 
+        /// <summary>
+        ///     Checks whether or not it is valid to set a default SQL expression for the property.
+        /// </summary>
+        /// <param name="value"> The expression to check. </param>
+        /// <returns> <c>True</c> if it is valid to set this expression; <c>false</c> otherwise. </returns>
         protected override bool CanSetDefaultValueSql(string value)
         {
             if (ShouldThrowOnConflict)
@@ -262,6 +357,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return base.CanSetDefaultValueSql(value);
         }
 
+        /// <summary>
+        ///     Gets the computed SQL expression set for the property.
+        /// </summary>
+        /// <param name="fallback">
+        ///     If <c>true</c>, and some SQL Server specific
+        ///     <see cref="ValueGenerationStrategy" /> has been set, then this method will always
+        ///     return <c>null</c> because these strategies do not use computed expressions.
+        /// </param>
+        /// <returns> The computed expression, or <c>null</c> if none has been set. </returns>
         protected override string GetComputedColumnSql(bool fallback)
         {
             if (fallback
@@ -273,6 +377,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return base.GetComputedColumnSql(fallback);
         }
 
+        /// <summary>
+        ///     Checks whether or not it is valid to set a computed SQL expression for the property.
+        /// </summary>
+        /// <param name="value"> The expression to check. </param>
+        /// <returns> <c>True</c> if it is valid to set this expression; <c>false</c> otherwise. </returns>
         protected override bool CanSetComputedColumnSql(string value)
         {
             if (ShouldThrowOnConflict)
@@ -292,6 +401,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             return base.CanSetComputedColumnSql(value);
         }
 
+        /// <summary>
+        ///     Resets value-generation for the property to defaults.
+        /// </summary>
         protected override void ClearAllServerGeneratedValues()
         {
             SetValueGenerationStrategy(null);

@@ -4,14 +4,13 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
 using Microsoft.EntityFrameworkCore.Storage;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public class OptimisticConcurrencySqlServerTest : OptimisticConcurrencyTestBase<SqlServerTestStore, F1SqlServerFixture>
+    public class OptimisticConcurrencySqlServerTest : OptimisticConcurrencyTestBase<F1SqlServerFixture>
     {
         public OptimisticConcurrencySqlServerTest(F1SqlServerFixture fixture)
             : base(fixture)
@@ -23,37 +22,72 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             using (var c = CreateF1Context())
             {
-                await c.Database.CreateExecutionStrategy().ExecuteAsync(async context =>
-                    {
-                        using (var transaction = context.Database.BeginTransaction())
+                await c.Database.CreateExecutionStrategy().ExecuteAsync(
+                    c, async context =>
                         {
-                            var driver = context.Drivers.Single(d => d.CarNumber == 1);
-                            Assert.NotEqual(1, context.Entry(driver).Property<byte[]>("Version").CurrentValue[0]);
-                            driver.Podiums = StorePodiums;
-                            var firstVersion = context.Entry(driver).Property<byte[]>("Version").CurrentValue;
-                            await context.SaveChangesAsync();
-
-                            using (var innerContext = CreateF1Context())
+                            using (var transaction = context.Database.BeginTransaction())
                             {
-                                innerContext.Database.UseTransaction(transaction.GetDbTransaction());
-                                driver = innerContext.Drivers.Single(d => d.CarNumber == 1);
-                                Assert.NotEqual(firstVersion, innerContext.Entry(driver).Property<byte[]>("Version").CurrentValue);
-                                Assert.Equal(StorePodiums, driver.Podiums);
+                                var driver = context.Drivers.Single(d => d.CarNumber == 1);
+                                driver.Podiums = StorePodiums;
+                                var firstVersion = context.Entry(driver).Property<byte[]>("Version").CurrentValue;
+                                await context.SaveChangesAsync();
 
-                                var secondVersion = innerContext.Entry(driver).Property<byte[]>("Version").CurrentValue;
-                                innerContext.Entry(driver).Property<byte[]>("Version").CurrentValue = firstVersion;
-                                await innerContext.SaveChangesAsync();
-                                using (var validationContext = CreateF1Context())
+                                using (var innerContext = CreateF1Context())
                                 {
-                                    validationContext.Database.UseTransaction(transaction.GetDbTransaction());
-                                    driver = validationContext.Drivers.Single(d => d.CarNumber == 1);
-                                    Assert.Equal(secondVersion, validationContext.Entry(driver).Property<byte[]>("Version").CurrentValue);
+                                    innerContext.Database.UseTransaction(transaction.GetDbTransaction());
+                                    driver = innerContext.Drivers.Single(d => d.CarNumber == 1);
+                                    Assert.NotEqual(firstVersion, innerContext.Entry(driver).Property<byte[]>("Version").CurrentValue);
                                     Assert.Equal(StorePodiums, driver.Podiums);
+
+                                    var secondVersion = innerContext.Entry(driver).Property<byte[]>("Version").CurrentValue;
+                                    innerContext.Entry(driver).Property<byte[]>("Version").CurrentValue = firstVersion;
+                                    await innerContext.SaveChangesAsync();
+                                    using (var validationContext = CreateF1Context())
+                                    {
+                                        validationContext.Database.UseTransaction(transaction.GetDbTransaction());
+                                        driver = validationContext.Drivers.Single(d => d.CarNumber == 1);
+                                        Assert.Equal(secondVersion, validationContext.Entry(driver).Property<byte[]>("Version").CurrentValue);
+                                        Assert.Equal(StorePodiums, driver.Podiums);
+                                    }
                                 }
                             }
-                        }
-                    }, c);
+                        });
             }
+        }
+
+        [Fact]
+        public Task Database_concurrency_token_value_is_discarded_for_non_conflicting_entities()
+        {
+            byte[] firstVersion = null;
+            byte[] secondVersion = null;
+            return ConcurrencyTestAsync(
+                c => c.Drivers.Single(d => d.CarNumber == 2).Podiums = StorePodiums,
+                c =>
+                    {
+                        var driver = c.Drivers.Single(d => d.CarNumber == 1);
+                        driver.Podiums = ClientPodiums;
+                        firstVersion = c.Entry(driver).Property<byte[]>("Version").CurrentValue;
+
+                        var secondDriver = c.Drivers.Single(d => d.CarNumber == 2);
+                        secondDriver.Podiums = ClientPodiums;
+                        secondVersion = c.Entry(secondDriver).Property<byte[]>("Version").CurrentValue;
+                    },
+                (c, ex) =>
+                    {
+                        Assert.IsType<DbUpdateConcurrencyException>(ex);
+
+                        var firstDriverEntry = c.Entry(c.Drivers.Local.Single(d => d.CarNumber == 1));
+                        Assert.Equal(firstVersion, firstDriverEntry.Property<byte[]>("Version").CurrentValue);
+                        var databaseValues = firstDriverEntry.GetDatabaseValues();
+                        Assert.NotEqual(firstVersion, databaseValues["Version"]);
+                        firstDriverEntry.OriginalValues.SetValues(databaseValues);
+
+                        var secondDriverEntry = ex.Entries.Single();
+                        Assert.Equal(secondVersion, secondDriverEntry.Property("Version").CurrentValue);
+                        secondDriverEntry.OriginalValues.SetValues(secondDriverEntry.GetDatabaseValues());
+                        ResolveConcurrencyTokens(secondDriverEntry);
+                    },
+                c => Assert.Equal(ClientPodiums, c.Drivers.Single(d => d.CarNumber == 2).Podiums));
         }
 
         protected override void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)

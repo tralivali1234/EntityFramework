@@ -2,26 +2,23 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Relational.Tests.TestUtilities;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Update;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Update
 {
     public abstract class UpdateSqlGeneratorTestBase
     {
         [Fact]
-        public void AppendDeleteOperation_creates_full_delete_command_text()
+        public virtual void AppendDeleteOperation_creates_full_delete_command_text()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateDeleteCommand(false);
@@ -51,7 +48,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendInsertOperation_appends_insert_and_select_and_where_if_store_generated_columns_exist()
+        public virtual void AppendInsertOperation_appends_insert_and_select_and_where_if_store_generated_columns_exist()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateInsertCommand(identityKey: true, isComputed: true);
@@ -73,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendInsertOperation_appends_insert_and_select_rowcount_if_no_store_generated_columns_exist_or_conditions_exist()
+        public virtual void AppendInsertOperation_appends_insert_and_select_rowcount_if_no_store_generated_columns_exist_or_conditions_exist()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateInsertCommand(false, false);
@@ -89,7 +86,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendInsertOperation_appends_insert_and_select_store_generated_columns_but_no_identity()
+        public virtual void AppendInsertOperation_appends_insert_and_select_store_generated_columns_but_no_identity()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateInsertCommand(false, isComputed: true);
@@ -113,7 +110,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendInsertOperation_appends_insert_and_select_for_only_identity()
+        public virtual void AppendInsertOperation_appends_insert_and_select_for_only_identity()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateInsertCommand(true, false);
@@ -136,7 +133,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendInsertOperation_appends_insert_and_select_for_all_store_generated_columns()
+        public virtual void AppendInsertOperation_appends_insert_and_select_for_all_store_generated_columns()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateInsertCommand(true, true, true);
@@ -158,7 +155,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendInsertOperation_appends_insert_and_select_for_only_single_identity_columns()
+        public virtual void AppendInsertOperation_appends_insert_and_select_for_only_single_identity_columns()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateInsertCommand(true, false, true);
@@ -180,7 +177,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendUpdateOperation_appends_update_and_select_if_store_generated_columns_exist()
+        public virtual void AppendUpdateOperation_appends_update_and_select_if_store_generated_columns_exist()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateUpdateCommand(isComputed: true, concurrencyToken: true);
@@ -203,7 +200,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendUpdateOperation_appends_update_and_select_rowcount_if_store_generated_columns_dont_exist()
+        public virtual void AppendUpdateOperation_appends_update_and_select_rowcount_if_store_generated_columns_dont_exist()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateUpdateCommand(false, false);
@@ -220,7 +217,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendUpdateOperation_appends_where_for_concurrency_token()
+        public virtual void AppendUpdateOperation_appends_where_for_concurrency_token()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateUpdateCommand(false, concurrencyToken: true);
@@ -237,7 +234,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         }
 
         [Fact]
-        public void AppendUpdateOperation_appends_select_for_computed_property()
+        public virtual void AppendUpdateOperation_appends_select_for_computed_property()
         {
             var stringBuilder = new StringBuilder();
             var command = CreateUpdateCommand(true, false);
@@ -293,9 +290,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
         protected virtual string Schema => "dbo";
 
         protected virtual string SchemaPrefix =>
-            string.IsNullOrEmpty(Schema) ?
-                string.Empty :
-                OpenDelimeter + Schema + CloseDelimeter + ".";
+            string.IsNullOrEmpty(Schema) ? string.Empty : OpenDelimeter + Schema + CloseDelimeter + ".";
 
         protected ModificationCommand CreateInsertCommand(bool identityKey = true, bool isComputed = true, bool defaultsOnly = false)
         {
@@ -329,7 +324,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             }
 
             return new FakeModificationCommand(
-                "Ducks", Schema, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, columnModifications);
+                "Ducks", Schema, new ParameterNameGenerator().GenerateNext, false, columnModifications);
         }
 
         protected ModificationCommand CreateUpdateCommand(bool isComputed = true, bool concurrencyToken = true)
@@ -359,7 +354,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             };
 
             return new FakeModificationCommand(
-                "Ducks", Schema, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, columnModifications);
+                "Ducks", Schema, new ParameterNameGenerator().GenerateNext, false, columnModifications);
         }
 
         protected ModificationCommand CreateDeleteCommand(bool concurrencyToken = true)
@@ -380,7 +375,7 @@ namespace Microsoft.EntityFrameworkCore.Relational.Tests.Update
             };
 
             return new FakeModificationCommand(
-                "Ducks", Schema, new ParameterNameGenerator().GenerateNext, new TestAnnotationProvider(), false, columnModifications);
+                "Ducks", Schema, new ParameterNameGenerator().GenerateNext, false, columnModifications);
         }
 
         protected abstract TestHelpers TestHelpers { get; }

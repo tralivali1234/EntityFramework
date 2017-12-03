@@ -2,25 +2,44 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Moq;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
+namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class ClrPropertySetterFactoryTest
     {
         [Fact]
         public void Property_is_returned_if_it_implements_IClrPropertySetter()
         {
-            var setterMock = new Mock<IClrPropertySetter>();
-            var propertyMock = setterMock.As<IProperty>();
+            var property = new FakeProperty();
 
-            var source = new ClrPropertySetterFactory();
+            Assert.Same(property, new ClrPropertySetterFactory().Create(property));
+        }
 
-            Assert.Same(setterMock.Object, source.Create(propertyMock.Object));
+        private class FakeProperty : IProperty, IClrPropertySetter
+        {
+            public void SetClrValue(object instance, object value) => throw new NotImplementedException();
+            public object this[string name] => throw new NotImplementedException();
+            public IAnnotation FindAnnotation(string name) => throw new NotImplementedException();
+            public IEnumerable<IAnnotation> GetAnnotations() => throw new NotImplementedException();
+            public string Name { get; }
+            public ITypeBase DeclaringType { get; }
+            public Type ClrType { get; }
+            public bool IsShadowProperty { get; }
+            public IEntityType DeclaringEntityType { get; }
+            public bool IsNullable { get; }
+            public PropertySaveBehavior BeforeSaveBehavior { get; }
+            public PropertySaveBehavior AfterSaveBehavior { get; }
+            public bool IsReadOnlyBeforeSave { get; }
+            public bool IsReadOnlyAfterSave { get; }
+            public bool IsStoreGeneratedAlways { get; }
+            public ValueGenerated ValueGenerated { get; }
+            public bool IsConcurrencyToken { get; }
+            public PropertyInfo PropertyInfo { get; }
+            public FieldInfo FieldInfo { get; }
         }
 
         [Fact]
@@ -196,18 +215,20 @@ namespace Microsoft.EntityFrameworkCore.Tests.Metadata.Internal
             var entityType = new Model().AddEntityType(typeof(ConcreteEntity1));
             var property = entityType.AddProperty(typeof(ConcreteEntity1).GetProperty(nameof(ConcreteEntity1.NoSetterProperty)));
             // ReSharper disable once NotAccessedVariable
-            var _ = new ConcreteEntity1();
+            _ = new ConcreteEntity1();
 
-            Assert.Throws<InvalidOperationException>(() =>
-                new ClrPropertySetterFactory().Create(property));
+            Assert.Throws<InvalidOperationException>(
+                () =>
+                    new ClrPropertySetterFactory().Create(property));
 
             entityType = new Model().AddEntityType(typeof(ConcreteEntity2));
             property = entityType.AddProperty(typeof(ConcreteEntity2).GetProperty(nameof(ConcreteEntity2.NoSetterProperty)));
             // ReSharper disable once RedundantAssignment
             _ = new ConcreteEntity2();
 
-            Assert.Throws<InvalidOperationException>(() =>
-                new ClrPropertySetterFactory().Create(property));
+            Assert.Throws<InvalidOperationException>(
+                () =>
+                    new ClrPropertySetterFactory().Create(property));
         }
 
         #region Fixture

@@ -2,9 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
+
 // ReSharper disable NonReadonlyMemberInGetHashCode
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNavigationsModel
+namespace Microsoft.EntityFrameworkCore.TestModels.ComplexNavigationsModel
 {
     public class Level4
     {
@@ -31,7 +32,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

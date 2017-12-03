@@ -202,7 +202,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="name">
         ///     The name to be used for the parameter when the command is executed against the database.
         /// </param>
-        /// <param name="property"></param>
+        /// <param name="property"> The property that the type for this parameter will come from. </param>
         /// <returns> The same builder instance so that multiple calls can be chained. </returns>
         public static IRelationalCommandBuilder AddParameter(
             [NotNull] this IRelationalCommandBuilder commandBuilder,
@@ -244,6 +244,31 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Check.NotNull(buildAction, nameof(buildAction));
 
             commandBuilder.ParameterBuilder.AddCompositeParameter(invariantName, buildAction);
+
+            return commandBuilder;
+        }
+
+        /// <summary>
+        ///     Adds a parameter.
+        /// </summary>
+        /// <param name="commandBuilder"> The command builder. </param>
+        /// <param name="invariantName">
+        ///     The key that identifies this parameter. Note that <see cref="IRelationalParameter" /> just represents a
+        ///     placeholder for a parameter and not the actual value. This is because the same command can be
+        ///     reused multiple times with different parameter values.
+        /// </param>
+        /// <param name="dbParameter"> The DbParameter being added. </param>
+        /// <returns> The same builder instance so that multiple calls can be chained. </returns>
+        public static IRelationalCommandBuilder AddRawParameter(
+            [NotNull] this IRelationalCommandBuilder commandBuilder,
+            [NotNull] string invariantName,
+            [NotNull] DbParameter dbParameter)
+        {
+            Check.NotNull(commandBuilder, nameof(commandBuilder));
+            Check.NotEmpty(invariantName, nameof(invariantName));
+            Check.NotNull(dbParameter, nameof(dbParameter));
+
+            commandBuilder.ParameterBuilder.AddRawParameter(invariantName, dbParameter);
 
             return commandBuilder;
         }

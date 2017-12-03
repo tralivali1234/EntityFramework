@@ -12,10 +12,13 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     /// </summary>
     public class SqlServerTransientExceptionDetector
     {
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static bool ShouldRetryOn([NotNull] Exception ex)
         {
-            var sqlException = ex as SqlException;
-            if (sqlException != null)
+            if (ex is SqlException sqlException)
             {
                 foreach (SqlError err in sqlException.Errors)
                 {
@@ -108,10 +111,10 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                         // The instance of SQL Server you attempted to connect to does not support encryption.
                         case 20:
                             return true;
-                        // This exception can be thrown even if the operation completed succesfully, so it's safer to let the application fail.
-                        // DBNETLIB Error Code: -2
-                        // Timeout expired. The timeout period elapsed prior to completion of the operation or the server is not responding. The statement has been terminated.
-                        //case -2:
+                            // This exception can be thrown even if the operation completed succesfully, so it's safer to let the application fail.
+                            // DBNETLIB Error Code: -2
+                            // Timeout expired. The timeout period elapsed prior to completion of the operation or the server is not responding. The statement has been terminated.
+                            //case -2:
                     }
                 }
 

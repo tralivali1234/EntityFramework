@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using JetBrains.Annotations;
@@ -66,10 +65,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (foreignKey.DeclaringEntityType != entityType
                 && foreignKey.PrincipalEntityType != entityType)
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationshipStrict(
-                    entityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName(),
-                    foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationshipStrict(
+                        entityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             return foreignKey.IsSelfReferencing()
@@ -87,10 +87,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (!foreignKey.DeclaringEntityType.IsAssignableFrom(entityType)
                 && !foreignKey.PrincipalEntityType.IsAssignableFrom(entityType))
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationship(
-                    entityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName(),
-                    foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationship(
+                        entityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             return foreignKey.IsIntraHierarchical()
@@ -107,10 +108,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (foreignKey.DeclaringEntityType != entityType
                 && foreignKey.PrincipalEntityType != entityType)
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationshipStrict(
-                    entityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName(),
-                    foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationshipStrict(
+                        entityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             return foreignKey.IsSelfReferencing()
@@ -128,8 +130,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (!foreignKey.DeclaringEntityType.IsAssignableFrom(entityType)
                 && !foreignKey.PrincipalEntityType.IsAssignableFrom(entityType))
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationship(
-                    entityType.DisplayName(), foreignKey.DeclaringEntityType.DisplayName(), foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationship(
+                        entityType.DisplayName(), foreignKey.DeclaringEntityType.DisplayName(), foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             return foreignKey.IsIntraHierarchical()
@@ -165,10 +168,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (foreignKey.DeclaringEntityType != entityType
                 && foreignKey.PrincipalEntityType != entityType)
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationshipStrict(
-                    entityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName(),
-                    foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationshipStrict(
+                        entityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             return foreignKey.DeclaringEntityType == entityType
@@ -186,19 +190,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (!foreignKey.DeclaringEntityType.IsAssignableFrom(entityType)
                 && !foreignKey.PrincipalEntityType.IsAssignableFrom(entityType))
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationship(
-                    entityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName(),
-                    foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationship(
+                        entityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             if (foreignKey.IsIntraHierarchical())
             {
-                throw new InvalidOperationException(CoreStrings.IntraHierarchicalAmbiguousTargetEntityType(
-                    entityType.DisplayName(),
-                    Property.Format(foreignKey.Properties),
-                    foreignKey.PrincipalEntityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.IntraHierarchicalAmbiguousTargetEntityType(
+                        entityType.DisplayName(),
+                        Property.Format(foreignKey.Properties),
+                        foreignKey.PrincipalEntityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName()));
             }
 
             return foreignKey.DeclaringEntityType.IsAssignableFrom(entityType)
@@ -215,18 +221,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (!foreignKey.DeclaringEntityType.IsAssignableFrom(entityType)
                 && !foreignKey.PrincipalEntityType.IsAssignableFrom(entityType))
             {
-                throw new InvalidOperationException(CoreStrings.EntityTypeNotInRelationship(
-                    entityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName(),
-                    foreignKey.PrincipalEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.EntityTypeNotInRelationship(
+                        entityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName()));
             }
 
             if (foreignKey.IsIntraHierarchical())
             {
-                throw new InvalidOperationException(CoreStrings.IntraHierarchicalAmbiguousTargetEntityType(
-                    entityType.DisplayName(), Property.Format(foreignKey.Properties),
-                    foreignKey.PrincipalEntityType.DisplayName(),
-                    foreignKey.DeclaringEntityType.DisplayName()));
+                throw new InvalidOperationException(
+                    CoreStrings.IntraHierarchicalAmbiguousTargetEntityType(
+                        entityType.DisplayName(), Property.Format(foreignKey.Properties),
+                        foreignKey.PrincipalEntityType.DisplayName(),
+                        foreignKey.DeclaringEntityType.DisplayName()));
             }
 
             return foreignKey.DeclaringEntityType.IsAssignableFrom(entityType)

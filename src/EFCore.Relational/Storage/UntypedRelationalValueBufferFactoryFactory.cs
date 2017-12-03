@@ -11,6 +11,7 @@ using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
+using Remotion.Linq.Parsing.ExpressionVisitors;
 
 namespace Microsoft.EntityFrameworkCore.Storage
 {
@@ -49,25 +50,21 @@ namespace Microsoft.EntityFrameworkCore.Storage
 
         private struct CacheKey
         {
-            public CacheKey(IReadOnlyList<Type> valueTypes)
-            {
-                ValueTypes = valueTypes;
-            }
+            public CacheKey(IReadOnlyList<TypeMaterializationInfo> typeMaterializationInfo)
+                => TypeMaterializationInfo = typeMaterializationInfo;
 
-            public IReadOnlyList<Type> ValueTypes { get; }
-
-            private bool Equals(CacheKey other) => ValueTypes.SequenceEqual(other.ValueTypes);
+            public IReadOnlyList<TypeMaterializationInfo> TypeMaterializationInfo { get; }
 
             public override bool Equals(object obj)
-                => !ReferenceEquals(null, obj) && obj is CacheKey && Equals((CacheKey)obj);
+                => !(obj is null)
+                   && (obj is CacheKey
+                       && Equals((CacheKey)obj));
+
+            private bool Equals(CacheKey other)
+                => TypeMaterializationInfo.SequenceEqual(other.TypeMaterializationInfo);
 
             public override int GetHashCode()
-            {
-                unchecked
-                {
-                    return ValueTypes.Aggregate(0, (t, v) => (t * 397) ^ v.GetHashCode());
-                }
-            }
+                => TypeMaterializationInfo.Aggregate(0, (t, v) => (t * 397) ^ v.GetHashCode());
         }
 
         private readonly ConcurrentDictionary<CacheKey, Action<object[]>> _cache
@@ -87,14 +84,32 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <returns>
         ///     The newly created <see cref="IRelationalValueBufferFactoryFactory" />.
         /// </returns>
+        [Obsolete("Use Create(IReadOnlyList<TypeMaterializationInfo>).")]
         public virtual IRelationalValueBufferFactory Create(
             IReadOnlyList<Type> valueTypes, IReadOnlyList<int> indexMap)
         {
-            var processValuesAction = _cache.GetOrAdd(new CacheKey(valueTypes), _createValueProcessorDelegate);
+            Check.NotNull(valueTypes, nameof(valueTypes));
 
-            return indexMap == null
-                ? (IRelationalValueBufferFactory)new UntypedRelationalValueBufferFactory(Dependencies, processValuesAction)
-                : new RemappingUntypedRelationalValueBufferFactory(Dependencies, indexMap, processValuesAction);
+            var mapper = Dependencies.TypeMapper;
+
+            return Create(valueTypes.Select(
+                (t, i) => new TypeMaterializationInfo(t, null, mapper, indexMap?[i] ?? -1)).ToList());
+        }
+
+        /// <summary>
+        ///     Creates a new <see cref="IRelationalValueBufferFactory" />.
+        /// </summary>
+        /// <param name="types"> Types and mapping for the values to be read. </param>
+        /// <returns> The newly created <see cref="IRelationalValueBufferFactoryFactory" />. </returns>
+        public virtual IRelationalValueBufferFactory Create(IReadOnlyList<TypeMaterializationInfo> types)
+        {
+            Check.NotNull(types, nameof(types));
+
+            var processValuesAction = _cache.GetOrAdd(new CacheKey(types), _createValueProcessorDelegate);
+
+            return types.Any(t => t.Index >= 0)
+                ? (IRelationalValueBufferFactory)new RemappingUntypedRelationalValueBufferFactory(Dependencies, types, processValuesAction)
+                : new UntypedRelationalValueBufferFactory(Dependencies, types, processValuesAction);
         }
 
         private static readonly Func<CacheKey, Action<object[]>> _createValueProcessorDelegate = CreateValueProcessor;
@@ -102,36 +117,81 @@ namespace Microsoft.EntityFrameworkCore.Storage
         private static Action<object[]> CreateValueProcessor(CacheKey cacheKey)
         {
             var valuesParam = Expression.Parameter(typeof(object[]), "values");
+            var conversions = new List<Expression>();   
+            var materializationInfo = cacheKey.TypeMaterializationInfo;
 
-            var conversions = new List<Expression>();
-            var valueTypes = cacheKey.ValueTypes;
-
-            var valueVariable = Expression.Variable(typeof(object), "value");
-
-            for (var i = 0; i < valueTypes.Count; i++)
+            for (var i = 0; i < materializationInfo.Count; i++)
             {
-                var type = valueTypes[i];
+                var modelType = materializationInfo[i].ModelType;
+                var converter = materializationInfo[i].Mapping?.Converter;
 
-                if (type.UnwrapNullableType().GetTypeInfo().IsEnum)
+                var arrayAccess =
+                    Expression.ArrayAccess(valuesParam, Expression.Constant(i));
+
+                if (converter != null)
                 {
-                    var arrayAccess = Expression.ArrayAccess(valuesParam, Expression.Constant(i));
+                    Expression valueExpression = Expression.Convert(
+                        arrayAccess,
+                        converter.StoreType);
 
-                    conversions.Add(Expression.Assign(valueVariable, arrayAccess));
+                    var passNullToConverter
+                        = converter.StoreType.IsNullableType()
+                          && !modelType.IsNullableType();
 
+                    if (passNullToConverter)
+                    {
+                        valueExpression
+                            = Expression.Condition(
+                                Expression.ReferenceEqual(
+                                    arrayAccess,
+                                    Expression.Constant(DBNull.Value)),
+                                Expression.Default(converter.StoreType),
+                                valueExpression);
+                    }
+
+                    valueExpression
+                        = Expression.Convert(
+                            ReplacingExpressionVisitor.Replace(
+                                converter.ConvertFromStoreExpression.Parameters.Single(),
+                                valueExpression,
+                                converter.ConvertFromStoreExpression.Body),
+                            typeof(object));
+
+                    if (!passNullToConverter)
+                    {
+                        valueExpression
+                            = Expression.Condition(
+                                Expression.ReferenceEqual(
+                                    arrayAccess,
+                                    Expression.Constant(DBNull.Value)),
+                                Expression.Constant(null),
+                                valueExpression);
+                    }
+
+                    conversions.Add(
+                        Expression.Assign(
+                            arrayAccess,
+                            valueExpression
+                        ));
+                }
+
+                if (converter == null
+                    && modelType.UnwrapNullableType().GetTypeInfo().IsEnum)
+                {
                     conversions.Add(
                         Expression.IfThen(
                             Expression.IsFalse(
                                 Expression.ReferenceEqual(
-                                    valueVariable,
+                                    arrayAccess,
                                     Expression.Constant(DBNull.Value))),
                             Expression.Assign(
                                 arrayAccess,
                                 Expression.Convert(
                                     Expression.Convert(
                                         Expression.Convert(
-                                            valueVariable,
-                                            type.UnwrapEnumType()),
-                                        type),
+                                            arrayAccess,
+                                            modelType.UnwrapEnumType()),
+                                        modelType),
                                     typeof(object)))));
                 }
             }
@@ -143,7 +203,6 @@ namespace Microsoft.EntityFrameworkCore.Storage
 
             return Expression.Lambda<Action<object[]>>(
                     Expression.Block(
-                        new[] { valueVariable },
                         conversions),
                     valuesParam)
                 .Compile();

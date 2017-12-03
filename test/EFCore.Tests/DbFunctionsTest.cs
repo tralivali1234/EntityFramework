@@ -6,7 +6,7 @@ using Xunit;
 // ReSharper disable ArgumentsStyleStringLiteral
 // ReSharper disable InconsistentNaming
 
-namespace Microsoft.EntityFrameworkCore.Tests
+namespace Microsoft.EntityFrameworkCore
 {
     public class DbFunctionsTest
     {
@@ -48,9 +48,11 @@ namespace Microsoft.EntityFrameworkCore.Tests
             Assert.True(_functions.Like("ABC", "a_c"));
             Assert.True(_functions.Like("ABC ", "a_c"));
             Assert.True(_functions.Like("ABC ", "%%%"));
+            Assert.True(_functions.Like("a\\b", "a\\_"));
 
             Assert.False(_functions.Like("ABC", "__"));
             Assert.False(_functions.Like("ab", "___"));
+            Assert.False(_functions.Like("a_", "a\\_"));
         }
 
         [Fact]
@@ -90,25 +92,25 @@ namespace Microsoft.EntityFrameworkCore.Tests
         [Fact]
         public void Like_when_escaping()
         {
-            Assert.True(_functions.Like("50%", "%!%", '!'));
-            Assert.True(_functions.Like("50%", "50!%", '!'));
-            Assert.True(_functions.Like("50%", "__!%", '!'));
-            Assert.True(_functions.Like("_%_%_%", "!_!%!_!%!_!%", '!'));
+            Assert.True(_functions.Like("50%", "%!%", "!"));
+            Assert.True(_functions.Like("50%", "50!%", "!"));
+            Assert.True(_functions.Like("50%", "__!%", "!"));
+            Assert.True(_functions.Like("_%_%_%", "!_!%!_!%!_!%", "!"));
 
-            Assert.False(_functions.Like("abc", "!%", '!'));
-            Assert.False(_functions.Like("50%abc", "50!%", '!'));
+            Assert.False(_functions.Like("abc", "!%", "!"));
+            Assert.False(_functions.Like("50%abc", "50!%", "!"));
         }
 
         [Fact]
         public void Like_when_escaping_with_regex_char()
         {
-            Assert.True(_functions.Like("50%", "%|%", '|'));
-            Assert.True(_functions.Like("50%", "50|%", '|'));
-            Assert.True(_functions.Like("50%", "__|%", '|'));
-            Assert.True(_functions.Like("_%_%_%", "|_|%|_|%|_|%", '|'));
+            Assert.True(_functions.Like("50%", "%|%", "|"));
+            Assert.True(_functions.Like("50%", "50|%", "|"));
+            Assert.True(_functions.Like("50%", "__|%", "|"));
+            Assert.True(_functions.Like("_%_%_%", "|_|%|_|%|_|%", "|"));
 
-            Assert.False(_functions.Like("abc", "|%", '|'));
-            Assert.False(_functions.Like("50%abc", "50|%", '|'));
+            Assert.False(_functions.Like("abc", "|%", "|"));
+            Assert.False(_functions.Like("50%abc", "50|%", "|"));
         }
 
         [Fact]

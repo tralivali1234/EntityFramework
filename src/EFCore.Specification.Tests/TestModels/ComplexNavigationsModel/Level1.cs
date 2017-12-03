@@ -3,9 +3,10 @@
 
 using System;
 using System.Collections.Generic;
+
 // ReSharper disable NonReadonlyMemberInGetHashCode
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNavigationsModel
+namespace Microsoft.EntityFrameworkCore.TestModels.ComplexNavigationsModel
 {
     public class Level1
     {
@@ -31,7 +32,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ComplexNa
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

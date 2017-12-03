@@ -54,8 +54,8 @@ namespace Microsoft.EntityFrameworkCore.Internal
             return this;
         }
 
-        private string BuildDatabaseNamesString(IEnumerable<IDatabaseProvider> available)
-            => string.Join(", ", available.Select(e => "'" + e.InvariantName +"'"));
+        private static string BuildDatabaseNamesString(IEnumerable<IDatabaseProvider> available)
+            => string.Join(", ", available.Select(e => "'" + e.Name + "'"));
 
         private IModel CreateModel()
         {

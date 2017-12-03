@@ -5,11 +5,13 @@ using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
+// ReSharper disable ClassNeverInstantiated.Local
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public abstract class MigrationSqlGeneratorTestBase
     {
@@ -174,11 +176,12 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                 modelBuilder =>
                     {
                         modelBuilder.Entity("Person");
-                        modelBuilder.Entity("SpecialPerson", b =>
-                            {
-                                b.HasBaseType("Person");
-                                b.Property<string>("Name").HasMaxLength(30);
-                            });
+                        modelBuilder.Entity(
+                            "SpecialPerson", b =>
+                                {
+                                    b.HasBaseType("Person");
+                                    b.Property<string>("Name").HasMaxLength(30);
+                                });
 
                         modelBuilder.Entity("MoreSpecialPerson").HasBaseType("SpecialPerson");
                     },
@@ -210,16 +213,19 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
 
         private class Base
         {
+            // ReSharper disable once UnusedMember.Local
             public int Id { get; set; }
         }
 
         private class Derived1 : Base
         {
+            // ReSharper disable once UnusedMember.Local
             public string Foo { get; set; }
         }
 
         private class Derived2 : Base
         {
+            // ReSharper disable once UnusedMember.Local
             public string Foo { get; set; }
         }
 
@@ -563,9 +569,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                 });
 
         [Fact]
-        public virtual void InsertRowsOperation()
+        public virtual void InsertDataOperation()
             => Generate(
-                new InsertOperation
+                new InsertDataOperation
                 {
                     Table = "People",
                     Columns = new[] { "Id", "Full Name" },
@@ -575,14 +581,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                         { 1, "Daenerys Targaryen" },
                         { 2, "John Snow" },
                         { 3, "Arya Stark" },
-                        { 4, "Harry Strickland" },
+                        { 4, "Harry Strickland" }
                     }
                 });
 
         [Fact]
-        public virtual void DeleteRowsOperation_simple_key()
+        public virtual void DeleteDataOperation_simple_key()
             => Generate(
-                new DeleteOperation
+                new DeleteDataOperation
                 {
                     Table = "People",
                     KeyColumns = new[] { "Id" },
@@ -594,9 +600,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                 });
 
         [Fact]
-        public virtual void DeleteRowsOperation_composite_key()
+        public virtual void DeleteDataOperation_composite_key()
             => Generate(
-                new DeleteOperation
+                new DeleteDataOperation
                 {
                     Table = "People",
                     KeyColumns = new[] { "First Name", "Last Name" },
@@ -608,9 +614,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                 });
 
         [Fact]
-        public virtual void UpdateRowsOperation_simple_key()
+        public virtual void UpdateDataOperation_simple_key()
             => Generate(
-                new UpdateOperation
+                new UpdateDataOperation
                 {
                     Table = "People",
                     KeyColumns = new[] { "Id" },
@@ -628,9 +634,9 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                 });
 
         [Fact]
-        public virtual void UpdateRowsOperation_composite_key()
+        public virtual void UpdateDataOperation_composite_key()
             => Generate(
-                new UpdateOperation
+                new UpdateDataOperation
                 {
                     Table = "People",
                     KeyColumns = new[] { "Id", "Last Name" },
@@ -643,14 +649,14 @@ namespace Microsoft.EntityFrameworkCore.Relational.Specification.Tests
                     Values = new object[,]
                     {
                         { "Hodor" },
-                        { "Homeless Harry" }
+                        { "Harry" }
                     }
                 });
 
         [Fact]
-        public virtual void UpdateRowsOperation_multiple_columns()
+        public virtual void UpdateDataOperation_multiple_columns()
             => Generate(
-                new UpdateOperation
+                new UpdateDataOperation
                 {
                     Table = "People",
                     KeyColumns = new[] { "Id" },

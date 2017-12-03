@@ -5,11 +5,11 @@ using System;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+namespace Microsoft.EntityFrameworkCore
 {
     public class CompositeKeyEndToEndTest : IDisposable
     {
@@ -195,26 +195,29 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Pegasus>(b =>
-                    {
-                        b.ToTable("Pegasus");
-                        b.HasKey(e => new { e.Id1, e.Id2 });
-                    });
+                modelBuilder.Entity<Pegasus>(
+                    b =>
+                        {
+                            b.ToTable("Pegasus");
+                            b.HasKey(e => new { e.Id1, e.Id2 });
+                        });
 
-                modelBuilder.Entity<Unicorn>(b =>
-                    {
-                        b.ToTable("Unicorn");
-                        b.HasKey(e => new { e.Id1, e.Id2, e.Id3 });
-                        b.Property(e => e.Id1).UseSqlServerIdentityColumn();
-                        b.Property(e => e.Id3).ValueGeneratedOnAdd();
-                    });
+                modelBuilder.Entity<Unicorn>(
+                    b =>
+                        {
+                            b.ToTable("Unicorn");
+                            b.HasKey(e => new { e.Id1, e.Id2, e.Id3 });
+                            b.Property(e => e.Id1).UseSqlServerIdentityColumn();
+                            b.Property(e => e.Id3).ValueGeneratedOnAdd();
+                        });
 
-                modelBuilder.Entity<EarthPony>(b =>
-                    {
-                        b.ToTable("EarthPony");
-                        b.HasKey(e => new { e.Id1, e.Id2 });
-                        b.Property(e => e.Id1).UseSqlServerIdentityColumn();
-                    });
+                modelBuilder.Entity<EarthPony>(
+                    b =>
+                        {
+                            b.ToTable("EarthPony");
+                            b.HasKey(e => new { e.Id1, e.Id2 });
+                            b.Property(e => e.Id1).UseSqlServerIdentityColumn();
+                        });
             }
         }
 
@@ -242,7 +245,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
 
         public CompositeKeyEndToEndTest()
         {
-            TestStore = SqlServerTestStore.Create("CompositeKeyEndToEndTest");
+            TestStore = SqlServerTestStore.CreateInitialized("CompositeKeyEndToEndTest");
         }
 
         protected SqlServerTestStore TestStore { get; }

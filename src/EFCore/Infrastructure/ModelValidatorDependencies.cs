@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Infrastructure
@@ -16,10 +17,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
     ///     </para>
     ///     <para>
     ///         Do not construct instances of this class directly from either provider or application code as the
-    ///         constructor signature may change as new dependencies are added. Instead, use this type in 
-    ///         your constructor so that an instance will be created and injected automatically by the 
-    ///         dependency injection container. To create an instance with some dependent services replaced, 
-    ///         first resolve the object from the dependency injection container, then replace selected 
+    ///         constructor signature may change as new dependencies are added. Instead, use this type in
+    ///         your constructor so that an instance will be created and injected automatically by the
+    ///         dependency injection container. To create an instance with some dependent services replaced,
+    ///         first resolve the object from the dependency injection container, then replace selected
     ///         services using the 'With...' methods. Do not call the constructor at any point in this process.
     ///     </para>
     /// </summary>
@@ -34,16 +35,16 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///         not used in application code.
         ///     </para>
         ///     <para>
-        ///         Do not call this constructor directly from either provider or application code as it may change 
-        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance 
-        ///         will be created and injected automatically by the dependency injection container. To create 
-        ///         an instance with some dependent services replaced, first resolve the object from the dependency 
-        ///         injection container, then replace selected services using the 'With...' methods. Do not call 
+        ///         Do not call this constructor directly from either provider or application code as it may change
+        ///         as new dependencies are added. Instead, use this type in your constructor so that an instance
+        ///         will be created and injected automatically by the dependency injection container. To create
+        ///         an instance with some dependent services replaced, first resolve the object from the dependency
+        ///         injection container, then replace selected services using the 'With...' methods. Do not call
         ///         the constructor at any point in this process.
         ///     </para>
         /// </summary>
         /// <param name="logger"> The logger. </param>
-        public ModelValidatorDependencies([NotNull] IDiagnosticsLogger<LoggerCategory.Model.Validation> logger)
+        public ModelValidatorDependencies([NotNull] IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
         {
             Check.NotNull(logger, nameof(logger));
 
@@ -53,14 +54,14 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// <summary>
         ///     The logger.
         /// </summary>
-        public IDiagnosticsLogger<LoggerCategory.Model.Validation> Logger { get; }
+        public IDiagnosticsLogger<DbLoggerCategory.Model.Validation> Logger { get; }
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="logger"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
-        public ModelValidatorDependencies With([NotNull] IDiagnosticsLogger<LoggerCategory.Model.Validation> logger)
+        public ModelValidatorDependencies With([NotNull] IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
             => new ModelValidatorDependencies(logger);
     }
 }

@@ -1,15 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <Import Project="..\..\build\common.props" />
-
   <PropertyGroup>
-    <TargetFrameworks>net46;netcoreapp2.0</TargetFrameworks>
-    <TargetFrameworks Condition="'$(OS)' != 'Windows_NT' OR '$(CoreOnly)' == 'True'">netcoreapp2.0</TargetFrameworks>
+    <TargetFrameworks>$(StandardTestTfms)</TargetFrameworks>
     <AssemblyName>Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests</AssemblyName>
-    <RootNamespace>Microsoft.EntityFrameworkCore.Sqlite.FunctionalTests</RootNamespace>
-    <!-- TODO: Remove when Microsoft/vstest#428 is fixed. -->
-    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <RootNamespace>Microsoft.EntityFrameworkCore</RootNamespace>
+    <!-- Workaround https://github.com/Microsoft/vstest/issues/792. -->
+    <HasRuntimeOutput>true</HasRuntimeOutput>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,18 +20,14 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\EFCore.Relational.Specification.Tests\EFCore.Relational.Specification.Tests.csproj" />
     <ProjectReference Include="..\..\src\EFCore.Sqlite.Core\EFCore.Sqlite.Core.csproj" />
-    <ProjectReference Include="..\..\src\EFCore.Sqlite.Design\EFCore.Sqlite.Design.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
+    <Reference Include="System.Transactions" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(TestSdkVersion)" />
-    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="$(SQLitePCLRawVersion)" />
-    <PackageReference Include="xunit" Version="$(XunitVersion)" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="$(XunitVersion)" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Service Include="{82a7f48d-3b50-4b1e-b82e-3ada8210c358}" />
+    <PackageReference Include="SQLitePCLRaw.bundle_green" Version="$(SQLitePCLRawBundleGreenPackageVersion)" />
   </ItemGroup>
 
 </Project>

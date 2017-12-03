@@ -1,17 +1,17 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
-  <!--
-    Microsoft ResX Schema
-
+  <!-- 
+    Microsoft ResX Schema 
+    
     Version 2.0
-
-    The primary goals of this format is to allow a simple XML format
-    that is mostly human readable. The generation and parsing of the
-    various data types are done through the TypeConverter classes
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
     associated with the data types.
-
+    
     Example:
-
+    
     ... ado.net/XML headers & schema ...
     <resheader name="resmimetype">text/microsoft-resx</resheader>
     <resheader name="version">2.0</resheader>
@@ -26,36 +26,36 @@
         <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
         <comment>This is a comment</comment>
     </data>
-
-    There are any number of "resheader" rows that contain simple
+                
+    There are any number of "resheader" rows that contain simple 
     name/value pairs.
-
-    Each data row contains a name, and value. The row also contains a
-    type or mimetype. Type corresponds to a .NET class that support
-    text/value conversion through the TypeConverter architecture.
-    Classes that don't support this are serialized and stored with the
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
     mimetype set.
-
-    The mimetype is used for serialized objects, and tells the
-    ResXResourceReader how to depersist the object. This is currently not
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
     extensible. For a given mimetype the value must be set accordingly:
-
-    Note - application/x-microsoft.net.object.binary.base64 is the format
-    that the ResXResourceWriter will generate, however the reader can
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
     read any of the formats listed below.
-
+    
     mimetype: application/x-microsoft.net.object.binary.base64
-    value   : The object must be serialized with
+    value   : The object must be serialized with 
             : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
             : and then encoded with base64 encoding.
-
+    
     mimetype: application/x-microsoft.net.object.soap.base64
-    value   : The object must be serialized with
+    value   : The object must be serialized with 
             : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
             : and then encoded with base64 encoding.
 
     mimetype: application/x-microsoft.net.object.bytearray.base64
-    value   : The object must be serialized into a byte array
+    value   : The object must be serialized into a byte array 
             : using a System.ComponentModel.TypeConverter
             : and then encoded with base64 encoding.
     -->
@@ -135,11 +135,18 @@
   <data name="NoConnectionOrConnectionString" xml:space="preserve">
     <value>A relational store has been configured without specifying either the DbConnection or connection string to use.</value>
   </data>
+  <data name="NamedConnectionStringNotFound" xml:space="preserve">
+    <value>A named connection string was used, but the name '{name}' was not found in the application's configuration. Note that named connection strings are only supported when using 'IConfiguration' and a service provider, such as in a typical ASP.NET Core application. See https://go.microsoft.com/fwlink/?linkid=850912 for more information.</value>
+  </data>
   <data name="UnsupportedType" xml:space="preserve">
     <value>No mapping to a relational type can be found for the CLR type '{clrType}'.</value>
   </data>
   <data name="RelationalNotInUse" xml:space="preserve">
     <value>Relational-specific methods can only be used when the context is using a relational database provider.</value>
+  </data>
+  <data name="LogBoolWithDefaultWarning" xml:space="preserve">
+    <value>The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used when the property value is 'null'.</value>
+    <comment>Warning RelationalEventId.BoolWithDefaultWarning string string</comment>
   </data>
   <data name="UpdateStoreException" xml:space="preserve">
     <value>An error occurred while updating the entries. See the inner exception for details.</value>
@@ -150,41 +157,53 @@
   <data name="TransactionAssociatedWithDifferentConnection" xml:space="preserve">
     <value>The specified transaction is not associated with the current connection. Only transactions associated with the current connection may be used.</value>
   </data>
-  <data name="RelationalLoggerOpeningConnection" xml:space="preserve">
+  <data name="LogRelationalLoggerOpeningConnection" xml:space="preserve">
     <value>Opening connection to database '{database}' on server '{server}'.</value>
+    <comment>Debug RelationalEventId.ConnectionOpening string string</comment>
   </data>
-  <data name="RelationalLoggerOpenedConnection" xml:space="preserve">
+  <data name="LogRelationalLoggerOpenedConnection" xml:space="preserve">
     <value>Opened connection to database '{database}' on server '{server}'.</value>
+    <comment>Debug RelationalEventId.ConnectionOpened string string</comment>
   </data>
-  <data name="RelationalLoggerClosingConnection" xml:space="preserve">
+  <data name="LogRelationalLoggerClosingConnection" xml:space="preserve">
     <value>Closing connection to database '{database}' on server '{server}'.</value>
+    <comment>Debug RelationalEventId.ConnectionClosing string string</comment>
   </data>
-  <data name="RelationalLoggerClosedConnection" xml:space="preserve">
+  <data name="LogRelationalLoggerClosedConnection" xml:space="preserve">
     <value>Closed connection to database '{database}' on server '{server}'.</value>
+    <comment>Debug RelationalEventId.ConnectionClosed string string</comment>
   </data>
-  <data name="RelationalLoggerConnectionError" xml:space="preserve">
+  <data name="LogRelationalLoggerConnectionError" xml:space="preserve">
     <value>An error occurred using the connection to database '{database}' on server '{server}'.</value>
+    <comment>Error RelationalEventId.ConnectionError string string</comment>
   </data>
-  <data name="RelationalLoggerBeginningTransaction" xml:space="preserve">
+  <data name="LogRelationalLoggerBeginningTransaction" xml:space="preserve">
     <value>Beginning transaction with isolation level '{isolationLevel}'.</value>
+    <comment>Debug RelationalEventId.TransactionStarted string</comment>
   </data>
-  <data name="RelationalLoggerUsingTransaction" xml:space="preserve">
+  <data name="LogRelationalLoggerUsingTransaction" xml:space="preserve">
     <value>Using an existing transaction with isolation level '{isolationLevel}'.</value>
+    <comment>Debug RelationalEventId.TransactionUsed string</comment>
   </data>
-  <data name="RelationalLoggerCommittingTransaction" xml:space="preserve">
+  <data name="LogRelationalLoggerCommittingTransaction" xml:space="preserve">
     <value>Committing transaction.</value>
+    <comment>Debug RelationalEventId.TransactionCommitted</comment>
   </data>
-  <data name="RelationalLoggerRollingbackTransaction" xml:space="preserve">
+  <data name="LogRelationalLoggerRollingbackTransaction" xml:space="preserve">
     <value>Rolling back transaction.</value>
+    <comment>Debug RelationalEventId.TransactionRolledBack</comment>
   </data>
-  <data name="RelationalLoggerDisposingTransaction" xml:space="preserve">
+  <data name="LogRelationalLoggerDisposingTransaction" xml:space="preserve">
     <value>Disposing transaction.</value>
+    <comment>Debug RelationalEventId.TransactionDisposed</comment>
   </data>
-  <data name="RelationalLoggerTransactionError" xml:space="preserve">
+  <data name="LogRelationalLoggerTransactionError" xml:space="preserve">
     <value>An error occurred using a transaction.</value>
+    <comment>Error RelationalEventId.TransactionError</comment>
   </data>
-  <data name="DisposingDataReader" xml:space="preserve">
+  <data name="LogDisposingDataReader" xml:space="preserve">
     <value>A data reader was disposed.</value>
+    <comment>Debug RelationalEventId.DataReaderDisposing</comment>
   </data>
   <data name="BadSequenceType" xml:space="preserve">
     <value>Invalid type for sequence. Valid types are 'Int64' (the default), 'Int32', 'Int16', and 'Byte'.</value>
@@ -213,29 +232,48 @@
   <data name="DiscriminatorPropertyNotFound" xml:space="preserve">
     <value>Unable to set property '{property}' as a discriminator for entity type '{entityType}' because it is not a property of '{entityType}'.</value>
   </data>
-  <data name="AmbientTransaction" xml:space="preserve">
-    <value>An ambient transaction has been detected. Entity Framework Core does not support ambient transactions. See http://go.microsoft.com/fwlink/?LinkId=800142</value>
+  <data name="LogAmbientTransaction" xml:space="preserve">
+    <value>An ambient transaction has been detected. The current provider does not support ambient transactions. See http://go.microsoft.com/fwlink/?LinkId=800142</value>
+    <comment>Warning RelationalEventId.AmbientTransactionWarning</comment>
   </data>
-  <data name="PossibleUnintendedUseOfEquals" xml:space="preserve">
-    <value>Possible unintended use of method Equals(object) for arguments of different types: '{left}', '{right}'. This comparison will always return 'false'.</value>
+  <data name="LogPossibleUnintendedUseOfEquals" xml:space="preserve">
+    <value>Possible unintended use of method Equals(object) for arguments of different types in expression '{expression}'. This comparison will always return 'false'.</value>
+    <comment>Warning RelationalEventId.QueryPossibleUnintendedUseOfEqualsWarning object</comment>
+  </data>
+  <data name="LogQueryPossibleExceptionWithAggregateOperator" xml:space="preserve">
+    <value>Possible unintended use of a potentially throwing aggregate method (Min, Max, Average) in a subquery. Client evaluation will be used and operator will throw if no data exists. Changing the subquery result type to a nullable type will allow full translation.</value>
+    <comment>Warning RelationalEventId.QueryPossibleExceptionWithAggregateOperator</comment>
   </data>
   <data name="StoredProcedureIncludeNotSupported" xml:space="preserve">
     <value>The Include operation is not supported when calling a stored procedure.</value>
   </data>
-  <data name="GeneratingDown" xml:space="preserve">
+  <data name="LogGeneratingDown" xml:space="preserve">
     <value>Generating down script for migration '{migration}'.</value>
+    <comment>Debug RelationalEventId.MigrationGeneratingDownScript string</comment>
   </data>
-  <data name="GeneratingUp" xml:space="preserve">
+  <data name="LogGeneratingUp" xml:space="preserve">
     <value>Generating up script for migration '{migration}'.</value>
+    <comment>Debug RelationalEventId.MigrationGeneratingUpScript string</comment>
   </data>
-  <data name="ApplyingMigration" xml:space="preserve">
+  <data name="LogApplyingMigration" xml:space="preserve">
     <value>Applying migration '{migration}'.</value>
+    <comment>Information RelationalEventId.MigrationApplying string</comment>
   </data>
-  <data name="RevertingMigration" xml:space="preserve">
+  <data name="LogRevertingMigration" xml:space="preserve">
     <value>Reverting migration '{migration}'.</value>
+    <comment>Information RelationalEventId.MigrationReverting string</comment>
   </data>
-  <data name="UsingConnection" xml:space="preserve">
-    <value>Using database '{database}' on server '{dataSource}'.</value>
+  <data name="LogMigrating" xml:space="preserve">
+    <value>Migrating using database '{database}' on server '{dataSource}'.</value>
+    <comment>Debug RelationalEventId.MigrateUsingConnection string string</comment>
+  </data>
+  <data name="LogNoMigrationsApplied" xml:space="preserve">
+    <value>No migrations were applied. The database is already up to date.</value>
+    <comment>Information RelationalEventId.MigrationsNotApplied</comment>
+  </data>
+  <data name="LogNoMigrationsFound" xml:space="preserve">
+    <value>No migrations were found in assembly '{migrationsAssembly}'.</value>
+    <comment>Debug RelationalEventId.MigrationsNotFound string</comment>
   </data>
   <data name="FromSqlMissingColumn" xml:space="preserve">
     <value>The required column '{column}' was not present in the results of a 'FromSql' operation.</value>
@@ -246,8 +284,12 @@
   <data name="IncompatibleTableNoRelationship" xml:space="preserve">
     <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between the primary key {primaryKey} and the primary key {otherPrimaryKey}.</value>
   </data>
-  <data name="KeyHasDefaultValue" xml:space="preserve">
+  <data name="IncompatibleTableDerivedPrincipal" xml:space="preserve">
+    <value>Cannot use table '{table}' for entity type '{dependentType}' since it has a relationship to a derived entity type '{principalType}'. Either point the relationship to the base type '{rootType}' or map '{dependentType}' to a different table.</value>
+  </data>
+  <data name="LogKeyHasDefaultValue" xml:space="preserve">
     <value>Property '{property}' on entity type '{entityType}' is part of a primary or alternate key but has a constant default value set. Constant default values are not useful for primary or alternate keys since these properties must always have non-null unqiue values.</value>
+    <comment>Warning RelationalEventId.ModelValidationKeyDefaultValueWarning string string</comment>
   </data>
   <data name="DiscriminatorEntityTypeNotDerived" xml:space="preserve">
     <value>Cannot configure the discriminator value for entity type '{entityType}' because it doesn't derive from '{rootEntityType}'.</value>
@@ -264,8 +306,9 @@
   <data name="NoDiscriminatorValue" xml:space="preserve">
     <value>The entity type '{entityType}' is part of a hierarchy, but does not have a discriminator value configured.</value>
   </data>
-  <data name="ClientEvalWarning" xml:space="preserve">
+  <data name="LogClientEvalWarning" xml:space="preserve">
     <value>The LINQ expression '{expression}' could not be translated and will be evaluated locally.</value>
+    <comment>Warning RelationalEventId.QueryClientEvaluationWarning object</comment>
   </data>
   <data name="MissingParameterValue" xml:space="preserve">
     <value>No value provided for required parameter '{parameter}'.</value>
@@ -273,14 +316,17 @@
   <data name="ParameterNotObjectArray" xml:space="preserve">
     <value>Cannot use the value provided for parameter '{parameter}' because it isn't assignable to type object[].</value>
   </data>
-  <data name="RelationalLoggerExecutingCommand" xml:space="preserve">
+  <data name="LogRelationalLoggerExecutingCommand" xml:space="preserve">
     <value>Executing DbCommand [Parameters=[{parameters}], CommandType='{commandType}', CommandTimeout='{commandTimeout}']{newLine}{commandText}</value>
+    <comment>Debug RelationalEventId.CommandExecuting string System.Data.CommandType int string string</comment>
   </data>
-  <data name="RelationalLoggerExecutedCommand" xml:space="preserve">
+  <data name="LogRelationalLoggerExecutedCommand" xml:space="preserve">
     <value>Executed DbCommand ({elapsed}ms) [Parameters=[{parameters}], CommandType='{commandType}', CommandTimeout='{commandTimeout}']{newLine}{commandText}</value>
+    <comment>Information RelationalEventId.CommandExecuted string string System.Data.CommandType int string string</comment>
   </data>
-  <data name="RelationalLoggerCommandFailed" xml:space="preserve">
+  <data name="LogRelationalLoggerCommandFailed" xml:space="preserve">
     <value>Failed executing DbCommand ({elapsed}ms) [Parameters=[{parameters}], CommandType='{commandType}', CommandTimeout='{commandTimeout}']{newLine}{commandText}</value>
+    <comment>Error RelationalEventId.CommandError string string System.Data.CommandType int string string</comment>
   </data>
   <data name="DuplicateColumnNameDataTypeMismatch" xml:space="preserve">
     <value>'{entityType1}.{property1}' and '{entityType2}.{property2}' are both mapped to column '{columnName}' in '{table}' but are configured to use different data types ('{dataType1}' and '{dataType2}').</value>
@@ -307,10 +353,10 @@
     <value>The instance of entity type '{firstEntityType}' and the instance of entity type '{secondEntityType}' are mapped to the same row with the key value '{keyValue}', but have different original property values '{firstConflictingValues}' and '{secondConflictingValues}' mapped to {columns}.</value>
   </data>
   <data name="SharedRowEntryCountMismatch" xml:space="preserve">
-    <value>There are '{mappedEntityTypeCount}' entity types sharing the table '{tableName}', but only '{entryCount}' entries with the same key values have been marked as '{state}'. The missing entities should be assignable to {missingEntityTypes}. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
+    <value>The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
   </data>
   <data name="SharedRowEntryCountMismatchSensitive" xml:space="preserve">
-    <value>There are '{mappedEntityTypeCount}' entity types sharing the table '{tableName}', but only '{entryCount}' entries with the same key values '{keyValue}' have been marked as '{state}'. The missing entities should be assignable to {missingEntityTypes}.</value>
+    <value>The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.</value>
   </data>
   <data name="IncorrectDefaultValueType" xml:space="preserve">
     <value>Cannot set default value '{value}' of type '{valueType}' on property '{property}' of type '{propertyType}' in entity type '{entityType}'.</value>
@@ -356,5 +402,45 @@
   </data>
   <data name="UnsupportedPropertyType" xml:space="preserve">
     <value>No mapping to a relational type can be found for property '{entity}.{property}' with the CLR type '{clrType}'.</value>
+  </data>
+  <data name="NoElements" xml:space="preserve">
+    <value>Sequence contains no elements.</value>
+  </data>
+  <data name="LogRelationalLoggerConnectionErrorAsDebug" xml:space="preserve">
+    <value>An error occurred using the connection to database '{database}' on server '{server}'.</value>
+    <comment>Debug RelationalEventId.ConnectionError string string</comment>
+  </data>
+  <data name="TimeoutTooSmall" xml:space="preserve">
+    <value>Timeout must be greater than or equal to zero.  Provided: {seconds} seconds.</value>
+  </data>
+  <data name="TimeoutTooBig" xml:space="preserve">
+    <value>Timeout must be less than or equal to Int32.MaxValue (2147483647) seconds.  Provided: {seconds} seconds.</value>
+  </data>
+  <data name="DbFunctionInvalidReturnType" xml:space="preserve">
+    <value>The DbFunction '{function}' has an invalid return type '{type}'. Ensure that the return type can be mapped by the current provider.</value>
+  </data>
+  <data name="DbFunctionNameEmpty" xml:space="preserve">
+    <value>The DbFunction '{function}' has no name set. Name is a required property of a DbFunction.</value>
+  </data>
+  <data name="DbFunctionInvalidParameterType" xml:space="preserve">
+    <value>The parameter '{parameter}' for the DbFunction '{function}' has an invalid type '{type}'. Ensure the parameter type can be mapped by the current provider.</value>
+  </data>
+  <data name="DbFunctionGenericMethodNotSupported" xml:space="preserve">
+    <value>The DbFunction '{function}' is generic. Generic methods are not supported.</value>
+  </data>
+  <data name="DbFunctionExpressionIsNotMethodCall" xml:space="preserve">
+    <value>The provided DbFunction expression '{expression}' is invalid. The expression should be a lambda expression containing a single method call to the target static method. Default values can be provided as arguments if required. E.g. () =&gt; SomeClass.SomeMethod(null, 0)</value>
+  </data>
+  <data name="DbFunctionInvalidInstanceType" xml:space="preserve">
+    <value>The DbFunction '{function}' defined on type '{type}' must be either a static method or an instance method defined on a DbContext subclass. Instance methods on other types are not supported.</value>
+  </data>
+  <data name="ConflictingAmbientTransaction" xml:space="preserve">
+    <value>An ambient transaction has been detected. The ambient transaction needs to be completed before beginning a transaction on this connection.</value>
+  </data>
+  <data name="ConflictingEnlistedTransaction" xml:space="preserve">
+    <value>The connection is currently enlisted in a transaction. The enlisted transaction needs to be completed before starting a transaction.</value>
+  </data>
+  <data name="InvalidMinBatchSize" xml:space="preserve">
+    <value>The specified MinBatchSize value is not valid. It must be a positive number.</value>
   </data>
 </root>

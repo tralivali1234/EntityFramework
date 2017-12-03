@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -257,14 +258,23 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         }
 
         /// <summary>
-        ///     Configures a property to have a value generated when saving a new or existing entity, unless
-        ///     a non-null, non-temporary value has been set for a new entity, or the existing property value has
-        ///     been modified for an existing entity, in which case the set value will be saved instead.
+        ///     Configures a property to have a value generated when saving a new or existing entity.
         /// </summary>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
         public virtual PropertyBuilder ValueGeneratedOnAddOrUpdate()
         {
             Builder.ValueGenerated(ValueGenerated.OnAddOrUpdate, ConfigurationSource.Explicit);
+
+            return this;
+        }
+
+        /// <summary>
+        ///     Configures a property to have a value generated when saving an existing entity.
+        /// </summary>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public virtual PropertyBuilder ValueGeneratedOnUpdate()
+        {
+            Builder.ValueGenerated(ValueGenerated.OnUpdate, ConfigurationSource.Explicit);
 
             return this;
         }
@@ -304,11 +314,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for this property as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for this property any access mode that was set on the
+        ///         Calling this method overrides for this property any access mode that was set on the
         ///         entity type or model.
         ///     </para>
         /// </summary>
@@ -322,5 +332,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         }
 
         private InternalPropertyBuilder Builder { get; }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

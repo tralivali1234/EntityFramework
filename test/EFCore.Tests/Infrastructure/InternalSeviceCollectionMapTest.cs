@@ -4,13 +4,12 @@
 using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
+namespace Microsoft.EntityFrameworkCore.Infrastructure
 {
     public class InternalSeviceCollectionMapTest
     {
@@ -250,7 +249,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
         [Fact]
         public virtual void Same_INavigationFixer_is_returned_for_all_registrations()
         {
-            using (var context = new DbContext(new DbContextOptionsBuilder().UseTransientInMemoryDatabase().Options))
+            using (var context = new DbContext(new DbContextOptionsBuilder().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options))
             {
                 var navFixer = context.GetService<INavigationFixer>();
 
@@ -296,7 +295,7 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
                         () => builder.TryAddCoreServices())
                     .Message);
         }
-        
+
         [Fact]
         public void Throws_if_attempt_is_made_to_register_dependency_as_instance()
         {
@@ -316,10 +315,11 @@ namespace Microsoft.EntityFrameworkCore.Tests.Infrastructure
             => new ServiceCollectionMap(new ServiceCollection().AddEntityFrameworkInMemoryDatabase());
 
         private static DbContext CreateContext(IServiceProvider serviceProvider)
-            => new DbContext(new DbContextOptionsBuilder()
-                .UseInternalServiceProvider(serviceProvider)
-                .UseTransientInMemoryDatabase()
-                .Options);
+            => new DbContext(
+                new DbContextOptionsBuilder()
+                    .UseInternalServiceProvider(serviceProvider)
+                    .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                    .Options);
 
         private interface IFakeService
         {

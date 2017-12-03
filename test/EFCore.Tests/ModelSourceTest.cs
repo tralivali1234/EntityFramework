@@ -2,28 +2,25 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.Extensions.Logging;
-using Moq;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests
+// ReSharper disable UnusedMember.Local
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     public class ModelSourceTest
     {
-        private readonly CoreModelValidator _coreModelValidator
-            = new CoreModelValidator(
-                new ModelValidatorDependencies(
-                    new DiagnosticsLogger<LoggerCategory.Model.Validation>(
-                        new InterceptingLogger<LoggerCategory.Model.Validation>(
-                            new LoggerFactory(),
-                            new LoggingOptions()),
-                        new DiagnosticListener("Fake"))));
+        private readonly IModelValidator _coreModelValidator
+            = InMemoryTestHelpers.Instance.CreateContextServices().GetRequiredService<IModelValidator>();
 
         private readonly NullConventionSetBuilder _nullConventionSetBuilder
             = new NullConventionSetBuilder();
@@ -31,21 +28,25 @@ namespace Microsoft.EntityFrameworkCore.Tests
         [Fact]
         public void Adds_all_entities_based_on_all_distinct_entity_types_found()
         {
-            var setFinderMock = new Mock<IDbSetFinder>();
-            setFinderMock.Setup(m => m.FindSets(It.IsAny<DbContext>())).Returns(
-                new[]
-                {
-                    new DbSetProperty("One", typeof(SetA), setter: null),
-                    new DbSetProperty("Two", typeof(SetB), setter: null),
-                    new DbSetProperty("Three", typeof(SetA), setter: null)
-                });
+            var setFinder = new FakeSetFinder();
 
-            var model = CreateDefaultModelSource(setFinderMock.Object)
-                .GetModel(new Mock<DbContext>().Object, _nullConventionSetBuilder, _coreModelValidator);
+            var model = CreateDefaultModelSource(setFinder)
+                .GetModel(InMemoryTestHelpers.Instance.CreateContext(), _nullConventionSetBuilder, _coreModelValidator);
 
             Assert.Equal(
                 new[] { typeof(SetA).DisplayName(), typeof(SetB).DisplayName() },
                 model.GetEntityTypes().Select(e => e.Name).ToArray());
+        }
+
+        private class FakeSetFinder : IDbSetFinder
+        {
+            public IReadOnlyList<DbSetProperty> FindSets(DbContext context)
+                => new[]
+                {
+                    new DbSetProperty("One", typeof(SetA), setter: null),
+                    new DbSetProperty("Two", typeof(SetB), setter: null),
+                    new DbSetProperty("Three", typeof(SetA), setter: null)
+                };
         }
 
         private class JustAClass
@@ -86,7 +87,7 @@ namespace Microsoft.EntityFrameworkCore.Tests
 
             var model = modelSource.GetModel(new Context1(), _nullConventionSetBuilder, _coreModelValidator);
 
-            Assert.StartsWith("2.0.0", model.GetProductVersion(), StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith("2.1.0", model.GetProductVersion(), StringComparison.OrdinalIgnoreCase);
         }
 
         private class Context1 : DbContext
@@ -100,15 +101,14 @@ namespace Microsoft.EntityFrameworkCore.Tests
         private IModelSource CreateDefaultModelSource(IDbSetFinder setFinder)
             => new ConcreteModelSource(setFinder);
 
-
         private class ConcreteModelSource : ModelSource
         {
             public ConcreteModelSource(IDbSetFinder setFinder)
-                : base(new ModelSourceDependencies(
-                    setFinder,
-                    new CoreConventionSetBuilder(),
-                    new ModelCustomizer(new ModelCustomizerDependencies()),
-                    new ModelCacheKeyFactory(new ModelCacheKeyFactoryDependencies())))
+                : base(
+                    new ModelSourceDependencies(
+                        new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))),
+                        new ModelCustomizer(new ModelCustomizerDependencies(setFinder)),
+                        new ModelCacheKeyFactory(new ModelCacheKeyFactoryDependencies())))
             {
             }
         }

@@ -3,23 +3,41 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class SqliteConventionSetBuilder : RelationalConventionSetBuilder
     {
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqliteConventionSetBuilder([NotNull] RelationalConventionSetBuilderDependencies dependencies)
             : base(dependencies)
         {
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static ConventionSet Build()
-            => new SqliteConventionSetBuilder(
-                    new RelationalConventionSetBuilderDependencies(
-                        new SqliteTypeMapper(new RelationalTypeMapperDependencies()), new SqliteAnnotationProvider(), null, null))
-                .AddConventions(new CoreConventionSetBuilder().CreateConventionSet());
+        {
+            var relationalTypeMapper = new SqliteTypeMapper(
+                new CoreTypeMapperDependencies(),
+                new RelationalTypeMapperDependencies());
+
+            return new SqliteConventionSetBuilder(
+                    new RelationalConventionSetBuilderDependencies(relationalTypeMapper, null, null))
+                .AddConventions(
+                    new CoreConventionSetBuilder(
+                        new CoreConventionSetBuilderDependencies(relationalTypeMapper)).CreateConventionSet());
+        }
     }
 }

@@ -1,8 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-#if NET46
-
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using JetBrains.Annotations;
@@ -23,7 +21,8 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="T"> The element type. </typeparam>
         /// <param name="source"> The collection that the binding list will stay in sync with. </param>
         /// <returns> The binding list. </returns>
-        public static BindingList<T> ToBindingList<T>([NotNull] this ObservableCollection<T> source) where T : class
+        public static BindingList<T> ToBindingList<T>([NotNull] this ObservableCollection<T> source)
+            where T : class
         {
             Check.NotNull(source, nameof(source));
 
@@ -31,7 +30,3 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 }
-#elif NETSTANDARD1_3
-#else
-#error target frameworks need to be updated.
-#endif

@@ -4,12 +4,15 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
+// ReSharper disable UnusedMember.Local
+
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
     [SqlServerConfiguredCondition]
     public class ConfigurationPatternsTest
@@ -67,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
             {
                 Assert.Same(_options, optionsBuilder.Options);
 
-                optionsBuilder.UseSqlServer(SqlServerTestStore.NorthwindConnectionString, b => b.ApplyConfiguration());
+                optionsBuilder.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString, b => b.ApplyConfiguration());
 
                 Assert.NotSame(_options, optionsBuilder.Options);
             }
@@ -178,34 +181,40 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
             {
             }
 
+            // ReSharper disable once UnusedAutoPropertyAccessor.Local
             public DbSet<Customer> Customers { get; set; }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Customer>(b =>
-                    {
-                        b.HasKey(c => c.CustomerID);
-                        b.ForSqlServerToTable("Customers");
-                    });
+                modelBuilder.Entity<Customer>(
+                    b =>
+                        {
+                            b.HasKey(c => c.CustomerID);
+                            b.ToTable("Customers");
+                        });
             }
         }
 
+        // ReSharper disable once ClassNeverInstantiated.Local
         private class Customer
         {
+            // ReSharper disable once UnusedAutoPropertyAccessor.Local
             public string CustomerID { get; set; }
+
             public string CompanyName { get; set; }
             public string Fax { get; set; }
         }
 
         private class MultipleProvidersContext : NorthwindContextBase
         {
+            // ReSharper disable once MemberCanBePrivate.Local
             public bool UseSqlServer { get; set; }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
             {
                 if (UseSqlServer)
                 {
-                    optionsBuilder.UseSqlServer(SqlServerTestStore.NorthwindConnectionString, b => b.ApplyConfiguration());
+                    optionsBuilder.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString, b => b.ApplyConfiguration());
                 }
                 else
                 {
@@ -214,6 +223,7 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
             }
         }
 
+        // ReSharper disable once ClassNeverInstantiated.Local
         private class SomeService
         {
             public SomeService(MultipleProvidersContext context)
@@ -241,7 +251,7 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
                         .BuildServiceProvider();
 
                     await NestedContextTest(
-                        () => new BlogContext(inMemoryServiceProvider), 
+                        () => new BlogContext(inMemoryServiceProvider),
                         () => new NorthwindContext(sqlServerServiceProvider));
                 }
             }
@@ -328,7 +338,7 @@ namespace Microsoft.EntityFrameworkCore.CrossStore.FunctionalTests
 
                 protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                     => optionsBuilder
-                        .UseSqlServer(SqlServerTestStore.NorthwindConnectionString, b => b.ApplyConfiguration())
+                        .UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString, b => b.ApplyConfiguration())
                         .UseInternalServiceProvider(_serviceProvider);
             }
         }

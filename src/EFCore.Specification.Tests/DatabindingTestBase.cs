@@ -1,24 +1,24 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.ConcurrencyModel;
+using Microsoft.EntityFrameworkCore.TestModels.ConcurrencyModel;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests
+// ReSharper disable AccessToDisposedClosure
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public abstract class DatabindingTestBase<TTestStore, TFixture> : IClassFixture<TFixture>, IDisposable
-        where TTestStore : TestStore
-        where TFixture : F1FixtureBase<TTestStore>, new()
+    public abstract class DatabindingTestBase<TFixture> : IClassFixture<TFixture>
+        where TFixture : F1FixtureBase, new()
     {
-        protected DatabindingTestBase(TFixture fixture)
-        {
-            Fixture = fixture;
+        protected DatabindingTestBase(TFixture fixture) => Fixture = fixture;
 
-            TestStore = Fixture.CreateTestStore();
-        }
+        protected TFixture Fixture { get; }
+
+        protected const int TotalCount = 40;
 
         protected const int DeletedTeam = Team.Hispania;
         protected const int DeletedCount = 4;
@@ -63,27 +63,43 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 });
         }
 
-        [Fact]
-        public virtual void DbSet_Local_contains_Unchanged_Modified_and_Added_entities_but_not_Deleted_entities()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void DbSet_Local_contains_Unchanged_Modified_and_Added_entities_but_not_Deleted_entities(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
 
                 Assert.Equal(0, local.Count(d => d.TeamId == DeletedTeam));
                 Assert.Equal(ModifiedCount, local.Count(d => d.TeamId == ModifedTeam));
                 Assert.Equal(UnchangedCount, local.Count(d => d.TeamId == UnchangedTeam));
                 Assert.Equal(AddedCount, local.Count(d => d.TeamId == AddedTeam));
+                Assert.Equal(TotalCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Adding_entity_to_context_is_reflected_in_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Adding_entity_to_context_is_reflected_in_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
-                var local = context.Drivers.Local;
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(0, local.Count);
 
                 var larry = new Driver
                 {
@@ -93,16 +109,25 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 };
                 context.Drivers.Add(larry);
 
+                Assert.Equal(1, local.Count);
                 Assert.True(local.Contains(larry));
             }
         }
 
-        [Fact]
-        public virtual void Attaching_entity_to_context_is_reflected_in_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Attaching_entity_to_context_is_reflected_in_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
-                var local = context.Drivers.Local;
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(0, local.Count);
 
                 var larry = new Driver
                 {
@@ -112,16 +137,25 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 };
                 context.Drivers.Attach(larry);
 
+                Assert.Equal(1, local.Count);
                 Assert.True(local.Contains(larry));
             }
         }
 
-        [Fact]
-        public virtual void Entities_materialized_into_context_are_reflected_in_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_materialized_into_context_are_reflected_in_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
-                var local = context.Drivers.Local;
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(0, local.Count);
 
                 context.Drivers.Where(d => d.TeamId == UnchangedTeam).Load();
 
@@ -129,30 +163,49 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             }
         }
 
-        [Fact]
-        public virtual void Entities_detached_from_context_are_removed_from_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_detached_from_context_are_removed_from_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 foreach (var driver in context.Drivers.Local.Where(d => d.TeamId == UnchangedTeam).ToList())
                 {
                     context.Entry(driver).State = EntityState.Detached;
                 }
 
-                Assert.Equal(0, local.Cast<Driver>().Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(0, local.Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(TotalCount - UnchangedCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Entities_deleted_from_context_are_removed_from_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_deleted_from_context_are_removed_from_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 foreach (var driver in context.Drivers.Local.Where(d => d.TeamId == UnchangedTeam).ToList())
                 {
@@ -160,16 +213,26 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.Equal(0, local.Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(TotalCount - UnchangedCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Entities_with_state_changed_to_deleted_are_removed_from_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_with_state_changed_to_deleted_are_removed_from_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 foreach (var driver in context.Drivers.Local.Where(d => d.TeamId == UnchangedTeam).ToList())
                 {
@@ -177,16 +240,26 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.Equal(0, local.Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(TotalCount - UnchangedCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Entities_with_state_changed_to_detached_are_removed_from_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_with_state_changed_to_detached_are_removed_from_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 foreach (var driver in context.Drivers.Local.Where(d => d.TeamId == UnchangedTeam).ToList())
                 {
@@ -194,16 +267,26 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.Equal(0, local.Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(TotalCount - UnchangedCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Entities_with_state_changed_from_deleted_to_added_are_added_to_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_with_state_changed_from_deleted_to_added_are_added_to_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 foreach (var driver in context.Drivers.Where(d => d.TeamId == DeletedTeam).ToList())
                 {
@@ -211,16 +294,26 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.Equal(DeletedCount, local.Count(d => d.TeamId == DeletedTeam));
+                Assert.Equal(TotalCount + DeletedCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Entities_with_state_changed_from_deleted_to_unchanged_are_added_to_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_with_state_changed_from_deleted_to_unchanged_are_added_to_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 foreach (var driver in context.Drivers.Where(d => d.TeamId == DeletedTeam).ToList())
                 {
@@ -228,15 +321,24 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.Equal(DeletedCount, local.Count(d => d.TeamId == DeletedTeam));
+                Assert.Equal(TotalCount + DeletedCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Entities_added_to_local_view_are_added_to_state_manager()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_added_to_local_view_are_added_to_state_manager(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
-                var local = context.Drivers.Local;
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(0, local.Count);
 
                 var larry = new Driver
                 {
@@ -245,25 +347,45 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                     TeamId = Team.Ferrari,
                     CarNumber = 13
                 };
+
                 local.Add(larry);
 
                 Assert.Same(larry, context.Drivers.Find(-1));
                 Assert.Equal(EntityState.Added, context.Entry(larry).State);
+                Assert.Equal(1, local.Count);
+                Assert.Equal(1, localView.Count);
+                Assert.Contains(larry, local);
+                Assert.Contains(larry, localView);
             }
         }
 
-        [Fact]
-        public virtual void Entities_removed_from_the_local_view_are_marked_deleted_in_the_state_manager()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Entities_removed_from_the_local_view_are_marked_deleted_in_the_state_manager(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
 
-                var alonso = local.Cast<Driver>().Single(d => d.Name == "Fernando Alonso");
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
+
+                var alonso = local.Single(d => d.Name == "Fernando Alonso");
+
                 local.Remove(alonso);
 
                 Assert.Equal(EntityState.Deleted, context.Entry(alonso).State);
+
+                Assert.Equal(TotalCount - 1, local.Count);
+                Assert.Equal(TotalCount - 1, localView.Count);
+                Assert.DoesNotContain(alonso, local);
+                Assert.DoesNotContain(alonso, localView);
             }
         }
 
@@ -273,22 +395,38 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
+
                 var local = context.Drivers.Local;
 
-                var alonso = local.Cast<Driver>().Single(d => d.Name == "Fernando Alonso");
+                Assert.Equal(TotalCount, local.Count);
+
+                var alonso = local.Single(d => d.Name == "Fernando Alonso");
+
                 local.Add(alonso);
 
                 Assert.Equal(EntityState.Unchanged, context.Entry(alonso).State);
+                Assert.Equal(TotalCount, local.Count);
+                Assert.Contains(alonso, local);
             }
         }
 
-        [Fact]
-        public virtual void Adding_entity_to_local_view_that_is_Deleted_in_the_state_manager_makes_entity_Added()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Adding_entity_to_local_view_that_is_Deleted_in_the_state_manager_makes_entity_Added(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
+                Assert.Equal(TotalCount, localView.Count);
 
                 var deletedDrivers = context.Drivers.Where(d => d.TeamId == DeletedTeam).ToList();
 
@@ -298,17 +436,33 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.True(deletedDrivers.TrueForAll(d => context.Entry(d).State == EntityState.Added));
+                Assert.Equal(TotalCount + DeletedCount, local.Count);
+                Assert.Equal(TotalCount + DeletedCount, localView.Count);
+
+                foreach (var driver in deletedDrivers)
+                {
+                    Assert.Contains(driver, local);
+                    Assert.Contains(driver, localView);
+                }
             }
         }
 
-        [Fact]
-        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var local = context.Drivers.Local;
-                var count = local.Count;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
+
+                Assert.Equal(TotalCount, local.Count);
 
                 context.Teams.Add(
                     new Team
@@ -317,17 +471,24 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                         Name = "Wubbsy Racing"
                     });
 
-                Assert.Equal(count, local.Count);
+                Assert.Equal(TotalCount, local.Count);
             }
         }
 
-        [Fact]
-        public virtual void Adding_entity_to_state_manager_of_subtype_still_shows_up_in_local_view()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Adding_entity_to_state_manager_of_subtype_still_shows_up_in_local_view(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
                 context.Drivers.Load();
-                var local = context.Drivers.Local;
+
+                var localView = context.Drivers.Local;
+                var local = toObservableCollection
+                    ? (ICollection<Driver>)localView.ToObservableCollection()
+                    : localView;
 
                 var newDriver = new TestDriver();
                 context.Drivers.Add(newDriver);
@@ -361,7 +522,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
 
                 context.ChangeTracker.AutoDetectChangesEnabled = true;
 
-                var _ = context.Drivers.Local;
+                _ = context.Drivers.Local;
 
                 context.ChangeTracker.AutoDetectChangesEnabled = false;
 
@@ -370,26 +531,6 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 context.ChangeTracker.AutoDetectChangesEnabled = true;
 
                 Assert.Equal(EntityState.Modified, context.Entry(alonso).State);
-            }
-        }
-
-        [Fact]
-        public virtual void Local_view_used_in_database_initializer_is_reset_for_use_with_real_context()
-        {
-            using (var context = CreateF1Context())
-            {
-                var local = context.Teams.Local;
-
-                Assert.Equal(0, local.Count);
-
-                context.Teams.Add(
-                    new Team
-                    {
-                        Id = -1,
-                        Name = "Wubbsy Racing"
-                    });
-
-                Assert.Equal(1, local.Count);
             }
         }
 
@@ -404,8 +545,11 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             }
         }
 
-        [Fact]
-        public void LocalView_is_initialized_with_entities_from_the_context()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void LocalView_is_initialized_with_entities_from_the_context(
+            bool toObservableCollection)
         {
             using (var context = CreateF1Context())
             {
@@ -413,9 +557,17 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 context.Set<TestDriver>().Load();
                 context.Teams.Load();
 
-                var driversLocal = context.Drivers.Local;
-                var testDriversLocal = context.Set<TestDriver>().Local;
-                var teamsLocal = context.Teams.Local;
+                var driversLocal = toObservableCollection
+                    ? (ICollection<Driver>)context.Drivers.Local.ToObservableCollection()
+                    : context.Drivers.Local;
+
+                var testDriversLocal = toObservableCollection
+                    ? (ICollection<TestDriver>)context.Set<TestDriver>().Local.ToObservableCollection()
+                    : context.Set<TestDriver>().Local;
+
+                var teamsLocal = toObservableCollection
+                    ? (ICollection<Team>)context.Teams.Local.ToObservableCollection()
+                    : context.Teams.Local;
 
                 Assert.Equal(42, driversLocal.Count);
                 Assert.Equal(20, testDriversLocal.Count);
@@ -430,8 +582,6 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             }
         }
 
-#if NET46
-
         [Fact]
         public virtual void DbSet_Local_ToBindingList_contains_Unchanged_Modified_and_Added_entities_but_not_Deleted_entities()
         {
@@ -444,6 +594,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 Assert.Equal(ModifiedCount, bindingList.Count(d => d.TeamId == ModifedTeam));
                 Assert.Equal(UnchangedCount, bindingList.Count(d => d.TeamId == UnchangedTeam));
                 Assert.Equal(AddedCount, bindingList.Count(d => d.TeamId == AddedTeam));
+                Assert.Equal(TotalCount, bindingList.Count);
             }
         }
 
@@ -454,6 +605,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             {
                 var bindingList = context.Drivers.Local.ToBindingList();
 
+                Assert.Equal(0, bindingList.Count);
+
                 var larry = new Driver
                 {
                     Name = "Larry David",
@@ -463,6 +616,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 context.Drivers.Add(larry);
 
                 Assert.True(bindingList.Contains(larry));
+                Assert.Equal(1, bindingList.Count);
             }
         }
 
@@ -472,6 +626,8 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             using (var context = CreateF1Context())
             {
                 var bindingList = context.Drivers.Local.ToBindingList();
+
+                Assert.Equal(0, bindingList.Count);
 
                 context.Drivers.Where(d => d.TeamId == UnchangedTeam).Load();
 
@@ -487,12 +643,15 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 SetupContext(context);
                 var bindingList = context.Drivers.Local.ToBindingList();
 
+                Assert.Equal(TotalCount, bindingList.Count);
+
                 foreach (var driver in context.Drivers.Local.Where(d => d.TeamId == UnchangedTeam).ToList())
                 {
                     context.Entry(driver).State = EntityState.Detached;
                 }
 
                 Assert.Equal(0, bindingList.Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(TotalCount - UnchangedCount, bindingList.Count);
             }
         }
 
@@ -504,12 +663,15 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 SetupContext(context);
                 var bindingList = context.Drivers.Local.ToBindingList();
 
+                Assert.Equal(TotalCount, bindingList.Count);
+
                 foreach (var driver in context.Drivers.Local.Where(d => d.TeamId == UnchangedTeam).ToList())
                 {
                     context.Drivers.Remove(driver);
                 }
 
                 Assert.Equal(0, bindingList.Count(d => d.TeamId == UnchangedTeam));
+                Assert.Equal(TotalCount - UnchangedCount, bindingList.Count);
             }
         }
 
@@ -518,7 +680,11 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
         {
             using (var context = CreateF1Context())
             {
-                var bindingList = context.Drivers.Local.ToBindingList();
+                var local = context.Drivers.Local;
+                var observable = local.ToObservableCollection();
+                var bindingList = local.ToBindingList();
+
+                Assert.Equal(0, bindingList.Count);
 
                 var larry = new Driver
                 {
@@ -527,10 +693,17 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                     TeamId = Team.Ferrari,
                     CarNumber = 13
                 };
+
                 bindingList.Add(larry);
 
                 Assert.Same(larry, context.Drivers.Find(-1));
                 Assert.Equal(EntityState.Added, context.Entry(larry).State);
+                Assert.Equal(1, bindingList.Count);
+                Assert.Equal(1, local.Count);
+                Assert.Equal(1, observable.Count);
+                Assert.Contains(larry, bindingList);
+                Assert.Contains(larry, local);
+                Assert.Contains(larry, observable);
             }
         }
 
@@ -540,27 +713,24 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var bindingList = context.Drivers.Local.ToBindingList();
+
+                var local = context.Drivers.Local;
+                var observable = local.ToObservableCollection();
+                var bindingList = local.ToBindingList();
+
+                Assert.Equal(TotalCount, bindingList.Count);
 
                 var alonso = bindingList.Single(d => d.Name == "Fernando Alonso");
+
                 bindingList.Remove(alonso);
 
                 Assert.Equal(EntityState.Deleted, context.Entry(alonso).State);
-            }
-        }
-
-        [Fact]
-        public virtual void Adding_entity_to_local_binding_list_that_is_already_in_the_state_manager_and_not_Deleted_is_noop()
-        {
-            using (var context = CreateF1Context())
-            {
-                SetupContext(context);
-                var bindingList = context.Drivers.Local.ToBindingList();
-
-                var alonso = bindingList.Single(d => d.Name == "Fernando Alonso");
-                bindingList.Add(alonso);
-
-                Assert.Equal(EntityState.Unchanged, context.Entry(alonso).State);
+                Assert.Equal(TotalCount - 1, bindingList.Count);
+                Assert.Equal(TotalCount - 1, local.Count);
+                Assert.Equal(TotalCount - 1, observable.Count);
+                Assert.DoesNotContain(alonso, bindingList);
+                Assert.DoesNotContain(alonso, local);
+                Assert.DoesNotContain(alonso, observable);
             }
         }
 
@@ -570,7 +740,12 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
             using (var context = CreateF1Context())
             {
                 SetupContext(context);
-                var bindingList = context.Drivers.Local.ToBindingList();
+
+                var local = context.Drivers.Local;
+                var observable = local.ToObservableCollection();
+                var bindingList = local.ToBindingList();
+
+                Assert.Equal(TotalCount, bindingList.Count);
 
                 var deletedDrivers = context.Drivers.Where(d => d.TeamId == DeletedTeam).ToList();
 
@@ -580,12 +755,21 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 }
 
                 Assert.True(deletedDrivers.TrueForAll(d => context.Entry(d).State == EntityState.Added));
+                Assert.Equal(TotalCount + DeletedCount, bindingList.Count);
+                Assert.Equal(TotalCount + DeletedCount, local.Count);
+                Assert.Equal(TotalCount + DeletedCount, observable.Count);
+
+                foreach (var driver in deletedDrivers)
+                {
+                    Assert.Contains(driver, bindingList);
+                    Assert.Contains(driver, local);
+                    Assert.Contains(driver, observable);
+                }
             }
         }
 
         [Fact]
-        public void
-            Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_binding_list()
+        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_binding_list()
         {
             using (var context = CreateF1Context())
             {
@@ -741,22 +925,12 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests
                 Assert.False(ferrari.Drivers.Contains(alonso)); // But has been removed from nav prop
             }
         }
-#elif NETCOREAPP2_0
-#else
-#error target frameworks need to be updated.
-#endif
 
         protected F1Context CreateF1Context()
         {
-            var context = Fixture.CreateContext(TestStore);
+            var context = Fixture.CreateContext();
             context.ChangeTracker.AutoDetectChangesEnabled = false;
             return context;
         }
-
-        protected TFixture Fixture { get; }
-
-        protected TTestStore TestStore { get; }
-
-        public virtual void Dispose() => TestStore.Dispose();
     }
 }

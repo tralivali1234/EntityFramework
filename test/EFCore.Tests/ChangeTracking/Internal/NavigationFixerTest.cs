@@ -5,16 +5,65 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.InMemory.FunctionalTests;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
+namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class NavigationFixerTest
     {
+        [Fact]
+        public void Does_not_throw_if_Add_during_fixup()
+        {
+            using (var context = new FixupContext())
+            {
+                var blog1 = new Blog { Id = 1 };
+                var blog2 = new Blog { Id = 2 };
+
+                var post1 = context.Add(new Post { BlogId = 2 }).Entity;
+
+                blog1.Posts.Add(post1);
+                blog1.Posts.Add(new Post { BlogId = 2 });
+
+                context.Add(blog2);
+                context.Add(blog1);
+            }
+        }
+
+        private class FixupContext : DbContext
+        {
+            public DbSet<Blog> Blogs { get; set; }
+            public DbSet<Post> Posts { get; set; }
+
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                => optionsBuilder.UseInMemoryDatabase(typeof(FixupContext).FullName);
+        }
+
+        private class Blog
+        {
+            public int Id { get; set; }
+            public HashSet<Post> Posts { get; } = new HashSet<Post>();
+        }
+
+        private class Post
+        {
+            private Blog _blog;
+            public int Id { get; set; }
+            public int BlogId { get; set; }
+
+            public Blog Blog
+            {
+                get => _blog;
+                set
+                {
+                    _blog = value;
+                    _blog.Posts.Add(new Post());
+                }
+            }
+        }
+
         [Fact]
         public void Does_fixup_of_related_principals()
         {
@@ -1198,32 +1247,35 @@ namespace Microsoft.EntityFrameworkCore.Tests.ChangeTracking.Internal
         {
             var builder = InMemoryTestHelpers.Instance.CreateConventionBuilder();
 
-            builder.Entity<Product>(b =>
-                {
-                    b.HasOne(e => e.AlternateProduct).WithOne(e => e.OriginalProduct)
-                        .HasForeignKey<Product>(e => e.AlternateProductId);
+            builder.Entity<Product>(
+                b =>
+                    {
+                        b.HasOne(e => e.AlternateProduct).WithOne(e => e.OriginalProduct)
+                            .HasForeignKey<Product>(e => e.AlternateProductId);
 
-                    b.HasOne(e => e.Detail).WithOne(e => e.Product)
-                        .HasForeignKey<ProductDetail>(e => e.Id);
-                });
+                        b.HasOne(e => e.Detail).WithOne(e => e.Product)
+                            .HasForeignKey<ProductDetail>(e => e.Id);
+                    });
 
             builder.Entity<Category>().HasMany(e => e.Products).WithOne(e => e.Category);
 
             builder.Entity<ProductDetail>();
 
-            builder.Entity<ProductPhoto>(b =>
-                {
-                    b.HasKey(e => new { e.ProductId, e.PhotoId });
-                    b.HasMany(e => e.ProductTags).WithOne(e => e.Photo)
-                        .HasForeignKey(e => new { e.ProductId, e.PhotoId });
-                });
+            builder.Entity<ProductPhoto>(
+                b =>
+                    {
+                        b.HasKey(e => new { e.ProductId, e.PhotoId });
+                        b.HasMany(e => e.ProductTags).WithOne(e => e.Photo)
+                            .HasForeignKey(e => new { e.ProductId, e.PhotoId });
+                    });
 
-            builder.Entity<ProductReview>(b =>
-                {
-                    b.HasKey(e => new { e.ProductId, e.ReviewId });
-                    b.HasMany(e => e.ProductTags).WithOne(e => e.Review)
-                        .HasForeignKey(e => new { e.ProductId, e.ReviewId });
-                });
+            builder.Entity<ProductReview>(
+                b =>
+                    {
+                        b.HasKey(e => new { e.ProductId, e.ReviewId });
+                        b.HasMany(e => e.ProductTags).WithOne(e => e.Review)
+                            .HasForeignKey(e => new { e.ProductId, e.ReviewId });
+                    });
 
             builder.Entity<ProductTag>();
 

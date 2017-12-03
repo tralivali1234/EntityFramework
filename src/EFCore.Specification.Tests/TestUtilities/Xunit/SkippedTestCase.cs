@@ -5,7 +5,7 @@ using System;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit
+namespace Microsoft.EntityFrameworkCore.TestUtilities.Xunit
 {
     internal class SkippedTestCase : XunitTestCase
     {
@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestUtilities.Xunit
         }
 
         [Obsolete("Called by the de-serializer; should only be called by deriving classes for de-serialization purposes")]
-        public SkippedTestCase() : base()
+        public SkippedTestCase()
         {
         }
 

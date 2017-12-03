@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
@@ -13,7 +14,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class BackingFieldConvention : IPropertyConvention, INavigationConvention
+    public class BackingFieldConvention : IPropertyAddedConvention, INavigationAddedConvention
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -64,14 +65,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         protected virtual FieldInfo TryMatchFieldName(
             [NotNull] Type entityType, [NotNull] Type propertyType, [NotNull] string propertyName)
         {
-            var fields = entityType.GetRuntimeFields().ToDictionary(f => f.Name);
+            var fields = new Dictionary<string, FieldInfo>();
+            foreach (var field in entityType.GetRuntimeFields().Where(f => !f.IsStatic))
+            {
+                if (!fields.ContainsKey(field.Name))
+                {
+                    fields[field.Name] = field;
+                }
+            }
 
             var camelized = char.ToLowerInvariant(propertyName[0]) + propertyName.Substring(1);
 
             var typeInfo = propertyType.GetTypeInfo();
 
-            FieldInfo fieldInfo;
-            return fields.TryGetValue("<" + propertyName + ">k__BackingField", out fieldInfo)
+            return fields.TryGetValue("<" + propertyName + ">k__BackingField", out var fieldInfo)
                    || (fields.TryGetValue(propertyName, out fieldInfo)
                        && IsConvertable(typeInfo, fieldInfo))
                    || (fields.TryGetValue(camelized, out fieldInfo)

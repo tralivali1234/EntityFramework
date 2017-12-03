@@ -4,14 +4,15 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Tests.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Infrastructure.Tests
+namespace Microsoft.EntityFrameworkCore.Infrastructure
 {
     public abstract class ModelValidatorTest
     {
@@ -68,6 +69,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure.Tests
             public int? P1 { get; set; }
             public int? P2 { get; set; }
             public int? P3 { get; set; }
+
+            public A A { get; set; }
         }
 
         protected class D : A
@@ -102,33 +105,54 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure.Tests
             public int SampleEntityId { get; set; }
         }
 
-        protected ModelValidatorTest()
+        protected class E
         {
-            Log = new List<Tuple<LogLevel, string>>();
-            Logger = new DiagnosticsLogger<LoggerCategory.Model.Validation>(
-                new InterceptingLogger<LoggerCategory.Model.Validation>(
-                    new ListLoggerFactory(Log, l => l == LoggerCategory.Model.Validation.Name),
-                    new LoggingOptions()),
-                new DiagnosticListener("Fake"));
+            public int Id { get; set; }
+            public bool ImBool { get; set; }
+            public bool? ImNot { get; set; }
         }
 
-        protected List<Tuple<LogLevel, string>> Log { get; }
+        protected ModelValidatorTest()
+        {
+            Log = new List<(LogLevel, EventId, string)>();
+            Logger = CreateLogger();
+        }
 
-        protected IDiagnosticsLogger<LoggerCategory.Model.Validation> Logger { get; }
+        protected List<(LogLevel Level, EventId Id, string Message)> Log { get; }
+
+        protected IDiagnosticsLogger<DbLoggerCategory.Model.Validation> Logger { get; set; }
 
         protected virtual void VerifyWarning(string expectedMessage, IModel model)
         {
             Validate(model);
 
-            Assert.Equal(LogLevel.Warning, Log[0].Item1);
-            Assert.Equal(expectedMessage, Log[0].Item2);
+            Assert.Equal(1, Log.Count);
+            Assert.Equal(LogLevel.Warning, Log[0].Level);
+            Assert.Equal(expectedMessage, Log[0].Message);
         }
 
         protected virtual void VerifyError(string expectedMessage, IModel model)
-            => Assert.Equal(expectedMessage, Assert.Throws<InvalidOperationException>(() => Validate(model)).Message);
+        {
+            ((Model)model).Validate();
+            Assert.Equal(expectedMessage, Assert.Throws<InvalidOperationException>(() => Validate(model)).Message);
+        }
 
-        protected virtual void Validate(IModel model) => CreateModelValidator().Validate(model);
+        protected virtual void Validate(IModel model)
+        {
+            ((Model)model).Validate();
+            CreateModelValidator().Validate(model);
+        }
 
-        protected abstract ModelValidator CreateModelValidator();
+        protected virtual DiagnosticsLogger<DbLoggerCategory.Model.Validation> CreateLogger(bool sensitiveDataLoggingEnabled = false)
+        {
+            var options = new LoggingOptions();
+            options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(sensitiveDataLoggingEnabled).Options);
+            return new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
+                new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
+                options,
+                new DiagnosticListener("Fake"));
+        }
+
+        protected abstract IModelValidator CreateModelValidator();
     }
 }

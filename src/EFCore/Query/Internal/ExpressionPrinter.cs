@@ -157,7 +157,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             var queryPlan = PostProcess(_stringBuilder.ToString());
 
-            if (characterLimit != null && characterLimit.Value > 0)
+            if (characterLimit != null
+                && characterLimit.Value > 0)
             {
                 queryPlan = queryPlan.Length > characterLimit
                     ? queryPlan.Substring(0, characterLimit.Value) + "..."
@@ -178,7 +179,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 return null;
             }
 
-            if (CharacterLimit != null && _stringBuilder.Length > CharacterLimit.Value)
+            if (CharacterLimit != null
+                && _stringBuilder.Length > CharacterLimit.Value)
             {
                 return expression;
             }
@@ -307,7 +309,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
             else
             {
-                if (!_binaryOperandMap.TryGetValue(binaryExpression.NodeType, out string operand))
+                if (!_binaryOperandMap.TryGetValue(binaryExpression.NodeType, out var operand))
                 {
                     UnhandledExpressionType(binaryExpression);
                 }
@@ -554,8 +556,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             _stringBuilder.Append(methodCallExpression.Method.Name + "(");
 
             var isSimpleMethodOrProperty = _simpleMethods.Contains(methodCallExpression.Method.Name)
-                || methodCallExpression.Arguments.Count < 2
-                || methodCallExpression.Method.IsEFPropertyMethod();
+                                           || methodCallExpression.Arguments.Count < 2
+                                           || methodCallExpression.Method.IsEFPropertyMethod();
 
             var appendAction = isSimpleMethodOrProperty ? (Action<string>)Append : AppendLine;
 
@@ -764,6 +766,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     VisitNullConditionalExpression(nullConditional);
                     break;
 
+                case NullConditionalEqualExpression nullConditionalEqualExpression:
+                    VisitNullConditionalEqualExpression(nullConditionalEqualExpression);
+                    break;
+
                 default:
                     UnhandledExpressionType(extensionExpression);
                     break;
@@ -781,14 +787,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             if (nullConditionalExpression.AccessOperation is MemberExpression memberExpression)
             {
-                Visit(nullConditionalExpression.NullableCaller);
+                Visit(nullConditionalExpression.Caller);
                 _stringBuilder.Append("?." + memberExpression.Member.Name);
             }
             else if (nullConditionalExpression.AccessOperation is MethodCallExpression methodCallExpression)
             {
                 if (methodCallExpression.Object != null)
                 {
-                    Visit(nullConditionalExpression.NullableCaller);
+                    Visit(nullConditionalExpression.Caller);
                     _stringBuilder.Append("?." + methodCallExpression.Method.Name + "(");
                     VisitArguments(methodCallExpression.Arguments, s => _stringBuilder.Append(s));
                     _stringBuilder.Append(")");
@@ -797,7 +803,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 var method = methodCallExpression.Method;
 
                 _stringBuilder.Append(method.DeclaringType?.Name + "." + method.Name + "(?");
-                Visit(nullConditionalExpression.NullableCaller);
+                Visit(nullConditionalExpression.Caller);
                 _stringBuilder.Append("?, ");
                 VisitArguments(methodCallExpression.Arguments.Skip(1).ToList(), s => _stringBuilder.Append(s));
                 _stringBuilder.Append(")");
@@ -808,6 +814,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 Visit(nullConditionalExpression.AccessOperation);
                 _stringBuilder.Append("?");
             }
+        }
+
+        private void VisitNullConditionalEqualExpression(NullConditionalEqualExpression nullConditionalEqualExpression)
+        {
+            Visit(nullConditionalEqualExpression.OuterKey);
+            _stringBuilder.Append(" ?= ");
+            Visit(nullConditionalEqualExpression.InnerKey);
         }
 
         private void VisitArguments(IList<Expression> arguments, Action<string> appendAction, string lastSeparator = "")
@@ -917,7 +930,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 bool removeFormatting)
             {
                 if (value is IEnumerable enumerable
-                     && !(value is string))
+                    && !(value is string))
                 {
                     var appendAction = value is byte[] || removeFormatting ? Append : AppendLine;
 
@@ -943,7 +956,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         ? value.ToString()
                         : value.GetType().ShortDisplayName();
 
-                if (value != null && value is string)
+                if (value != null
+                    && value is string)
                 {
                     stringValue = $@"""{stringValue}""";
                 }

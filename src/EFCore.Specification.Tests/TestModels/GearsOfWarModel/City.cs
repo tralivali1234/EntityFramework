@@ -3,12 +3,13 @@
 
 using System.Collections.Generic;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.GearsOfWarModel
+namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
 {
     public class City
     {
         // non-integer key with not conventional name
         public string Name { get; set; }
+
         public string Location { get; set; }
 
         public List<Gear> BornGears { get; set; }

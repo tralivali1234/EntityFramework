@@ -2,18 +2,21 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Specification.Tests;
-using Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore
 {
-    public class DataAnnotationSqlServerTest : DataAnnotationTestBase<SqlServerTestStore, DataAnnotationSqlServerFixture>
+    public class DataAnnotationSqlServerTest : DataAnnotationTestBase<DataAnnotationSqlServerTest.DataAnnotationSqlServerFixture>
     {
         public DataAnnotationSqlServerTest(DataAnnotationSqlServerFixture fixture)
             : base(fixture)
@@ -35,7 +38,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             Assert.Equal(
                 CoreStrings.WarningAsErrorTemplate(
                     RelationalEventId.ModelValidationKeyDefaultValueWarning,
-                    RelationalStrings.KeyHasDefaultValue(nameof(Login1.UserName), nameof(Login1))),
+                    RelationalStrings.LogKeyHasDefaultValue.GenerateMessage(nameof(Login1.UserName), nameof(Login1))),
                 Assert.Throws<InvalidOperationException>(() => Validate(modelBuilder)).Message);
 
             return modelBuilder;
@@ -79,7 +82,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             var modelBuilder = base.Key_and_MaxLength_64_produce_nvarchar_64();
 
             var property = GetProperty<ColumnKeyAnnotationClass2>(modelBuilder, "PersonFirstName");
-            Assert.Equal("nvarchar(64)", new SqlServerTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("nvarchar(64)", new SqlServerTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -89,7 +92,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength();
 
             var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "MaxTimestamp");
-            Assert.Equal("rowversion", new SqlServerTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("rowversion", new SqlServerTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -99,7 +102,7 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
             var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength_with_value();
 
             var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "NonMaxTimestamp");
-            Assert.Equal("rowversion", new SqlServerTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("rowversion", new SqlServerTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -146,7 +149,8 @@ namespace Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests
         {
             base.ConcurrencyCheckAttribute_throws_if_value_in_database_changed();
 
-            Assert.Equal(@"SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersion]
+            Assert.Equal(
+                @"SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersion]
 FROM [Sample] AS [r]
 WHERE [r].[UniqueNo] = 1
 
@@ -154,35 +158,37 @@ SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersi
 FROM [Sample] AS [r]
 WHERE [r].[UniqueNo] = 1
 
-@p2: 1
-@p0: ModifiedData (Nullable = false) (Size = 4000)
-@p1: 00000000-0000-0000-0003-000000000001
-@p3: 00000001-0000-0000-0000-000000000001
+@p2='1'
+@p0='ModifiedData' (Nullable = false) (Size = 4000)
+@p1='00000000-0000-0000-0003-000000000001'
+@p3='00000001-0000-0000-0000-000000000001'
 
 SET NOCOUNT ON;
 UPDATE [Sample] SET [Name] = @p0, [RowVersion] = @p1
 WHERE [UniqueNo] = @p2 AND [RowVersion] = @p3;
 SELECT @@ROWCOUNT;
 
-@p2: 1
-@p0: ChangedData (Nullable = false) (Size = 4000)
-@p1: 00000000-0000-0000-0002-000000000001
-@p3: 00000001-0000-0000-0000-000000000001
+@p2='1'
+@p0='ChangedData' (Nullable = false) (Size = 4000)
+@p1='00000000-0000-0000-0002-000000000001'
+@p3='00000001-0000-0000-0000-000000000001'
 
 SET NOCOUNT ON;
 UPDATE [Sample] SET [Name] = @p0, [RowVersion] = @p1
 WHERE [UniqueNo] = @p2 AND [RowVersion] = @p3;
 SELECT @@ROWCOUNT;",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void DatabaseGeneratedAttribute_autogenerates_values_when_set_to_identity()
         {
             base.DatabaseGeneratedAttribute_autogenerates_values_when_set_to_identity();
 
-            Assert.Equal(@"@p0:  (Size = 10) (DbType = String)
-@p1: Third (Nullable = false) (Size = 4000)
-@p2: 00000000-0000-0000-0000-000000000003
+            Assert.Equal(
+                @"@p0='' (Size = 10) (DbType = String)
+@p1='Third' (Nullable = false) (Size = 4000)
+@p2='00000000-0000-0000-0000-000000000003'
 
 SET NOCOUNT ON;
 INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
@@ -190,16 +196,18 @@ VALUES (@p0, @p1, @p2);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void MaxLengthAttribute_throws_while_inserting_value_longer_than_max_length()
         {
             base.MaxLengthAttribute_throws_while_inserting_value_longer_than_max_length();
 
-            Assert.Equal(@"@p0: Short (Size = 10)
-@p1: ValidString (Nullable = false) (Size = 4000)
-@p2: 00000000-0000-0000-0000-000000000001
+            Assert.Equal(
+                @"@p0='Short' (Size = 10)
+@p1='ValidString' (Nullable = false) (Size = 4000)
+@p2='00000000-0000-0000-0000-000000000001'
 
 SET NOCOUNT ON;
 INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
@@ -208,9 +216,9 @@ SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();
 
-@p0: VeryVeryVeryVeryVeryVeryLongString (Size = -1)
-@p1: ValidString (Nullable = false) (Size = 4000)
-@p2: 00000000-0000-0000-0000-000000000002
+@p0='VeryVeryVeryVeryVeryVeryLongString' (Size = -1)
+@p1='ValidString' (Nullable = false) (Size = 4000)
+@p2='00000000-0000-0000-0000-000000000002'
 
 SET NOCOUNT ON;
 INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
@@ -218,19 +226,20 @@ VALUES (@p0, @p1, @p2);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void RequiredAttribute_for_navigation_throws_while_inserting_null_value()
         {
             base.RequiredAttribute_for_navigation_throws_while_inserting_null_value();
 
-            Assert.Contains(@"@p1: Book1 (Nullable = false) (Size = 450)
-",
+            Assert.Contains(
+                @"@p1='1'" + EOL,
                 Sql);
 
-            Assert.Contains(@"@p1:  (Nullable = false) (Size = 450) (DbType = String)
-",
+            Assert.Contains(
+                @"@p1='' (Nullable = false) (DbType = Int32)" + EOL,
                 Sql);
         }
 
@@ -238,9 +247,10 @@ WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
         {
             base.RequiredAttribute_for_property_throws_while_inserting_null_value();
 
-            Assert.Equal(@"@p0:  (Size = 10) (DbType = String)
-@p1: ValidString (Nullable = false) (Size = 4000)
-@p2: 00000000-0000-0000-0000-000000000001
+            Assert.Equal(
+                @"@p0='' (Size = 10) (DbType = String)
+@p1='ValidString' (Nullable = false) (Size = 4000)
+@p2='00000000-0000-0000-0000-000000000001'
 
 SET NOCOUNT ON;
 INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
@@ -249,9 +259,9 @@ SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();
 
-@p0:  (Size = 10) (DbType = String)
-@p1:  (Nullable = false) (Size = 4000) (DbType = String)
-@p2: 00000000-0000-0000-0000-000000000002
+@p0='' (Size = 10) (DbType = String)
+@p1='' (Nullable = false) (Size = 4000) (DbType = String)
+@p2='00000000-0000-0000-0000-000000000002'
 
 SET NOCOUNT ON;
 INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
@@ -259,14 +269,16 @@ VALUES (@p0, @p1, @p2);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void StringLengthAttribute_throws_while_inserting_value_longer_than_max_length()
         {
             base.StringLengthAttribute_throws_while_inserting_value_longer_than_max_length();
 
-            Assert.Equal(@"@p0: ValidString (Size = 16)
+            Assert.Equal(
+                @"@p0='ValidString' (Size = 16)
 
 SET NOCOUNT ON;
 INSERT INTO [Two] ([Data])
@@ -275,7 +287,7 @@ SELECT [Id], [Timestamp]
 FROM [Two]
 WHERE @@ROWCOUNT = 1 AND [Id] = scope_identity();
 
-@p0: ValidButLongString (Size = -1)
+@p0='ValidButLongString' (Size = -1)
 
 SET NOCOUNT ON;
 INSERT INTO [Two] ([Data])
@@ -283,7 +295,8 @@ VALUES (@p0);
 SELECT [Id], [Timestamp]
 FROM [Two]
 WHERE @@ROWCOUNT = 1 AND [Id] = scope_identity();",
-                Sql);
+                Sql,
+                ignoreLineEndingDifferences: true);
         }
 
         public override void TimestampAttribute_throws_if_value_in_database_changed()
@@ -294,9 +307,14 @@ WHERE @@ROWCOUNT = 1 AND [Id] = scope_identity();",
             // row version value is not stable.
         }
 
-        private const string FileLineEnding = @"
-";
+        private static readonly string EOL = Environment.NewLine;
 
-        private string Sql => Fixture.TestSqlLoggerFactory.Sql.Replace(Environment.NewLine, FileLineEnding);
+        private string Sql => Fixture.TestSqlLoggerFactory.Sql;
+
+        public class DataAnnotationSqlServerFixture : DataAnnotationFixtureBase
+        {
+            protected override ITestStoreFactory TestStoreFactory => SqlServerTestStoreFactory.Instance;
+            public TestSqlLoggerFactory TestSqlLoggerFactory => (TestSqlLoggerFactory)ServiceProvider.GetRequiredService<ILoggerFactory>();
+        }
     }
 }

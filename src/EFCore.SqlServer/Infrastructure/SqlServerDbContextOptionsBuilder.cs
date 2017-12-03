@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
     ///     <para>
     ///         Instances of this class are returned from a call to
     ///         <see
-    ///             cref="SqlServerDbContextOptionsExtensions.UseSqlServer(DbContextOptionsBuilder, string, System.Action{SqlServerDbContextOptionsBuilder})" />
+    ///             cref="SqlServerDbContextOptionsExtensions.UseSqlServer(DbContextOptionsBuilder, string, Action{SqlServerDbContextOptionsBuilder})" />
     ///         and it is not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
@@ -35,7 +35,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// <summary>
         ///     Use a ROW_NUMBER() in queries instead of OFFSET/FETCH. This method is backwards-compatible to SQL Server 2005.
         /// </summary>
-        public virtual void UseRowNumberForPaging(bool useRowNumberForPaging = true) 
+        public virtual void UseRowNumberForPaging(bool useRowNumberForPaging = true)
             => WithOption(e => e.WithRowNumberPaging(useRowNumberForPaging));
 
         /// <summary>
@@ -59,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         public virtual SqlServerDbContextOptionsBuilder EnableRetryOnFailure(
             int maxRetryCount,
             TimeSpan maxRetryDelay,
-            [NotNull] ICollection<int> errorNumbersToAdd)
+            [CanBeNull] ICollection<int> errorNumbersToAdd)
             => ExecutionStrategy(c => new SqlServerRetryingExecutionStrategy(c, maxRetryCount, maxRetryDelay, errorNumbersToAdd));
     }
 }

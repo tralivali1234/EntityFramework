@@ -3,7 +3,7 @@
 
 using System.Collections.Generic;
 
-namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.GearsOfWarModel
+namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
 {
     public class Squad
     {
@@ -14,6 +14,7 @@ namespace Microsoft.EntityFrameworkCore.Specification.Tests.TestModels.GearsOfWa
 
         // non-auto generated key
         public int Id { get; set; }
+
         public string Name { get; set; }
 
         // auto-generated non-key (sequence)

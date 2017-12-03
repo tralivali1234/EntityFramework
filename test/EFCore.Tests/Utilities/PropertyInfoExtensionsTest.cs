@@ -5,7 +5,8 @@ using System;
 using System.Reflection;
 using Xunit;
 
-namespace Microsoft.EntityFrameworkCore.Tests.Utilities
+// ReSharper disable InconsistentNaming
+namespace Microsoft.EntityFrameworkCore.Utilities
 {
     public class PropertyInfoExtensionsTest
     {

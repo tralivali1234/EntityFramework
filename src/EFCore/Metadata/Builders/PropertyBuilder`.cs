@@ -189,13 +189,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             => (PropertyBuilder<TProperty>)base.ValueGeneratedOnAdd();
 
         /// <summary>
-        ///     Configures a property to have a value generated only when saving a new or existing entity, unless
-        ///     a non-null, non-temporary value has been set for a new entity, or the existing property value has
-        ///     been modified for an existing entity, in which case the set value will be saved instead.
+        ///     Configures a property to have a value generated when saving a new or existing entity.
         /// </summary>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
         public new virtual PropertyBuilder<TProperty> ValueGeneratedOnAddOrUpdate()
             => (PropertyBuilder<TProperty>)base.ValueGeneratedOnAddOrUpdate();
+
+        /// <summary>
+        ///     Configures a property to have a value generated when saving an existing entity.
+        /// </summary>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public new virtual PropertyBuilder<TProperty> ValueGeneratedOnUpdate()
+            => (PropertyBuilder<TProperty>)base.ValueGeneratedOnUpdate();
 
         /// <summary>
         ///     <para>
@@ -226,11 +231,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for this property as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for this property any access mode that was set on the
+        ///         Calling this method overrides for this property any access mode that was set on the
         ///         entity type or model.
         ///     </para>
         /// </summary>

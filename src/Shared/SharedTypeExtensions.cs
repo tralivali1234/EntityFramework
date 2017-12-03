@@ -19,8 +19,8 @@ namespace System
             var typeInfo = type.GetTypeInfo();
 
             return !typeInfo.IsValueType
-                   || (typeInfo.IsGenericType
-                       && (typeInfo.GetGenericTypeDefinition() == typeof(Nullable<>)));
+                   || typeInfo.IsGenericType
+                   && typeInfo.GetGenericTypeDefinition() == typeof(Nullable<>);
         }
 
         public static Type MakeNullable(this Type type)
@@ -32,15 +32,15 @@ namespace System
         {
             type = type.UnwrapNullableType();
 
-            return (type == typeof(int))
-                   || (type == typeof(long))
-                   || (type == typeof(short))
-                   || (type == typeof(byte))
-                   || (type == typeof(uint))
-                   || (type == typeof(ulong))
-                   || (type == typeof(ushort))
-                   || (type == typeof(sbyte))
-                   || (type == typeof(char));
+            return type == typeof(int)
+                   || type == typeof(long)
+                   || type == typeof(short)
+                   || type == typeof(byte)
+                   || type == typeof(uint)
+                   || type == typeof(ulong)
+                   || type == typeof(ushort)
+                   || type == typeof(sbyte)
+                   || type == typeof(char);
         }
 
         public static PropertyInfo GetAnyProperty(this Type type, string name)
@@ -53,26 +53,6 @@ namespace System
 
             return props.SingleOrDefault();
         }
-
-        private static bool IsNonIntegerPrimitive(this Type type)
-        {
-            type = type.UnwrapNullableType();
-
-            return (type == typeof(bool))
-                   || (type == typeof(byte[]))
-                   || (type == typeof(DateTime))
-                   || (type == typeof(DateTimeOffset))
-                   || (type == typeof(decimal))
-                   || (type == typeof(double))
-                   || (type == typeof(float))
-                   || (type == typeof(Guid))
-                   || (type == typeof(string))
-                   || (type == typeof(TimeSpan))
-                   || type.GetTypeInfo().IsEnum;
-        }
-
-        public static bool IsPrimitive(this Type type)
-            => type.IsInteger() || type.IsNonIntegerPrimitive();
 
         public static bool IsInstantiable(this Type type) => IsInstantiable(type.GetTypeInfo());
 
@@ -138,7 +118,7 @@ namespace System
                     .Union(new[] { type })
                     .Where(
                         t => t.GetTypeInfo().IsGenericType
-                             && (t.GetGenericTypeDefinition() == interfaceOrBaseType));
+                             && t.GetGenericTypeDefinition() == interfaceOrBaseType);
             }
 
             return Enumerable.Empty<Type>();
@@ -195,35 +175,20 @@ namespace System
         public static IEnumerable<MemberInfo> GetMembersInHierarchy(this Type type, string name)
         {
             // Do the whole hierarchy for properties first since looking for fields is slower.
-            var currentType = type;
-            do
+            foreach (var propertyInfo in type.GetRuntimeProperties().Where(pi => pi.Name == name && !(pi.GetMethod ?? pi.SetMethod).IsStatic))
             {
-                var typeInfo = currentType.GetTypeInfo();
-                var propertyInfo = typeInfo.GetDeclaredProperty(name);
-                if (propertyInfo != null
-                    && !(propertyInfo.GetMethod ?? propertyInfo.SetMethod).IsStatic)
-                {
-                    yield return propertyInfo;
-                }
-                currentType = typeInfo.BaseType;
+                yield return propertyInfo;
             }
-            while (currentType != null);
 
-            currentType = type;
-            do
+            foreach (var fieldInfo in type.GetRuntimeFields().Where(f => f.Name == name && !f.IsStatic))
             {
-                var fieldInfo = currentType.GetRuntimeFields().FirstOrDefault(f => f.Name == name && !f.IsStatic);
-                if (fieldInfo != null)
-                {
-                    yield return fieldInfo;
-                }
-                currentType = currentType.GetTypeInfo().BaseType;
+                yield return fieldInfo;
             }
-            while (currentType != null);
         }
 
         private static readonly Dictionary<Type, object> _commonTypeDictionary = new Dictionary<Type, object>
         {
+#pragma warning disable IDE0034 // Simplify 'default' expression - default causes default(object)
             { typeof(int), default(int) },
             { typeof(Guid), default(Guid) },
             { typeof(DateTime), default(DateTime) },
@@ -239,6 +204,7 @@ namespace System
             { typeof(ushort), default(ushort) },
             { typeof(ulong), default(ulong) },
             { typeof(sbyte), default(sbyte) }
+#pragma warning restore IDE0034 // Simplify 'default' expression
         };
 
         public static object GetDefaultValue(this Type type)
@@ -251,13 +217,12 @@ namespace System
             // A bit of perf code to avoid calling Activator.CreateInstance for common types and
             // to avoid boxing on every call. This is about 50% faster than just calling CreateInstance
             // for all value types.
-            object value;
-            return _commonTypeDictionary.TryGetValue(type, out value)
+            return _commonTypeDictionary.TryGetValue(type, out var value)
                 ? value
                 : Activator.CreateInstance(type);
         }
 
-        public static IEnumerable<TypeInfo> GetConstructableTypes(this Assembly assembly)
+        public static IEnumerable<TypeInfo> GetConstructibleTypes(this Assembly assembly)
             => assembly.GetLoadableDefinedTypes().Where(
                 t => !t.IsAbstract
                      && !t.IsGenericTypeDefinition);
