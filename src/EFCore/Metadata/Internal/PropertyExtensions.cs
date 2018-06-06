@@ -61,7 +61,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public static IProperty GetGenerationProperty([NotNull] this IProperty property)
         {
-            var traversalList = new List<IProperty> { property };
+            var traversalList = new List<IProperty>
+            {
+                property
+            };
 
             var index = 0;
             while (index < traversalList.Count)
@@ -87,8 +90,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         }
                     }
                 }
+
                 index++;
             }
+
             return null;
         }
 
@@ -97,7 +102,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     values when new entities are added to the context.
         /// </summary>
         public static bool RequiresValueGenerator([NotNull] this IProperty property)
-            => (property.ValueGenerated.HasFlag(ValueGenerated.OnAdd)
+            => ((property.ValueGenerated & ValueGenerated.OnAdd) == ValueGenerated.OnAdd
                 && !property.IsForeignKey()
                 && property.IsKey())
                || property.GetValueGeneratorFactory() != null;
@@ -145,6 +150,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static IProperty FindPrincipal([NotNull] this IProperty property)
         {
             var concreteProperty = property.AsProperty();
@@ -163,6 +169,45 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             return null;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static IReadOnlyList<IProperty> FindPrincipals([NotNull] this IProperty property)
+        {
+            var principals = new List<IProperty>
+            {
+                property
+            };
+            AddPrincipals(property, principals);
+            return principals;
+        }
+
+        private static void AddPrincipals(IProperty property, List<IProperty> visited)
+        {
+            var concreteProperty = property.AsProperty();
+
+            if (concreteProperty.ForeignKeys != null)
+            {
+                foreach (var foreignKey in concreteProperty.ForeignKeys)
+                {
+                    for (var propertyIndex = 0; propertyIndex < foreignKey.Properties.Count; propertyIndex++)
+                    {
+                        if (property == foreignKey.Properties[propertyIndex])
+                        {
+                            var principal = foreignKey.PrincipalKey.Properties[propertyIndex];
+                            if (!visited.Contains(principal))
+                            {
+                                visited.Add(principal);
+
+                                AddPrincipals(principal, visited);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>

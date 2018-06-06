@@ -4,8 +4,9 @@
 using System.Data.Common;
 using System.Data.SqlClient;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -33,14 +34,16 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         /// </summary>
         protected override DbConnection CreateDbConnection() => new SqlConnection(ConnectionString);
 
-        // TODO use clone connection method once implemented see #1406
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual ISqlServerConnection CreateMasterConnection()
         {
-            var connectionStringBuilder = new SqlConnectionStringBuilder(ConnectionString) { InitialCatalog = "master" };
+            var connectionStringBuilder = new SqlConnectionStringBuilder(ConnectionString)
+            {
+                InitialCatalog = "master"
+            };
             connectionStringBuilder.Remove("AttachDBFilename");
 
             var contextOptions = new DbContextOptionsBuilder()

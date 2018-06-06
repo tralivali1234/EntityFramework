@@ -3,7 +3,6 @@
 
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Storage
@@ -15,9 +14,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var commandBuilder = new RelationalCommandBuilder(
                 new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                new FakeRelationalTypeMapper(
-                    new CoreTypeMapperDependencies(),
-                    new RelationalTypeMapperDependencies()));
+                new TestRelationalTypeMappingSource(
+                    TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                    TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()));
 
             var command = commandBuilder.Build();
 
@@ -30,9 +29,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var commandBuilder = new RelationalCommandBuilder(
                 new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                new FakeRelationalTypeMapper(
-                    new CoreTypeMapperDependencies(),
-                    new RelationalTypeMapperDependencies()));
+                new TestRelationalTypeMappingSource(
+                    TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                    TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()));
 
             commandBuilder.ParameterBuilder.AddParameter(
                 "InvariantName",

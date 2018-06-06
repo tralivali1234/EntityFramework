@@ -6,9 +6,11 @@ using System.Collections.Generic;
 using System.Threading;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class PropertyMappingValidationConventionTest
@@ -18,14 +20,25 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var modelBuilder = new InternalModelBuilder(new Model());
             var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveAsPropertyEntity), ConfigurationSource.Convention);
-            entityTypeBuilder.Property("Property", typeof(NavigationAsProperty), ConfigurationSource.Convention);
+            entityTypeBuilder.Property(nameof(NonPrimitiveAsPropertyEntity.Property), typeof(NavigationAsProperty), ConfigurationSource.Convention);
 
             Assert.Equal(
                 CoreStrings.PropertyNotMapped(
                     typeof(NonPrimitiveAsPropertyEntity).ShortDisplayName(),
-                    "Property",
+                    nameof(NonPrimitiveAsPropertyEntity.Property),
                     typeof(NavigationAsProperty).ShortDisplayName()),
                 Assert.Throws<InvalidOperationException>(() => CreateConvention().Apply(modelBuilder)).Message);
+        }
+
+        [Fact]
+        public virtual void Does_not_throw_when_added_shadow_property_by_convention_is_not_of_primitive_type()
+        {
+            var modelBuilder = new InternalModelBuilder(new Model());
+            var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveAsPropertyEntity), ConfigurationSource.Convention);
+            entityTypeBuilder.Property("ShadowProperty", typeof(NavigationAsProperty), ConfigurationSource.Convention);
+            entityTypeBuilder.Ignore(nameof(NonPrimitiveAsPropertyEntity.Property), ConfigurationSource.Explicit);
+
+            CreateConvention().Apply(modelBuilder);
         }
 
         [Fact]
@@ -166,7 +179,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         }
 
         protected virtual PropertyMappingValidationConvention CreateConvention()
-            => new PropertyMappingValidationConvention(new CoreTypeMapper(new CoreTypeMapperDependencies()));
+            => new PropertyMappingValidationConvention(
+                TestServiceFactory.Instance.Create<FallbackTypeMappingSource>(),
+                TestServiceFactory.Instance.Create<IMemberClassifier>());
+
+        protected class NonPrimitiveNonNavigationAsPropertyEntity
+        {
+        }
 
         protected class NonPrimitiveAsPropertyEntity
         {
@@ -205,7 +224,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             public int WriteOnlyProperty
             {
-                set { _writeOnlyField = value; }
+                set => _writeOnlyField = value;
             }
         }
 

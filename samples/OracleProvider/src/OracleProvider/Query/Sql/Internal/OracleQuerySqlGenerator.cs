@@ -3,15 +3,17 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.Sql;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
 
-namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Query.Sql.Internal
 {
     public class OracleQuerySqlGenerator : DefaultQuerySqlGenerator
     {
@@ -162,11 +164,38 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
             return fromSqlExpression;
         }
 
-        protected override void GeneratorPseudoFromClause()
+        protected override void GeneratePseudoFromClause()
         {
             Sql.Append(" FROM DUAL");
         }
 
+        private static readonly HashSet<string> _builtInFunctions 
+            = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "MAX",
+                "MIN",
+                "SUM",
+                "SUBSTR",
+                "INSTR",
+                "LENGTH",
+                "COUNT"
+            };
+        
+        protected override void GenerateSqlFunctionName(SqlFunctionExpression sqlFunctionExpression)
+        {
+            if (sqlFunctionExpression.Instance != null)
+            {
+                Visit(sqlFunctionExpression.Instance);
+
+                Sql.Append(".");
+            }
+            
+            Sql.Append(
+                _builtInFunctions.Contains(sqlFunctionExpression.FunctionName)
+                    ? sqlFunctionExpression.FunctionName
+                    : SqlGenerator.DelimitIdentifier(sqlFunctionExpression.FunctionName));
+        }
+        
         public override Expression VisitCrossJoinLateral(CrossJoinLateralExpression crossJoinLateralExpression)
         {
             Check.NotNull(crossJoinLateralExpression, nameof(crossJoinLateralExpression));
@@ -227,7 +256,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
                 {
                     if (sqlFunctionExpression.Arguments[1] is ParameterExpression parameterExpression
                         && ParameterValues.TryGetValue(parameterExpression.Name, out var value)
-                        && (string)value == string.Empty)
+                        && ((string)value)?.Length == 0)
                     {
                         return Visit(Expression.Constant(1));
                     }
@@ -263,11 +292,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
         }
 
         private static Expression ExplicitCastToBool(Expression expression)
-        {
-            return (expression as BinaryExpression)?.NodeType == ExpressionType.Coalesce
-                   && expression.Type.UnwrapNullableType() == typeof(bool)
+            => (expression as BinaryExpression)?.NodeType == ExpressionType.Coalesce
+               && expression.Type.UnwrapNullableType() == typeof(bool)
                 ? new ExplicitCastExpression(expression, expression.Type)
                 : expression;
-        }
     }
 }

@@ -13,6 +13,27 @@ namespace Microsoft.EntityFrameworkCore.Metadata
     public class RelationalMetadataExtensionsTest
     {
         [Fact]
+        public void Can_get_and_set_fixed_length()
+        {
+            var modelBuilder = new ModelBuilder(new ConventionSet());
+
+            var property = modelBuilder
+                .Entity<Customer>()
+                .Property(e => e.Name)
+                .Metadata;
+
+            Assert.False(property.Relational().IsFixedLength);
+
+            property.Relational().IsFixedLength = true;
+
+            Assert.True(property.Relational().IsFixedLength);
+
+            property.Relational().IsFixedLength = false;
+
+            Assert.False(property.Relational().IsFixedLength);
+        }
+
+        [Fact]
         public void Can_get_and_set_index_filter()
         {
             var modelBuilder = new ModelBuilder(new ConventionSet());
@@ -213,8 +234,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
             property.Relational().DefaultValue = MyEnum.Mon;
 
-            Assert.Equal(typeof(byte), property.Relational().DefaultValue.GetType());
-            Assert.Equal((byte)1, property.Relational().DefaultValue);
+            Assert.Equal(typeof(MyEnum), property.Relational().DefaultValue.GetType());
+            Assert.Equal(MyEnum.Mon, property.Relational().DefaultValue);
 
             property.Relational().DefaultValue = null;
 

@@ -44,7 +44,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
             Assert.Equal("GenericContextModelSnapshot", migration.SnapshotName);
         }
 
-        private MigrationsScaffolder CreateMigrationScaffolder<TContext>()
+        private IMigrationsScaffolder CreateMigrationScaffolder<TContext>()
             where TContext : DbContext, new()
         {
             var currentContext = new CurrentDbContext(new TContext());
@@ -55,7 +55,8 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 = new MigrationsAssembly(
                     currentContext,
                     new DbContextOptions<TContext>().WithExtension(new FakeRelationalOptionsExtension()),
-                    idGenerator);
+                    idGenerator,
+                    new FakeDiagnosticsLogger<DbLoggerCategory.Migrations>());
             var historyRepository = new MockHistoryRepository();
 
             var services = RelationalTestHelpers.Instance.CreateContextServices();
@@ -66,7 +67,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                     new Model(),
                     migrationAssembly,
                     new MigrationsModelDiffer(
-                        new TestRelationalTypeMapper(new CoreTypeMapperDependencies(), new RelationalTypeMapperDependencies()),
+                        new TestRelationalTypeMappingSource(
+                            TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                            TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()),
                         new MigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies()),
                         services.GetRequiredService<IChangeDetector>(),
                         services.GetRequiredService<StateManagerDependencies>(),

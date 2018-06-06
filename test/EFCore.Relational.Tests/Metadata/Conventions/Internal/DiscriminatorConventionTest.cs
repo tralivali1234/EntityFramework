@@ -1,11 +1,14 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable UnusedMember.Local
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class DiscriminatorConventionTest
@@ -161,13 +164,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
         private static InternalEntityTypeBuilder CreateInternalEntityTypeBuilder<T>()
         {
-            var modelBuilder
-                = new InternalModelBuilder(
-                    new Model(
-                        new CoreConventionSetBuilder(
-                                new CoreConventionSetBuilderDependencies(
-                                    new CoreTypeMapper(new CoreTypeMapperDependencies())))
-                            .CreateConventionSet()));
+            var modelBuilder = InMemoryTestHelpers.Instance.CreateConventionBuilder().GetInfrastructure();
 
             return modelBuilder.Entity(typeof(T), ConfigurationSource.Explicit);
         }

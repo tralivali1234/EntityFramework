@@ -10,6 +10,8 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using Microsoft.EntityFrameworkCore.Sqlite.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Migrations
@@ -63,6 +65,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
 
                 operations.Add(operation);
             }
+
             return operations.AsReadOnly();
         }
 
@@ -160,7 +163,8 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
 
-            if (operation.NewName != null)
+            if (operation.NewName != null
+                && operation.NewName != operation.Name)
             {
                 builder
                     .Append("ALTER TABLE ")
@@ -196,12 +200,38 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                     {
                         columnOp.AddAnnotation(SqliteAnnotationNames.InlinePrimaryKeyName, operation.PrimaryKey.Name);
                     }
+
                     operation.PrimaryKey = null;
                 }
             }
 
             base.Generate(operation, model, builder);
         }
+
+        /// <summary>
+        ///     Generates a SQL fragment for a column definition in an <see cref="AddColumnOperation" />.
+        /// </summary>
+        /// <param name="operation"> The operation. </param>
+        /// <param name="model"> The target model which may be <c>null</c> if the operations exist without a model. </param>
+        /// <param name="builder"> The command builder to use to add the SQL fragment. </param>
+        protected override void ColumnDefinition(AddColumnOperation operation, IModel model, MigrationCommandListBuilder builder)
+            => ColumnDefinition(
+                operation.Schema,
+                operation.Table,
+                operation.Name,
+                operation.ClrType,
+                operation.ColumnType,
+                operation.IsUnicode,
+                operation.MaxLength,
+                operation.IsFixedLength,
+                operation.IsRowVersion,
+                operation.IsNullable,
+                operation.DefaultValue,
+                operation.DefaultValueSql,
+                operation.ComputedColumnSql,
+                operation,
+                model,
+                builder);
 
         /// <summary>
         ///     Generates a SQL fragment for a column definition for the given column metadata.
@@ -217,6 +247,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         /// <param name="maxLength">
         ///     The maximum amount of data that the column can contain, or <c>null</c> if this is not applicable or not specified.
         /// </param>
+        /// <param name="fixedLength"> Indicates whether or not the column is constrained to fixed-length data. </param>
         /// <param name="rowVersion">
         ///     Indicates whether or not this column is an automatic concurrency token, such as a SQL Server timestamp/rowversion.
         /// </param>
@@ -235,6 +266,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             string type,
             bool? unicode,
             int? maxLength,
+            bool? fixedLength,
             bool rowVersion,
             bool nullable,
             object defaultValue,
@@ -245,7 +277,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             MigrationCommandListBuilder builder)
         {
             base.ColumnDefinition(
-                schema, table, name, clrType, type, unicode, maxLength, rowVersion, nullable,
+                schema, table, name, clrType, type, unicode, maxLength, fixedLength, rowVersion, nullable,
                 defaultValue, defaultValueSql, computedColumnSql, annotatable, model, builder);
 
             var inlinePk = annotatable[SqliteAnnotationNames.InlinePrimaryKey] as bool?;
@@ -259,6 +291,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                         .Append(" CONSTRAINT ")
                         .Append(Dependencies.SqlGenerationHelper.DelimitIdentifier(inlinePkName));
                 }
+
                 builder.Append(" PRIMARY KEY");
                 var autoincrement = annotatable[SqliteAnnotationNames.Autoincrement] as bool?
                                     // NB: Migrations scaffolded with version 1.0.0 don't have the prefix. See #6461

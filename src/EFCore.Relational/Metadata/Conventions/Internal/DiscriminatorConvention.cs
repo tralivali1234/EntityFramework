@@ -12,7 +12,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class DiscriminatorConvention : IBaseTypeChangedConvention
+    public class DiscriminatorConvention : IBaseTypeChangedConvention, IEntityTypeRemovedConvention
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -22,10 +22,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             if (oldBaseType != null
                 && oldBaseType.BaseType == null
-                && !oldBaseType.GetDerivedTypes().Any())
+                && oldBaseType.GetDirectlyDerivedTypes().Count == 0)
             {
-                var oldBaseTypeBuilder = oldBaseType.Builder;
-                oldBaseTypeBuilder?.Relational(ConfigurationSource.Convention).HasDiscriminator(propertyInfo: null);
+                oldBaseType.Builder?.Relational(ConfigurationSource.Convention).HasDiscriminator(propertyInfo: null);
             }
 
             var entityType = entityTypeBuilder.Metadata;
@@ -47,7 +46,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             {
                 if (entityTypeBuilder.Relational(ConfigurationSource.Convention).HasDiscriminator(propertyInfo: null) == null)
                 {
-                    // TODO: log warning that the current discriminator couldn't be removed
                     return true;
                 }
 
@@ -69,7 +67,24 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             return true;
         }
 
-        private void SetDefaultDiscriminatorValues(IReadOnlyList<EntityType> entityTypes, DiscriminatorBuilder discriminator)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool Apply(InternalModelBuilder modelBuilder, EntityType type)
+        {
+            var oldBaseType = type.BaseType;
+            if (oldBaseType != null
+                && oldBaseType.BaseType == null
+                && oldBaseType.GetDirectlyDerivedTypes().Count == 0)
+            {
+                oldBaseType.Builder?.Relational(ConfigurationSource.Convention).HasDiscriminator(propertyInfo: null);
+            }
+
+            return true;
+        }
+
+        private static void SetDefaultDiscriminatorValues(IReadOnlyList<EntityType> entityTypes, DiscriminatorBuilder discriminator)
         {
             foreach (var entityType in entityTypes)
             {

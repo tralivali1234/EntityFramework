@@ -369,6 +369,48 @@ namespace Microsoft.EntityFrameworkCore
         public virtual void Update_fields_only()
             => Update<BlogFields>("Posts");
 
+        [Fact]
+        public virtual void Include_collection_fields_only_for_navs_too()
+        {
+            using (var context = CreateContext())
+            {
+                AssertGraph(context.Set<BlogNavFields>().Include("_posts").ToList());
+            }
+        }
+
+        [Fact]
+        public virtual void Include_reference_fields_only_only_for_navs_too()
+        {
+            using (var context = CreateContext())
+            {
+                AssertGraph(context.Set<PostNavFields>().Include("_blog").ToList());
+            }
+        }
+
+        [Fact]
+        public virtual void Load_collection_fields_only_only_for_navs_too()
+            => Load_collection<BlogNavFields>("_posts");
+
+        [Fact]
+        public virtual void Load_reference_fields_only_only_for_navs_too()
+            => Load_reference<PostNavFields>("_blog");
+
+        [Fact]
+        public virtual void Query_with_conditional_constant_fields_only_only_for_navs_too()
+            => Query_with_conditional_constant<PostNavFields>("_blogId");
+
+        [Fact]
+        public virtual void Query_with_conditional_param_fields_only_only_for_navs_too()
+            => Query_with_conditional_param<PostNavFields>("_title");
+
+        [Fact]
+        public virtual void Projection_fields_only_only_for_navs_too()
+            => Projection<PostNavFields>("_id", "_title");
+
+        [Fact]
+        public virtual void Update_fields_only_only_for_navs_too()
+            => Update<BlogNavFields>("_posts");
+
         protected virtual void Load_collection<TBlog>(string navigation)
             where TBlog : class, IBlogAccesor, new()
         {
@@ -463,38 +505,38 @@ namespace Microsoft.EntityFrameworkCore
             TestHelpers.ExecuteWithStrategyInTransaction(
                 CreateContext, UseTransaction,
                 context =>
+                {
+                    var blogs = context.Set<TBlog>().ToList();
+
+                    foreach (var blog in blogs)
                     {
-                        var blogs = context.Set<TBlog>().ToList();
+                        context.Entry(blog).Collection(navigation).Load();
 
-                        foreach (var blog in blogs)
+                        blog.AccessTitle += "Updated";
+
+                        foreach (var post in blog.AccessPosts)
                         {
-                            context.Entry(blog).Collection(navigation).Load();
-
-                            blog.AccessTitle += "Updated";
-
-                            foreach (var post in blog.AccessPosts)
-                            {
-                                post.AccessTitle += "Updated";
-                            }
+                            post.AccessTitle += "Updated";
                         }
+                    }
 
-                        AssertGraph(blogs, "Updated");
+                    AssertGraph(blogs, "Updated");
 
-                        context.SaveChanges();
+                    context.SaveChanges();
 
-                        AssertGraph(blogs, "Updated");
-                    },
+                    AssertGraph(blogs, "Updated");
+                },
                 context =>
+                {
+                    var blogs = context.Set<TBlog>().ToList();
+
+                    foreach (var blog in blogs)
                     {
-                        var blogs = context.Set<TBlog>().ToList();
+                        context.Entry(blog).Collection(navigation).Load();
+                    }
 
-                        foreach (var blog in blogs)
-                        {
-                            context.Entry(blog).Collection(navigation).Load();
-                        }
-
-                        AssertGraph(blogs, "Updated");
-                    });
+                    AssertGraph(blogs, "Updated");
+                });
         }
 
         protected virtual void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)
@@ -555,20 +597,20 @@ namespace Microsoft.EntityFrameworkCore
 
             int IBlogAccesor.AccessId
             {
-                get { return Id; }
-                set { Id = value; }
+                get => Id;
+                set => Id = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return Title; }
-                set { Title = value; }
+                get => Title;
+                set => Title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return Posts; }
-                set { Posts = (IEnumerable<PostAuto>)value; }
+                get => Posts;
+                set => Posts = (IEnumerable<PostAuto>)value;
             }
         }
 
@@ -584,26 +626,26 @@ namespace Microsoft.EntityFrameworkCore
 
             int IPostAccesor.AccessId
             {
-                get { return Id; }
-                set { Id = value; }
+                get => Id;
+                set => Id = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return Title; }
-                set { Title = value; }
+                get => Title;
+                set => Title = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return BlogId; }
-                set { BlogId = value; }
+                get => BlogId;
+                set => BlogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return Blog; }
-                set { Blog = (BlogAuto)value; }
+                get => Blog;
+                set => Blog = (BlogAuto)value;
             }
         }
 
@@ -617,40 +659,40 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                get { return _id; }
-                set { _id = value; }
+                get => _id;
+                set => _id = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public string Title
             {
-                get { return _title; }
-                set { _title = value; }
+                get => _title;
+                set => _title = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public IEnumerable<PostFull> Posts
             {
-                get { return _posts; }
-                set { _posts = (ICollection<PostFull>)value; }
+                get => _posts;
+                set => _posts = (ICollection<PostFull>)value;
             }
 
             int IBlogAccesor.AccessId
             {
-                get { return Id; }
-                set { Id = value; }
+                get => Id;
+                set => Id = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return Title; }
-                set { Title = value; }
+                get => Title;
+                set => Title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return Posts; }
-                set { Posts = (IEnumerable<PostFull>)value; }
+                get => Posts;
+                set => Posts = (IEnumerable<PostFull>)value;
             }
         }
 
@@ -665,53 +707,116 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                get { return _id; }
-                set { _id = value; }
+                get => _id;
+                set => _id = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public string Title
             {
-                get { return _title; }
-                set { _title = value; }
+                get => _title;
+                set => _title = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public int BlogId
             {
-                get { return _blogId; }
-                set { _blogId = value; }
+                get => _blogId;
+                set => _blogId = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public BlogFull Blog
             {
-                get { return _blog; }
-                set { _blog = value; }
+                get => _blog;
+                set => _blog = value;
             }
 
             int IPostAccesor.AccessId
             {
-                get { return Id; }
-                set { Id = value; }
+                get => Id;
+                set => Id = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return Title; }
-                set { Title = value; }
+                get => Title;
+                set => Title = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return BlogId; }
-                set { BlogId = value; }
+                get => BlogId;
+                set => BlogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return Blog; }
-                set { Blog = (BlogFull)value; }
+                get => Blog;
+                set => Blog = (BlogFull)value;
+            }
+        }
+
+        protected class BlogNavFields : IBlogAccesor
+        {
+            [DatabaseGenerated(DatabaseGeneratedOption.None)]
+            private int _id;
+            private string _title;
+            private ICollection<PostNavFields> _posts;
+
+            int IBlogAccesor.AccessId
+            {
+                get => _id;
+                set => _id = value;
+            }
+
+            // ReSharper disable once ConvertToAutoProperty
+            string IBlogAccesor.AccessTitle
+            {
+                get => _title;
+                set => _title = value;
+            }
+
+            IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
+            {
+                get => _posts;
+                set => _posts = (ICollection<PostNavFields>)value;
+            }
+        }
+
+        protected class PostNavFields : IPostAccesor
+        {
+            [DatabaseGenerated(DatabaseGeneratedOption.None)]
+            private int _id;
+            private string _title;
+            private int _blogId;
+
+            private BlogNavFields _blog;
+
+            int IPostAccesor.AccessId
+            {
+                get => _id;
+                set => _id = value;
+            }
+
+            // ReSharper disable once ConvertToAutoProperty
+            string IPostAccesor.AccessTitle
+            {
+                get => _title;
+                set => _title = value;
+            }
+
+            // ReSharper disable once ConvertToAutoProperty
+            int IPostAccesor.AccessBlogId
+            {
+                get => _blogId;
+                set => _blogId = value;
+            }
+
+            IBlogAccesor IPostAccesor.AccessBlog
+            {
+                get => _blog;
+                set => _blog = (BlogNavFields)value;
             }
         }
 
@@ -725,40 +830,40 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                get { return _myid; }
-                set { _myid = value; }
+                get => _myid;
+                set => _myid = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public string Title
             {
-                get { return _mytitle; }
-                set { _mytitle = value; }
+                get => _mytitle;
+                set => _mytitle = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public IEnumerable<PostFullExplicit> Posts
             {
-                get { return _myposts; }
-                set { _myposts = (ICollection<PostFullExplicit>)value; }
+                get => _myposts;
+                set => _myposts = (ICollection<PostFullExplicit>)value;
             }
 
             int IBlogAccesor.AccessId
             {
-                get { return Id; }
-                set { Id = value; }
+                get => Id;
+                set => Id = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return Title; }
-                set { Title = value; }
+                get => Title;
+                set => Title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return Posts; }
-                set { Posts = (IEnumerable<PostFullExplicit>)value; }
+                get => Posts;
+                set => Posts = (IEnumerable<PostFullExplicit>)value;
             }
         }
 
@@ -773,53 +878,53 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                get { return _myid; }
-                set { _myid = value; }
+                get => _myid;
+                set => _myid = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public string Title
             {
-                get { return _mytitle; }
-                set { _mytitle = value; }
+                get => _mytitle;
+                set => _mytitle = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public int BlogId
             {
-                get { return _myblogId; }
-                set { _myblogId = value; }
+                get => _myblogId;
+                set => _myblogId = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public BlogFullExplicit Blog
             {
-                get { return _myblog; }
-                set { _myblog = value; }
+                get => _myblog;
+                set => _myblog = value;
             }
 
             int IPostAccesor.AccessId
             {
-                get { return Id; }
-                set { Id = value; }
+                get => Id;
+                set => Id = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return Title; }
-                set { Title = value; }
+                get => Title;
+                set => Title = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return BlogId; }
-                set { BlogId = value; }
+                get => BlogId;
+                set => BlogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return Blog; }
-                set { Blog = (BlogFullExplicit)value; }
+                get => Blog;
+                set => Blog = (BlogFullExplicit)value;
             }
         }
 
@@ -841,20 +946,20 @@ namespace Microsoft.EntityFrameworkCore
 
             int IBlogAccesor.AccessId
             {
-                get { return Id; }
-                set { _id = value; }
+                get => Id;
+                set => _id = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return Title; }
-                set { _title = value; }
+                get => Title;
+                set => _title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return Posts; }
-                set { _posts = (ICollection<PostReadOnly>)value; }
+                get => Posts;
+                set => _posts = (ICollection<PostReadOnly>)value;
             }
         }
 
@@ -880,26 +985,26 @@ namespace Microsoft.EntityFrameworkCore
 
             int IPostAccesor.AccessId
             {
-                get { return Id; }
-                set { _id = value; }
+                get => Id;
+                set => _id = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return Title; }
-                set { _title = value; }
+                get => Title;
+                set => _title = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return BlogId; }
-                set { _blogId = value; }
+                get => BlogId;
+                set => _blogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return Blog; }
-                set { _blog = (BlogReadOnly)value; }
+                get => Blog;
+                set => _blog = (BlogReadOnly)value;
             }
         }
 
@@ -921,20 +1026,20 @@ namespace Microsoft.EntityFrameworkCore
 
             int IBlogAccesor.AccessId
             {
-                get { return Id; }
-                set { _myid = value; }
+                get => Id;
+                set => _myid = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return Title; }
-                set { _mytitle = value; }
+                get => Title;
+                set => _mytitle = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return Posts; }
-                set { _myposts = (ICollection<PostReadOnlyExplicit>)value; }
+                get => Posts;
+                set => _myposts = (ICollection<PostReadOnlyExplicit>)value;
             }
         }
 
@@ -960,26 +1065,26 @@ namespace Microsoft.EntityFrameworkCore
 
             int IPostAccesor.AccessId
             {
-                get { return Id; }
-                set { _myid = value; }
+                get => Id;
+                set => _myid = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return Title; }
-                set { _mytitle = value; }
+                get => Title;
+                set => _mytitle = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return BlogId; }
-                set { _myblogId = value; }
+                get => BlogId;
+                set => _myblogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return Blog; }
-                set { _myblog = (BlogReadOnlyExplicit)value; }
+                get => Blog;
+                set => _myblog = (BlogReadOnlyExplicit)value;
             }
         }
 
@@ -992,35 +1097,35 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                set { _id = value; }
+                set => _id = value;
             }
 
             public string Title
             {
-                set { _title = value; }
+                set => _title = value;
             }
 
             public IEnumerable<PostWriteOnly> Posts
             {
-                set { _posts = (ICollection<PostWriteOnly>)value; }
+                set => _posts = (ICollection<PostWriteOnly>)value;
             }
 
             int IBlogAccesor.AccessId
             {
-                get { return _id; }
-                set { Id = value; }
+                get => _id;
+                set => Id = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return _title; }
-                set { Title = value; }
+                get => _title;
+                set => Title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return _posts; }
-                set { Posts = (IEnumerable<PostWriteOnly>)value; }
+                get => _posts;
+                set => Posts = (IEnumerable<PostWriteOnly>)value;
             }
         }
 
@@ -1034,46 +1139,46 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                set { _id = value; }
+                set => _id = value;
             }
 
             public string Title
             {
-                set { _title = value; }
+                set => _title = value;
             }
 
             public int BlogId
             {
-                set { _blogId = value; }
+                set => _blogId = value;
             }
 
             public BlogWriteOnly Blog
             {
-                set { _blog = value; }
+                set => _blog = value;
             }
 
             int IPostAccesor.AccessId
             {
-                get { return _id; }
-                set { Id = value; }
+                get => _id;
+                set => Id = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return _title; }
-                set { Title = value; }
+                get => _title;
+                set => Title = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return _blogId; }
-                set { BlogId = value; }
+                get => _blogId;
+                set => BlogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return _blog; }
-                set { Blog = (BlogWriteOnly)value; }
+                get => _blog;
+                set => Blog = (BlogWriteOnly)value;
             }
         }
 
@@ -1086,35 +1191,35 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                set { _myid = value; }
+                set => _myid = value;
             }
 
             public string Title
             {
-                set { _mytitle = value; }
+                set => _mytitle = value;
             }
 
             public IEnumerable<PostWriteOnlyExplicit> Posts
             {
-                set { _myposts = (ICollection<PostWriteOnlyExplicit>)value; }
+                set => _myposts = (ICollection<PostWriteOnlyExplicit>)value;
             }
 
             int IBlogAccesor.AccessId
             {
-                get { return _myid; }
-                set { Id = value; }
+                get => _myid;
+                set => Id = value;
             }
 
             string IBlogAccesor.AccessTitle
             {
-                get { return _mytitle; }
-                set { Title = value; }
+                get => _mytitle;
+                set => Title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return _myposts; }
-                set { Posts = (IEnumerable<PostWriteOnlyExplicit>)value; }
+                get => _myposts;
+                set => Posts = (IEnumerable<PostWriteOnlyExplicit>)value;
             }
         }
 
@@ -1128,46 +1233,46 @@ namespace Microsoft.EntityFrameworkCore
             [DatabaseGenerated(DatabaseGeneratedOption.None)]
             public int Id
             {
-                set { _myid = value; }
+                set => _myid = value;
             }
 
             public string Title
             {
-                set { _mytitle = value; }
+                set => _mytitle = value;
             }
 
             public int BlogId
             {
-                set { _myblogId = value; }
+                set => _myblogId = value;
             }
 
             public BlogWriteOnlyExplicit Blog
             {
-                set { _myblog = value; }
+                set => _myblog = value;
             }
 
             int IPostAccesor.AccessId
             {
-                get { return _myid; }
-                set { Id = value; }
+                get => _myid;
+                set => Id = value;
             }
 
             string IPostAccesor.AccessTitle
             {
-                get { return _mytitle; }
-                set { Title = value; }
+                get => _mytitle;
+                set => Title = value;
             }
 
             int IPostAccesor.AccessBlogId
             {
-                get { return _myblogId; }
-                set { BlogId = value; }
+                get => _myblogId;
+                set => BlogId = value;
             }
 
             IBlogAccesor IPostAccesor.AccessBlog
             {
-                get { return _myblog; }
-                set { Blog = (BlogWriteOnlyExplicit)value; }
+                get => _myblog;
+                set => Blog = (BlogWriteOnlyExplicit)value;
             }
         }
 
@@ -1182,21 +1287,21 @@ namespace Microsoft.EntityFrameworkCore
 
             int IBlogAccesor.AccessId
             {
-                get { return _id; }
-                set { _id = value; }
+                get => _id;
+                set => _id = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             string IBlogAccesor.AccessTitle
             {
-                get { return _title; }
-                set { _title = value; }
+                get => _title;
+                set => _title = value;
             }
 
             IEnumerable<IPostAccesor> IBlogAccesor.AccessPosts
             {
-                get { return Posts; }
-                set { Posts = (IEnumerable<PostFields>)value; }
+                get => Posts;
+                set => Posts = (IEnumerable<PostFields>)value;
             }
         }
 
@@ -1261,8 +1366,16 @@ namespace Microsoft.EntityFrameworkCore
                 AccessTitle = "Blog10",
                 AccessPosts = (IEnumerable<IPostAccesor>)new List<TPost>
                 {
-                    new TPost { AccessId = 10, AccessTitle = "Post10" },
-                    new TPost { AccessId = 11, AccessTitle = "Post11" }
+                    new TPost
+                    {
+                        AccessId = 10,
+                        AccessTitle = "Post10"
+                    },
+                    new TPost
+                    {
+                        AccessId = 11,
+                        AccessTitle = "Post11"
+                    }
                 }
             };
 
@@ -1278,14 +1391,24 @@ namespace Microsoft.EntityFrameworkCore
 
             return new List<TPost>
             {
-                new TPost { AccessId = 20, AccessTitle = "Post20", AccessBlog = blog },
-                new TPost { AccessId = 21, AccessTitle = "Post21", AccessBlog = blog }
+                new TPost
+                {
+                    AccessId = 20,
+                    AccessTitle = "Post20",
+                    AccessBlog = blog
+                },
+                new TPost
+                {
+                    AccessId = 21,
+                    AccessTitle = "Post21",
+                    AccessBlog = blog
+                }
             };
         }
 
         protected DbContext CreateContext() => Fixture.CreateContext();
 
-        public abstract class FieldMappingFixtureBase : SharedStoreFixtureBase<DbContext>
+        public abstract class FieldMappingFixtureBase : SharedStoreFixtureBase<PoolableDbContext>
         {
             protected override string StoreName { get; } = "FieldMapping";
 
@@ -1299,19 +1422,19 @@ namespace Microsoft.EntityFrameworkCore
 
                 modelBuilder.Entity<PostFullExplicit>(
                     b =>
-                        {
-                            b.Property(e => e.Id).HasField("_myid");
-                            b.Property(e => e.Title).HasField("_mytitle");
-                            b.Property(e => e.BlogId).HasField("_myblogId");
-                        });
+                    {
+                        b.Property(e => e.Id).HasField("_myid");
+                        b.Property(e => e.Title).HasField("_mytitle");
+                        b.Property(e => e.BlogId).HasField("_myblogId");
+                    });
 
                 modelBuilder.Entity<BlogFullExplicit>(
                     b =>
-                        {
-                            b.Property(e => e.Id).HasField("_myid");
-                            b.Property(e => e.Title).HasField("_mytitle");
-                            b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey(e => e.BlogId);
-                        });
+                    {
+                        b.Property(e => e.Id).HasField("_myid");
+                        b.Property(e => e.Title).HasField("_mytitle");
+                        b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey(e => e.BlogId);
+                    });
 
                 modelBuilder.Entity<PostFullExplicit>().Metadata.FindNavigation("Blog").SetField("_myblog");
                 modelBuilder.Entity<BlogFullExplicit>().Metadata.FindNavigation("Posts").SetField("_myposts");
@@ -1320,99 +1443,117 @@ namespace Microsoft.EntityFrameworkCore
                 {
                     modelBuilder.Entity<PostReadOnly>(
                         b =>
-                            {
-                                b.HasKey(e => e.Id);
-                                b.Property(e => e.Title);
-                                b.Property(e => e.BlogId);
-                            });
+                        {
+                            b.HasKey(e => e.Id);
+                            b.Property(e => e.Title);
+                            b.Property(e => e.BlogId);
+                        });
 
                     modelBuilder.Entity<BlogReadOnly>(
                         b =>
-                            {
-                                b.HasKey(e => e.Id);
-                                b.Property(e => e.Title);
-                                b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey(e => e.BlogId);
-                            });
+                        {
+                            b.HasKey(e => e.Id);
+                            b.Property(e => e.Title);
+                            b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey(e => e.BlogId);
+                        });
 
                     modelBuilder.Entity<PostReadOnlyExplicit>(
                         b =>
-                            {
-                                b.HasKey(e => e.Id);
-                                b.Property(e => e.Id).HasField("_myid");
-                                b.Property(e => e.Title).HasField("_mytitle");
-                                b.Property(e => e.BlogId).HasField("_myblogId");
-                            });
+                        {
+                            b.HasKey(e => e.Id);
+                            b.Property(e => e.Id).HasField("_myid");
+                            b.Property(e => e.Title).HasField("_mytitle");
+                            b.Property(e => e.BlogId).HasField("_myblogId");
+                        });
 
                     modelBuilder.Entity<BlogReadOnlyExplicit>(
                         b =>
-                            {
-                                b.HasKey(e => e.Id);
-                                b.Property(e => e.Id).HasField("_myid");
-                                b.Property(e => e.Title).HasField("_mytitle");
-                                b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey(e => e.BlogId);
-                            });
+                        {
+                            b.HasKey(e => e.Id);
+                            b.Property(e => e.Id).HasField("_myid");
+                            b.Property(e => e.Title).HasField("_mytitle");
+                            b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey(e => e.BlogId);
+                        });
 
                     modelBuilder.Entity<PostReadOnlyExplicit>().Metadata.FindNavigation("Blog").SetField("_myblog");
                     modelBuilder.Entity<BlogReadOnlyExplicit>().Metadata.FindNavigation("Posts").SetField("_myposts");
 
                     modelBuilder.Entity<PostWriteOnly>(
                         b =>
-                            {
-                                b.HasKey("Id");
-                                b.Property("Title");
-                                b.Property("BlogId");
-                            });
+                        {
+                            b.HasKey("Id");
+                            b.Property("Title");
+                            b.Property("BlogId");
+                        });
 
                     modelBuilder.Entity<BlogWriteOnly>(
                         b =>
-                            {
-                                b.HasKey("Id");
-                                b.Property("Title");
-                                b.HasMany(typeof(PostWriteOnly).DisplayName(), "Posts").WithOne("Blog").HasForeignKey("BlogId");
-                            });
+                        {
+                            b.HasKey("Id");
+                            b.Property("Title");
+                            b.HasMany(typeof(PostWriteOnly).DisplayName(), "Posts").WithOne("Blog").HasForeignKey("BlogId");
+                        });
 
                     modelBuilder.Entity<PostWriteOnlyExplicit>(
                         b =>
-                            {
-                                b.HasKey("Id");
-                                b.Property("Id").HasField("_myid");
-                                b.Property("Title").HasField("_mytitle");
-                                b.Property("BlogId").HasField("_myblogId");
-                            });
+                        {
+                            b.HasKey("Id");
+                            b.Property("Id").HasField("_myid");
+                            b.Property("Title").HasField("_mytitle");
+                            b.Property("BlogId").HasField("_myblogId");
+                        });
 
                     modelBuilder.Entity<BlogWriteOnlyExplicit>(
                         b =>
-                            {
-                                b.HasKey("Id");
-                                b.Property("Id").HasField("_myid");
-                                b.Property("Title").HasField("_mytitle");
-                                b.HasMany(typeof(PostWriteOnlyExplicit).DisplayName(), "Posts").WithOne("Blog").HasForeignKey("BlogId");
-                            });
+                        {
+                            b.HasKey("Id");
+                            b.Property("Id").HasField("_myid");
+                            b.Property("Title").HasField("_mytitle");
+                            b.HasMany(typeof(PostWriteOnlyExplicit).DisplayName(), "Posts").WithOne("Blog").HasForeignKey("BlogId");
+                        });
 
                     modelBuilder.Entity<PostWriteOnlyExplicit>().Metadata.FindNavigation("Blog").SetField("_myblog");
                     modelBuilder.Entity<BlogWriteOnlyExplicit>().Metadata.FindNavigation("Posts").SetField("_myposts");
 
                     modelBuilder.Entity<PostFields>(
                         b =>
-                            {
-                                b.Property("_id");
-                                b.HasKey("_id");
-                                b.Property("_title");
-                                b.Property("_blogId");
-                            });
+                        {
+                            b.Property("_id");
+                            b.HasKey("_id");
+                            b.Property("_title");
+                            b.Property("_blogId");
+                        });
 
                     modelBuilder.Entity<BlogFields>(
                         b =>
-                            {
-                                b.Property("_id");
-                                b.HasKey("_id");
-                                b.Property("_title");
-                                b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey("_blogId");
-                            });
+                        {
+                            b.Property("_id");
+                            b.HasKey("_id");
+                            b.Property("_title");
+                            b.HasMany(e => e.Posts).WithOne(e => e.Blog).HasForeignKey("_blogId");
+                        });
+
+                    modelBuilder.Entity<PostNavFields>(
+                        b =>
+                        {
+                            b.Property("_id");
+                            b.HasKey("_id");
+                            b.Property("_title");
+                            b.Property("_blogId");
+                        });
+
+                    modelBuilder.Entity<BlogNavFields>(
+                        b =>
+                        {
+                            b.Property("_id");
+                            b.HasKey("_id");
+                            b.Property("_title");
+                            b.HasMany(typeof(PostNavFields), "_posts").WithOne("_blog").HasForeignKey("_blogId");
+                        });
                 }
             }
 
-            protected override void Seed(DbContext context)
+            protected override void Seed(PoolableDbContext context)
             {
                 context.Add(CreateBlogAndPosts<BlogAuto, PostAuto>());
                 context.AddRange(CreatePostsAndBlog<BlogAuto, PostAuto>());
@@ -1439,6 +1580,9 @@ namespace Microsoft.EntityFrameworkCore
 
                     context.Add(CreateBlogAndPosts<BlogFields, PostFields>());
                     context.AddRange(CreatePostsAndBlog<BlogFields, PostFields>());
+
+                    context.Add(CreateBlogAndPosts<BlogNavFields, PostNavFields>());
+                    context.AddRange(CreatePostsAndBlog<BlogNavFields, PostNavFields>());
                 }
 
                 context.SaveChanges();

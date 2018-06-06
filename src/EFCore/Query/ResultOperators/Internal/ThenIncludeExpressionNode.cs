@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -25,9 +26,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         public static readonly IReadOnlyCollection<MethodInfo> SupportedMethods = new[]
         {
             EntityFrameworkQueryableExtensions.ThenIncludeAfterEnumerableMethodInfo,
-            EntityFrameworkQueryableExtensions.ThenIncludeAfterReferenceMethodInfo,
-            EntityFrameworkQueryableExtensions.ThenIncludeOnDerivedAfterEnumerableMethodInfo,
-            EntityFrameworkQueryableExtensions.ThenIncludeOnDerivedAfterReferenceMethodInfo,
+            EntityFrameworkQueryableExtensions.ThenIncludeAfterReferenceMethodInfo
         };
 
         /// <summary>
@@ -51,10 +50,15 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
             var includeResultOperator
                 = (IncludeResultOperator)clauseGenerationContext.GetContextInfo(Source);
 
-            includeResultOperator
-                .AppendToNavigationPath(
-                    NavigationPropertyPathLambda.GetComplexPropertyAccess(
-                        nameof(EntityFrameworkQueryableExtensions.ThenInclude)));
+            if (!NavigationPropertyPathLambda.TryGetComplexPropertyAccess(out var propertyPath))
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.InvalidIncludeLambdaExpression(
+                        nameof(EntityFrameworkQueryableExtensions.ThenInclude),
+                        NavigationPropertyPathLambda));
+            }
+
+            includeResultOperator.AppendToNavigationPath(propertyPath);
 
             clauseGenerationContext.AddContextInfo(this, includeResultOperator);
         }

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 
 namespace Microsoft.EntityFrameworkCore.Diagnostics
@@ -43,6 +44,8 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
             TransactionDisposed,
             TransactionError,
             AmbientTransactionWarning,
+            AmbientTransactionEnlisted,
+            ExplicitTransactionEnlisted,
 
             // DataReader events
             DataReaderDisposing = CoreEventId.RelationalBaseId + 300,
@@ -55,15 +58,21 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
             MigrationGeneratingUpScript,
             MigrationsNotApplied,
             MigrationsNotFound,
+            MigrationAttributeMissingWarning,
 
             // Query events
             QueryClientEvaluationWarning = CoreEventId.RelationalBaseId + 500,
             QueryPossibleUnintendedUseOfEqualsWarning,
             QueryPossibleExceptionWithAggregateOperator,
+            ValueConversionSqlLiteralWarning,
 
             // Model validation events
             ModelValidationKeyDefaultValueWarning = CoreEventId.RelationalBaseId + 600,
-            BoolWithDefaultWarning
+            BoolWithDefaultWarning,
+
+            // Update events
+            BatchReadyForExecution = CoreEventId.RelationalBaseId + 700,
+            BatchSmallerThanMinBatchSize
         }
 
         private static readonly string _connectionPrefix = DbLoggerCategory.Database.Connection.Name + ".";
@@ -272,6 +281,32 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
 
         /// <summary>
         ///     <para>
+        ///         Entity Framework enlisted the connection in an ambient transaction.
+        ///     </para>
+        ///     <para>
+        ///         This event is in the <see cref="DbLoggerCategory.Database.Transaction" /> category.
+        ///     </para>
+        ///     <para>
+        ///         This event uses the <see cref="TransactionEnlistedEventData" /> payload when used with a <see cref="DiagnosticSource" />.
+        ///     </para>
+        /// </summary>
+        public static readonly EventId AmbientTransactionEnlisted = MakeTransactionId(Id.AmbientTransactionEnlisted);
+
+        /// <summary>
+        ///     <para>
+        ///         The connection was explicitly enlisted in a transaction.
+        ///     </para>
+        ///     <para>
+        ///         This event is in the <see cref="DbLoggerCategory.Database.Transaction" /> category.
+        ///     </para>
+        ///     <para>
+        ///         This event uses the <see cref="TransactionEnlistedEventData" /> payload when used with a <see cref="DiagnosticSource" />.
+        ///     </para>
+        /// </summary>
+        public static readonly EventId ExplicitTransactionEnlisted = MakeTransactionId(Id.ExplicitTransactionEnlisted);
+
+        /// <summary>
+        ///     <para>
         ///         A database data reader has been disposed.
         ///     </para>
         ///     <para>
@@ -377,6 +412,19 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
         /// </summary>
         public static readonly EventId MigrationsNotFound = MakeMigrationsId(Id.MigrationsNotFound);
 
+        /// <summary>
+        ///     <para>
+        ///         A MigrationAttribute isn't specified on the class.
+        ///     </para>
+        ///     <para>
+        ///         This event is in the <see cref="DbLoggerCategory.Migrations" /> category.
+        ///     </para>
+        ///     <para>
+        ///         This event uses the <see cref="MigrationTypeEventData" /> payload when used with a <see cref="DiagnosticSource" />.
+        ///     </para>
+        /// </summary>
+        public static readonly EventId MigrationAttributeMissingWarning = MakeMigrationsId(Id.MigrationAttributeMissingWarning);
+
         private static readonly string _queryPrefix = DbLoggerCategory.Query.Name + ".";
         private static EventId MakeQueryId(Id id) => new EventId((int)id, _queryPrefix + id);
 
@@ -416,6 +464,16 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
         /// </summary>
         public static readonly EventId QueryPossibleExceptionWithAggregateOperator = MakeQueryId(Id.QueryPossibleExceptionWithAggregateOperator);
 
+        /// <summary>
+        ///     <para>
+        ///         A SQL literal is being generated for a value that is using a value conversion.
+        ///     </para>
+        ///     <para>
+        ///         This event is in the <see cref="DbLoggerCategory.Query" /> category.
+        ///     </para>
+        /// </summary>
+        public static readonly EventId ValueConversionSqlLiteralWarning = MakeQueryId(Id.ValueConversionSqlLiteralWarning);
+
         private static readonly string _validationPrefix = DbLoggerCategory.Model.Validation.Name + ".";
         private static EventId MakeValidationId(Id id) => new EventId((int)id, _validationPrefix + id);
 
@@ -444,5 +502,36 @@ namespace Microsoft.EntityFrameworkCore.Diagnostics
         ///     </para>
         /// </summary>
         public static readonly EventId BoolWithDefaultWarning = MakeValidationId(Id.BoolWithDefaultWarning);
+
+        private static readonly string _updatePrefix = DbLoggerCategory.Update.Name + ".";
+        private static EventId MakeUpdateId(Id id) => new EventId((int)id, _updatePrefix + id);
+
+        /// <summary>
+        ///     <para>
+        ///         Update commands were batched and are now ready for execution
+        ///         <see cref="RelationalDbContextOptionsBuilder{TBuilder,TExtension}.MinBatchSize" />.
+        ///     </para>
+        ///     <para>
+        ///         This event is in the <see cref="DbLoggerCategory.Update" /> category.
+        ///     </para>
+        ///     <para>
+        ///         This event uses the <see cref="BatchEventData" /> payload when used with a <see cref="DiagnosticSource" />.
+        ///     </para>
+        /// </summary>
+        public static readonly EventId BatchReadyForExecution = MakeUpdateId(Id.BatchReadyForExecution);
+
+        /// <summary>
+        ///     <para>
+        ///         Update commands were not batched because there were fewer than
+        ///         <see cref="RelationalDbContextOptionsBuilder{TBuilder,TExtension}.MinBatchSize" />.
+        ///     </para>
+        ///     <para>
+        ///         This event is in the <see cref="DbLoggerCategory.Update" /> category.
+        ///     </para>
+        ///     <para>
+        ///         This event uses the <see cref="MinBatchSizeEventData" /> payload when used with a <see cref="DiagnosticSource" />.
+        ///     </para>
+        /// </summary>
+        public static readonly EventId BatchSmallerThanMinBatchSize = MakeUpdateId(Id.BatchSmallerThanMinBatchSize);
     }
 }

@@ -450,7 +450,7 @@ namespace Microsoft.EntityFrameworkCore
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_view(
+        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_query_type_has_no_effect_on_local_view(
             bool toObservableCollection)
         {
             using (var context = CreateF1Context())
@@ -769,7 +769,7 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [Fact]
-        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_binding_list()
+        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_query_type_has_no_effect_on_local_binding_list()
         {
             using (var context = CreateF1Context())
             {
@@ -809,9 +809,21 @@ namespace Microsoft.EntityFrameworkCore
             using (var context = CreateF1Context())
             {
                 var testDrivers = context.Set<TestDriver>();
-                testDrivers.Attach(new TestDriver { Id = 3 });
-                testDrivers.Attach(new TestDriver { Id = 1 });
-                testDrivers.Attach(new TestDriver { Id = 4 });
+                testDrivers.Attach(
+                    new TestDriver
+                    {
+                        Id = 3
+                    });
+                testDrivers.Attach(
+                    new TestDriver
+                    {
+                        Id = 1
+                    });
+                testDrivers.Attach(
+                    new TestDriver
+                    {
+                        Id = 4
+                    });
 
                 var bindingList = testDrivers.Local.ToBindingList();
 
@@ -830,9 +842,21 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
-                context.Drivers.Attach(new TestDriver { Id = 3 });
-                context.Drivers.Attach(new TestDriver { Id = 1 });
-                context.Drivers.Attach(new TestDriver { Id = 4 });
+                context.Drivers.Attach(
+                    new TestDriver
+                    {
+                        Id = 3
+                    });
+                context.Drivers.Attach(
+                    new TestDriver
+                    {
+                        Id = 1
+                    });
+                context.Drivers.Attach(
+                    new TestDriver
+                    {
+                        Id = 4
+                    });
 
                 var bindingList = context.Drivers.Local.ToBindingList();
 
@@ -862,7 +886,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
-                var ferrari = context.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.Ferrari);
+                var ferrari = context.Teams.Single(t => t.Id == Team.Ferrari);
                 var navBindingList = ((IListSource)ferrari.Drivers).GetList();
 
                 var larry = new Driver
@@ -882,7 +906,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
-                var ferrari = context.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.Ferrari);
+                var ferrari = context.Teams.Single(t => t.Id == Team.Ferrari);
                 var navBindingList = ((IListSource)ferrari.Drivers).GetList();
                 var localDrivers = context.Drivers.Local;
 
@@ -909,7 +933,11 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
+#if Test20
                 var ferrari = context.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.Ferrari);
+#else
+                var ferrari = context.Teams.Single(t => t.Id == Team.Ferrari);
+#endif
                 var navBindingList = ((IListSource)ferrari.Drivers).GetList();
                 var localDrivers = context.Drivers.Local;
 

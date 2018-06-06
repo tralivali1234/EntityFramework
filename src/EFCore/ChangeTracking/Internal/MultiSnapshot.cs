@@ -11,7 +11,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public struct MultiSnapshot : ISnapshot
+    public readonly struct MultiSnapshot : ISnapshot
     {
         private readonly ISnapshot[] _snapshots;
 
@@ -40,8 +40,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public object this[int index]
         {
-            get { return _snapshots[index / Snapshot.MaxGenericTypes][index % Snapshot.MaxGenericTypes]; }
-            set { _snapshots[index / Snapshot.MaxGenericTypes][index % Snapshot.MaxGenericTypes] = value; }
+            get => _snapshots[index / Snapshot.MaxGenericTypes][index % Snapshot.MaxGenericTypes];
+            set => _snapshots[index / Snapshot.MaxGenericTypes][index % Snapshot.MaxGenericTypes] = value;
         }
     }
 }

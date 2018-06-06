@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.TestUtilities;
@@ -133,6 +134,33 @@ namespace Microsoft.EntityFrameworkCore
                 });
 
         [Fact]
+        public virtual void AddColumnOperation_with_fixed_length()
+            => Generate(
+                modelBuilder => modelBuilder.Entity("Person").Property<string>("Name").IsFixedLength(),
+                new AddColumnOperation
+                {
+                    Table = "Person",
+                    Name = "Name",
+                    ClrType = typeof(string),
+                    IsUnicode = true,
+                    IsNullable = true,
+                    IsFixedLength = true
+                });
+
+        [Fact]
+        public virtual void AddColumnOperation_with_fixed_length_no_model()
+            => Generate(
+                new AddColumnOperation
+                {
+                    Table = "Person",
+                    Name = "Name",
+                    ClrType = typeof(string),
+                    IsUnicode = false,
+                    IsNullable = true,
+                    IsFixedLength = true
+                });
+
+        [Fact]
         public virtual void AddColumnOperation_with_maxLength()
             => Generate(
                 modelBuilder => modelBuilder.Entity("Person").Property<string>("Name").HasMaxLength(30),
@@ -174,17 +202,17 @@ namespace Microsoft.EntityFrameworkCore
         public virtual void AddColumnOperation_with_maxLength_on_derived()
             => Generate(
                 modelBuilder =>
-                    {
-                        modelBuilder.Entity("Person");
-                        modelBuilder.Entity(
-                            "SpecialPerson", b =>
-                                {
-                                    b.HasBaseType("Person");
-                                    b.Property<string>("Name").HasMaxLength(30);
-                                });
+                {
+                    modelBuilder.Entity("Person");
+                    modelBuilder.Entity(
+                        "SpecialPerson", b =>
+                        {
+                            b.HasBaseType("Person");
+                            b.Property<string>("Name").HasMaxLength(30);
+                        });
 
-                        modelBuilder.Entity("MoreSpecialPerson").HasBaseType("SpecialPerson");
-                    },
+                    modelBuilder.Entity("MoreSpecialPerson").HasBaseType("SpecialPerson");
+                },
                 new AddColumnOperation
                 {
                     Table = "Person",
@@ -198,11 +226,11 @@ namespace Microsoft.EntityFrameworkCore
         public virtual void AddColumnOperation_with_shared_column()
             => Generate(
                 modelBuilder =>
-                    {
-                        modelBuilder.Entity<Base>();
-                        modelBuilder.Entity<Derived1>();
-                        modelBuilder.Entity<Derived2>();
-                    },
+                {
+                    modelBuilder.Entity<Base>();
+                    modelBuilder.Entity<Derived1>();
+                    modelBuilder.Entity<Derived2>();
+                },
                 new AddColumnOperation
                 {
                     Table = "Base",
@@ -352,15 +380,28 @@ namespace Microsoft.EntityFrameworkCore
                 });
 
         [Fact]
-        public virtual void RenameTableOperation_within_schema()
+        public virtual void RenameTableOperation_legacy()
             => Generate(
                 new RenameTableOperation
                 {
                     Name = "People",
                     Schema = "dbo",
-                    NewName = "Personas",
+                    NewName = "Person"
+                });
+
+#if !Test20
+        [Fact]
+        public virtual void RenameTableOperation()
+            => Generate(
+                modelBuilder => modelBuilder.HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "2.1.0"),
+                new RenameTableOperation
+                {
+                    Name = "People",
+                    Schema = "dbo",
+                    NewName = "Person",
                     NewSchema = "dbo"
                 });
+#endif
 
         [Fact]
         public virtual void CreateIndexOperation_unique()
@@ -673,11 +714,11 @@ namespace Microsoft.EntityFrameworkCore
                     }
                 });
 
-        private readonly TestHelpers _testHelpers;
+        protected TestHelpers TestHelpers { get; }
 
         protected MigrationSqlGeneratorTestBase(TestHelpers testHelpers)
         {
-            _testHelpers = testHelpers;
+            TestHelpers = testHelpers;
         }
 
         protected virtual void Generate(params MigrationOperation[] operation)
@@ -685,10 +726,10 @@ namespace Microsoft.EntityFrameworkCore
 
         protected virtual void Generate(Action<ModelBuilder> buildAction, params MigrationOperation[] operation)
         {
-            var modelBuilder = _testHelpers.CreateConventionBuilder();
+            var modelBuilder = TestHelpers.CreateConventionBuilder();
             buildAction(modelBuilder);
 
-            var batch = _testHelpers.CreateContextServices().GetRequiredService<IMigrationsSqlGenerator>()
+            var batch = TestHelpers.CreateContextServices().GetRequiredService<IMigrationsSqlGenerator>()
                 .Generate(operation, modelBuilder.Model);
 
             Sql = string.Join(

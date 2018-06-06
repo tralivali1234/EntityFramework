@@ -8,6 +8,8 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Extensions.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
@@ -144,21 +146,32 @@ namespace Microsoft.EntityFrameworkCore.Internal
             [NotNull] this LambdaExpression propertyAccessExpression,
             [NotNull] string methodName)
         {
-            Debug.Assert(propertyAccessExpression.Parameters.Count == 1);
-
-            var propertyPath
-                = propertyAccessExpression
-                    .Parameters
-                    .Single()
-                    .MatchPropertyAccess(propertyAccessExpression.Body);
-
-            if (propertyPath == null)
+            if (!TryGetComplexPropertyAccess(propertyAccessExpression, out var propertyPath))
             {
                 throw new ArgumentException(
                     CoreStrings.InvalidIncludeLambdaExpression(methodName, propertyAccessExpression));
             }
 
             return propertyPath;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static bool TryGetComplexPropertyAccess(
+            [NotNull] this LambdaExpression propertyAccessExpression,
+            out IReadOnlyList<PropertyInfo> propertyPath)
+        {
+            Debug.Assert(propertyAccessExpression.Parameters.Count == 1);
+
+            propertyPath
+                = propertyAccessExpression
+                    .Parameters
+                    .Single()
+                    .MatchPropertyAccess(propertyAccessExpression.Body);
+
+            return propertyPath != null;
         }
 
         private static IReadOnlyList<PropertyInfo> MatchPropertyAccess(
@@ -170,7 +183,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
             do
             {
-                memberExpression = RemoveConvert(propertyAccessExpression) as MemberExpression;
+                memberExpression = RemoveTypeAs(RemoveConvert(propertyAccessExpression)) as MemberExpression;
 
                 var propertyInfo = memberExpression?.Member as PropertyInfo;
 
@@ -183,7 +196,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
                 propertyAccessExpression = memberExpression.Expression;
             }
-            while (memberExpression.Expression.RemoveConvert() != parameterExpression);
+            while (RemoveTypeAs(RemoveConvert(memberExpression.Expression)) != parameterExpression);
 
             return propertyInfos;
         }
@@ -192,11 +205,27 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static Expression RemoveConvert([CanBeNull] this Expression expression)
         {
             while (expression != null
                    && (expression.NodeType == ExpressionType.Convert
                        || expression.NodeType == ExpressionType.ConvertChecked))
+            {
+                expression = RemoveConvert(((UnaryExpression)expression).Operand);
+            }
+
+            return expression;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static Expression RemoveTypeAs([CanBeNull] this Expression expression)
+        {
+            while (expression != null
+                   && (expression.NodeType == ExpressionType.TypeAs))
             {
                 expression = RemoveConvert(((UnaryExpression)expression).Operand);
             }
@@ -255,7 +284,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public static bool IsEntityQueryable([NotNull] this ConstantExpression constantExpression)
             => constantExpression.Type.GetTypeInfo().IsGenericType
-            && constantExpression.Type.GetGenericTypeDefinition() == typeof(EntityQueryable<>);
+               && constantExpression.Type.GetGenericTypeDefinition() == typeof(EntityQueryable<>);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -349,6 +378,33 @@ namespace Microsoft.EntityFrameworkCore.Internal
             resultExpression = binaryTest.NodeType == ExpressionType.Equal ? conditionalExpression.IfFalse : conditionalExpression.IfTrue;
 
             return true;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static Expression CreateKeyAccessExpression(
+            [NotNull] this Expression target,
+            [NotNull] IReadOnlyList<IProperty> properties)
+        {
+            Check.NotNull(target, nameof(target));
+            Check.NotNull(properties, nameof(properties));
+
+            return properties.Count == 1
+                ? target.CreateEFPropertyExpression(properties[0])
+                : Expression.New(
+                    AnonymousObject.AnonymousObjectCtor,
+                    Expression.NewArrayInit(
+                        typeof(object),
+                        properties
+                            .Select(
+                                p =>
+                                    Expression.Convert(
+                                        target.CreateEFPropertyExpression(p),
+                                        typeof(object)))
+                            .Cast<Expression>()
+                            .ToArray()));
         }
     }
 }

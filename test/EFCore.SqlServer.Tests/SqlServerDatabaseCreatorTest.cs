@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
@@ -94,11 +95,12 @@ namespace Microsoft.EntityFrameworkCore
             var connection = (FakeSqlServerConnection)contextServices.GetRequiredService<ISqlServerConnection>();
 
             connection.ErrorNumber = errorNumber;
-            connection.FailureCount = 5;
+            connection.FailureCount = 2;
 
             var creator = (SqlServerDatabaseCreator)contextServices.GetRequiredService<IRelationalDatabaseCreator>();
 
             creator.RetryDelay = TimeSpan.FromMilliseconds(1);
+            creator.RetryTimeout = TimeSpan.FromMinutes(5);
 
             if (async)
             {
@@ -109,7 +111,7 @@ namespace Microsoft.EntityFrameworkCore
                 creator.Create();
             }
 
-            Assert.Equal(5, connection.OpenCount);
+            Assert.Equal(2, connection.OpenCount);
         }
 
         [Fact]
@@ -204,10 +206,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             public IndentedStringBuilder Instance { get; } = new IndentedStringBuilder();
 
-            public IRelationalParameterBuilder ParameterBuilder
-            {
-                get { throw new NotImplementedException(); }
-            }
+            public IRelationalParameterBuilder ParameterBuilder => throw new NotImplementedException();
 
             public IRelationalCommand Build() => new FakeRelationalCommand();
         }
@@ -218,10 +217,7 @@ namespace Microsoft.EntityFrameworkCore
 
             public IReadOnlyList<IRelationalParameter> Parameters { get; }
 
-            public IReadOnlyDictionary<string, object> ParameterValues
-            {
-                get { throw new NotImplementedException(); }
-            }
+            public IReadOnlyDictionary<string, object> ParameterValues => throw new NotImplementedException();
 
             public int ExecuteNonQuery(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues)
             {

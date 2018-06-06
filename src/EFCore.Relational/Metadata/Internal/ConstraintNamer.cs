@@ -53,6 +53,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public static string GetDefaultName([NotNull] IKey key)
         {
+            var sharedTablePrincipalPrimaryKeyProperty = key.Properties[0].FindSharedTableRootPrimaryKeyProperty();
+            if (sharedTablePrincipalPrimaryKeyProperty != null)
+            {
+                return sharedTablePrincipalPrimaryKeyProperty.GetContainingPrimaryKey().Relational().Name;
+            }
+
             var builder = new StringBuilder();
             var tableName = key.DeclaringEntityType.Relational().TableName;
 
@@ -80,7 +86,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public static string GetDefaultName([NotNull] IProperty property)
         {
-            var sharedTablePrincipalPrimaryKeyProperty = property.FindSharedTablePrincipalPrimaryKeyProperty();
+            var sharedTablePrincipalPrimaryKeyProperty = property.FindSharedTableRootPrimaryKeyProperty();
             if (sharedTablePrincipalPrimaryKeyProperty != null)
             {
                 return sharedTablePrincipalPrimaryKeyProperty.Relational().ColumnName;
@@ -107,6 +113,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         {
                             builder = new StringBuilder();
                         }
+
                         builder.Insert(0, "_");
                         builder.Insert(0, ownership.PrincipalToDependent.Name);
                         entityType = ownerType;
@@ -139,7 +146,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             var maxNameLength = maxLength - uniquifierLength;
 
             var builder = new StringBuilder();
-            if (name.Length <= maxLength)
+            if (name.Length <= maxNameLength)
             {
                 builder.Append(name);
             }
@@ -148,6 +155,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 builder.Append(name.Substring(0, maxNameLength - 1));
                 builder.Append("~");
             }
+
             if (uniquifier != null)
             {
                 builder.Append(uniquifier.Value);

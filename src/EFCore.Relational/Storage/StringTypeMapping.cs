@@ -30,45 +30,29 @@ namespace Microsoft.EntityFrameworkCore.Storage
             DbType? dbType = null,
             bool unicode = false,
             int? size = null)
-            : this(storeType, null, dbType, unicode, size)
+            : base(
+                new RelationalTypeMappingParameters(
+                    new CoreTypeMappingParameters(
+                        typeof(string)), storeType, StoreTypePostfix.None, dbType, unicode, size))
         {
         }
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="StringTypeMapping" /> class.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="converter"> Converts values to and from the store whenever this mapping is used. </param>
-        /// <param name="dbType"> The <see cref="System.Data.DbType" /> to be used. </param>
-        /// <param name="unicode"> A value indicating whether the type should handle Unicode data or not. </param>
-        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
-        public StringTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null,
-            bool unicode = false,
-            int? size = null)
-            : base(storeType, typeof(string), converter, dbType, unicode, size)
+        /// <param name="parameters"> Parameter object for <see cref="RelationalTypeMapping" />. </param>
+        protected StringTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         /// <summary>
         ///     Creates a copy of this mapping.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        /// <param name="parameters"> The parameters for this mapping. </param>
         /// <returns> The newly created mapping. </returns>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new StringTypeMapping(storeType, Converter, DbType, IsUnicode, size);
-
-        /// <summary>
-        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
-        ///    added.
-        /// </summary>
-        /// <param name="converter"> The converter to use. </param>
-        /// <returns> A new type mapping </returns>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new StringTypeMapping(StoreType, ComposeConverter(converter), DbType, IsUnicode, Size);
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new StringTypeMapping(parameters);
 
         /// <summary>
         ///     Generates the escaped SQL representation of a literal value.

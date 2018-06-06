@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
 // ReSharper disable ParameterOnlyUsedForPreconditionCheck.Local
@@ -1308,7 +1309,7 @@ namespace Microsoft.EntityFrameworkCore
             }
         }
 
-        private void ValidateBuildingPropereties(
+        private static void ValidateBuildingPropereties(
             EntityEntry buildingEntry,
             Func<EntityEntry, string, object> getValue,
             int shadow1,
@@ -1889,7 +1890,15 @@ namespace Microsoft.EntityFrameworkCore
                 var buildingValues = await getPropertyValues(context.Entry(building));
 
                 Assert.Equal(
-                    new List<string> { "BuildingId", "Name", "PrincipalMailRoomId", "Shadow1", "Shadow2", "Value" },
+                    new List<string>
+                    {
+                        "BuildingId",
+                        "Name",
+                        "PrincipalMailRoomId",
+                        "Shadow1",
+                        "Shadow2",
+                        "Value"
+                    },
                     buildingValues.Properties.Select(p => p.Name).ToList());
             }
         }
@@ -2210,7 +2219,9 @@ namespace Microsoft.EntityFrameworkCore
 
         protected class MailRoom
         {
+#pragma warning disable IDE1006 // Naming Styles
             public int id { get; set; }
+#pragma warning restore IDE1006 // Naming Styles
             public Building Building { get; set; }
             public Guid BuildingId { get; set; }
         }
@@ -2245,7 +2256,9 @@ namespace Microsoft.EntityFrameworkCore
 
         protected class Whiteboard
         {
+#pragma warning disable IDE1006 // Naming Styles
             public byte[] iD { get; set; }
+#pragma warning restore IDE1006 // Naming Styles
             public string AssetTag { get; set; }
             public Office Office { get; set; }
         }
@@ -2279,7 +2292,7 @@ namespace Microsoft.EntityFrameworkCore
             return context;
         }
 
-        public abstract class PropertyValuesFixtureBase : SharedStoreFixtureBase<DbContext>
+        public abstract class PropertyValuesFixtureBase : SharedStoreFixtureBase<PoolableDbContext>
         {
             protected override string StoreName { get; } = "PropertyValues";
 
@@ -2287,47 +2300,52 @@ namespace Microsoft.EntityFrameworkCore
             {
                 modelBuilder.Entity<Employee>(
                     b =>
-                        {
-                            b.Property(e => e.EmployeeId).ValueGeneratedNever();
-                            b.Property<int>("Shadow1");
-                            b.Property<string>("Shadow2");
-                        });
+                    {
+                        b.Property(e => e.EmployeeId).ValueGeneratedNever();
+                        b.Property<int>("Shadow1");
+                        b.Property<string>("Shadow2");
+                    });
 
                 modelBuilder.Entity<CurrentEmployee>(b => { b.Property<int>("Shadow3"); });
 
                 modelBuilder.Entity<PastEmployee>(b => { b.Property<string>("Shadow4"); });
 
                 modelBuilder.Entity<Building>()
-                    .HasOne(b => b.PrincipalMailRoom)
+                    .HasOne<MailRoom>(nameof(Building.PrincipalMailRoom))
                     .WithMany()
                     .HasForeignKey(b => b.PrincipalMailRoomId);
 
                 modelBuilder.Entity<MailRoom>()
-                    .HasOne(m => m.Building)
-                    .WithMany(b => b.MailRooms)
+                    .HasOne<Building>(nameof(MailRoom.Building))
+                    .WithMany(nameof(Building.MailRooms))
                     .HasForeignKey(m => m.BuildingId);
 
-                modelBuilder.Entity<Office>().HasKey(o => new { o.Number, o.BuildingId });
+                modelBuilder.Entity<Office>().HasKey(
+                    o => new
+                    {
+                        o.Number,
+                        o.BuildingId
+                    });
 
                 modelBuilder.Ignore<UnMappedOffice>();
 
                 modelBuilder.Entity<BuildingDetail>(
                     b =>
-                        {
-                            b.HasKey(d => d.BuildingId);
-                            b.HasOne(d => d.Building).WithOne().HasPrincipalKey<Building>(e => e.BuildingId);
-                        });
+                    {
+                        b.HasKey(d => d.BuildingId);
+                        b.HasOne(d => d.Building).WithOne().HasPrincipalKey<Building>(e => e.BuildingId);
+                    });
 
                 modelBuilder.Entity<Building>(
                     b =>
-                        {
-                            b.Ignore(e => e.NotInModel);
-                            b.Property<int>("Shadow1");
-                            b.Property<string>("Shadow2");
-                        });
+                    {
+                        b.Ignore(e => e.NotInModel);
+                        b.Property<int>("Shadow1");
+                        b.Property<string>("Shadow2");
+                    });
             }
 
-            protected override void Seed(DbContext context)
+            protected override void Seed(PoolableDbContext context)
             {
                 var buildings = new List<Building>
                 {

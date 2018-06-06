@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 
@@ -29,6 +30,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
         }
 
         public class NonGenericOwnedTypes : OwnedTypesTestBase
+        {
+            protected override TestModelBuilder CreateTestModelBuilder(TestHelpers testHelpers)
+                => new NonGenericTestModelBuilder(testHelpers);
+        }
+
+        public class NonGenericQueryTypes : QueryTypesTestBase
         {
             protected override TestModelBuilder CreateTestModelBuilder(TestHelpers testHelpers)
                 => new NonGenericTestModelBuilder(testHelpers);
@@ -70,6 +77,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 return this;
             }
 
+            public override TestQueryTypeBuilder<TQuery> Query<TQuery>()
+                => new NonGenericTestQueryTypeBuilder<TQuery>(ModelBuilder.Query(typeof(TQuery)));
+
+            public override TestOwnedEntityTypeBuilder<TEntity> Owned<TEntity>()
+                => new NonGenericTestOwnedEntityTypeBuilder<TEntity>(ModelBuilder.Owned(typeof(TEntity)));
+
             public override TestModelBuilder Ignore<TEntity>()
             {
                 ModelBuilder.Ignore(typeof(TEntity));
@@ -77,7 +90,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             }
         }
 
-        protected class NonGenericTestEntityTypeBuilder<TEntity> : TestEntityTypeBuilder<TEntity>
+        protected class NonGenericTestEntityTypeBuilder<TEntity> : TestEntityTypeBuilder<TEntity>, IInfrastructure<EntityTypeBuilder>
             where TEntity : class
         {
             public NonGenericTestEntityTypeBuilder(EntityTypeBuilder entityTypeBuilder)
@@ -155,11 +168,87 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 Expression<Func<TEntity, IEnumerable<TRelatedEntity>>> navigationExpression = null)
                 => new NonGenericTestCollectionNavigationBuilder<TEntity, TRelatedEntity>(EntityTypeBuilder.HasMany(typeof(TRelatedEntity), navigationExpression?.GetPropertyAccess().Name));
 
+            public override TestEntityTypeBuilder<TEntity> HasQueryFilter(Expression<Func<TEntity, bool>> filter)
+                => Wrap(EntityTypeBuilder.HasQueryFilter(filter));
+
             public override TestEntityTypeBuilder<TEntity> HasChangeTrackingStrategy(ChangeTrackingStrategy changeTrackingStrategy)
                 => Wrap(EntityTypeBuilder.HasChangeTrackingStrategy(changeTrackingStrategy));
 
             public override TestEntityTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
                 => Wrap(EntityTypeBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public override DataBuilder<TEntity> HasData(params TEntity[] data)
+            {
+                EntityTypeBuilder.HasData(data);
+                return new DataBuilder<TEntity>();
+            }
+
+            public EntityTypeBuilder Instance => EntityTypeBuilder;
+        }
+
+        protected class NonGenericTestOwnedEntityTypeBuilder<TEntity> : TestOwnedEntityTypeBuilder<TEntity>, IInfrastructure<OwnedEntityTypeBuilder>
+            where TEntity : class
+        {
+            public NonGenericTestOwnedEntityTypeBuilder(OwnedEntityTypeBuilder ownedEntityTypeBuilder)
+            {
+                OwnedEntityTypeBuilder = ownedEntityTypeBuilder;
+            }
+
+            protected OwnedEntityTypeBuilder OwnedEntityTypeBuilder { get; }
+
+            public OwnedEntityTypeBuilder Instance => OwnedEntityTypeBuilder;
+        }
+
+        protected class NonGenericTestQueryTypeBuilder<TEntity> : TestQueryTypeBuilder<TEntity>, IInfrastructure<QueryTypeBuilder>
+            where TEntity : class
+        {
+            public NonGenericTestQueryTypeBuilder(QueryTypeBuilder queryTypeBuilder)
+            {
+                QueryTypeBuilder = queryTypeBuilder;
+            }
+
+            protected QueryTypeBuilder QueryTypeBuilder { get; }
+
+            public override IMutableEntityType Metadata => QueryTypeBuilder.Metadata;
+
+            protected virtual NonGenericTestQueryTypeBuilder<TEntity> Wrap(QueryTypeBuilder queryTypeBuilder)
+                => new NonGenericTestQueryTypeBuilder<TEntity>(queryTypeBuilder);
+
+            public override TestQueryTypeBuilder<TEntity> HasAnnotation(string annotation, object value)
+                => Wrap(QueryTypeBuilder.HasAnnotation(annotation, value));
+
+            public override TestQueryTypeBuilder<TEntity> HasBaseType<TBaseEntity>()
+                => Wrap(QueryTypeBuilder.HasBaseType(typeof(TBaseEntity)));
+
+            public override TestQueryTypeBuilder<TEntity> HasBaseType(string baseEntityTypeName)
+                => Wrap(QueryTypeBuilder.HasBaseType(baseEntityTypeName));
+
+            public override TestPropertyBuilder<TProperty> Property<TProperty>(Expression<Func<TEntity, TProperty>> propertyExpression)
+            {
+                var propertyInfo = propertyExpression.GetPropertyAccess();
+                return new NonGenericTestPropertyBuilder<TProperty>(QueryTypeBuilder.Property(propertyInfo.PropertyType, propertyInfo.Name));
+            }
+
+            public override TestPropertyBuilder<TProperty> Property<TProperty>(string propertyName)
+                => new NonGenericTestPropertyBuilder<TProperty>(QueryTypeBuilder.Property<TProperty>(propertyName));
+
+            public override TestQueryTypeBuilder<TEntity> Ignore(Expression<Func<TEntity, object>> propertyExpression)
+                => Wrap(QueryTypeBuilder.Ignore(propertyExpression.GetPropertyAccess().Name));
+
+            public override TestQueryTypeBuilder<TEntity> Ignore(string propertyName)
+                => Wrap(QueryTypeBuilder.Ignore(propertyName));
+
+            public override TestReferenceNavigationBuilder<TEntity, TRelatedEntity> HasOne<TRelatedEntity>(
+                Expression<Func<TEntity, TRelatedEntity>> navigationExpression = null)
+                => new NonGenericTestReferenceNavigationBuilder<TEntity, TRelatedEntity>(QueryTypeBuilder.HasOne(typeof(TRelatedEntity), navigationExpression?.GetPropertyAccess().Name));
+
+            public override TestQueryTypeBuilder<TEntity> HasQueryFilter(Expression<Func<TEntity, bool>> filter)
+                => Wrap(QueryTypeBuilder.HasQueryFilter(filter));
+
+            public override TestQueryTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
+                => Wrap(QueryTypeBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public QueryTypeBuilder Instance => QueryTypeBuilder;
         }
 
         protected class NonGenericTestPropertyBuilder<TProperty> : TestPropertyBuilder<TProperty>, IInfrastructure<PropertyBuilder>
@@ -217,6 +306,25 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public override TestPropertyBuilder<TProperty> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
                 => new NonGenericTestPropertyBuilder<TProperty>(PropertyBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TProvider>()
+                => new NonGenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion<TProvider>());
+
+            public override TestPropertyBuilder<TProperty> HasConversion(Type providerClrType)
+                => new NonGenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(providerClrType));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TProvider>(
+                Expression<Func<TProperty, TProvider>> convertToProviderExpression,
+                Expression<Func<TProvider, TProperty>> convertFromProviderExpression)
+                => new NonGenericTestPropertyBuilder<TProperty>(
+                    PropertyBuilder.HasConversion(
+                        new ValueConverter<TProperty, TProvider>(convertToProviderExpression, convertFromProviderExpression)));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TStore>(ValueConverter<TProperty, TStore> converter)
+                => new NonGenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(converter));
+
+            public override TestPropertyBuilder<TProperty> HasConversion(ValueConverter converter)
+                => new NonGenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(converter));
 
             PropertyBuilder IInfrastructure<PropertyBuilder>.Instance => PropertyBuilder;
         }

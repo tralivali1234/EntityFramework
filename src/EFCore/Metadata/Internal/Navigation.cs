@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
@@ -33,19 +34,33 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             Check.NotNull(foreignKey, nameof(foreignKey));
 
             ForeignKey = foreignKey;
+
+            Builder = new InternalNavigationBuilder(this, foreignKey.DeclaringEntityType.Model.Builder);
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override Type ClrType => PropertyInfo?.PropertyType ?? typeof(object);
+        public override Type ClrType => this.GetIdentifyingMemberInfo()?.GetMemberType() ?? typeof(object);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual ForeignKey ForeignKey { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual InternalNavigationBuilder Builder
+        {
+            [DebuggerStepThrough] get;
+            [DebuggerStepThrough]
+            [param: CanBeNull]
+            set;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -66,7 +81,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public new virtual EntityType DeclaringType => DeclaringEntityType;
+        public override TypeBase DeclaringType
+        {
+            [DebuggerStepThrough] get => DeclaringEntityType;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -78,14 +96,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static PropertyInfo GetClrProperty(
+        public static MemberInfo GetClrMember(
             [NotNull] string navigationName,
             [NotNull] EntityType sourceType,
             [NotNull] EntityType targetType,
             bool shouldThrow)
         {
             var sourceClrType = sourceType.ClrType;
-            var navigationProperty = sourceClrType?.GetPropertiesInHierarchy(navigationName).FirstOrDefault();
+            var navigationProperty = sourceClrType?.GetMembersInHierarchy(navigationName).FirstOrDefault();
             if (!IsCompatible(navigationName, navigationProperty, sourceType, targetType, null, shouldThrow))
             {
                 return null;
@@ -100,7 +118,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public static bool IsCompatible(
             [NotNull] string navigationName,
-            [CanBeNull] PropertyInfo navigationProperty,
+            [CanBeNull] MemberInfo navigationProperty,
             [NotNull] EntityType sourceType,
             [NotNull] EntityType targetType,
             bool? shouldBeCollection,
@@ -114,6 +132,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     throw new InvalidOperationException(
                         CoreStrings.NavigationToShadowEntity(navigationName, sourceType.DisplayName(), targetType.DisplayName()));
                 }
+
                 return false;
             }
 
@@ -126,7 +145,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static bool IsCompatible(
-            [NotNull] PropertyInfo navigationProperty,
+            [NotNull] MemberInfo navigationProperty,
             [NotNull] Type sourceClrType,
             [NotNull] Type targetClrType,
             bool? shouldBeCollection,
@@ -140,10 +159,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         CoreStrings.NoClrNavigation(
                             navigationProperty.Name, sourceClrType.ShortDisplayName()));
                 }
+
                 return false;
             }
 
-            var navigationTargetClrType = navigationProperty.PropertyType.TryGetSequenceType();
+            var navigationTargetClrType = navigationProperty.GetMemberType().TryGetSequenceType();
             if (shouldBeCollection == false
                 || navigationTargetClrType == null
                 || !navigationTargetClrType.GetTypeInfo().IsAssignableFrom(targetClrType.GetTypeInfo()))
@@ -156,13 +176,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                             CoreStrings.NavigationCollectionWrongClrType(
                                 navigationProperty.Name,
                                 sourceClrType.ShortDisplayName(),
-                                navigationProperty.PropertyType.ShortDisplayName(),
+                                navigationProperty.GetMemberType().ShortDisplayName(),
                                 targetClrType.ShortDisplayName()));
                     }
+
                     return false;
                 }
 
-                if (!navigationProperty.PropertyType.GetTypeInfo().IsAssignableFrom(targetClrType.GetTypeInfo()))
+                if (!navigationProperty.GetMemberType().GetTypeInfo().IsAssignableFrom(targetClrType.GetTypeInfo()))
                 {
                     if (shouldThrow)
                     {
@@ -170,9 +191,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                             CoreStrings.NavigationSingleWrongClrType(
                                 navigationProperty.Name,
                                 sourceClrType.ShortDisplayName(),
-                                navigationProperty.PropertyType.ShortDisplayName(),
+                                navigationProperty.GetMemberType().ShortDisplayName(),
                                 targetClrType.ShortDisplayName()));
                     }
+
                     return false;
                 }
             }
@@ -199,17 +221,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual IClrCollectionAccessor CollectionAccessor
-            => NonCapturingLazyInitializer.EnsureInitialized(ref _collectionAccessor, this, n =>
-                !n.IsCollection() || n.IsShadowProperty
-                    ? null
-                    : new ClrCollectionAccessorFactory().Create(n));
+            => NonCapturingLazyInitializer.EnsureInitialized(
+                ref _collectionAccessor, this, n =>
+                    !n.IsCollection() || n.IsShadowProperty
+                        ? null
+                        : new ClrCollectionAccessorFactory().Create(n));
 
         IForeignKey INavigation.ForeignKey => ForeignKey;
         IMutableForeignKey IMutableNavigation.ForeignKey => ForeignKey;
         IEntityType INavigation.DeclaringEntityType => DeclaringEntityType;
         IMutableEntityType IMutableNavigation.DeclaringEntityType => DeclaringEntityType;
-        ITypeBase IPropertyBase.DeclaringType => DeclaringType;
-        IMutableTypeBase IMutablePropertyBase.DeclaringType => DeclaringType;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

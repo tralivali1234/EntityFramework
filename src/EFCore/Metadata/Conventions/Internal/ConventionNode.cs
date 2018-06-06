@@ -20,30 +20,42 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
         private class ConventionScope : ConventionNode
         {
-            private readonly List<ConventionNode> _children;
+            private List<ConventionNode> _children;
+#if DEBUG
             private bool _readonly;
+#endif
 
-            public ConventionScope(ConventionScope parent, List<ConventionNode> children)
+            public ConventionScope(ConventionScope parent, List<ConventionNode> children = null)
             {
                 Parent = parent;
-                _children = children ?? new List<ConventionNode>();
+                _children = children;
             }
 
             public ConventionScope Parent { [DebuggerStepThrough] get; }
 
             public IReadOnlyList<ConventionNode> Children
             {
-                [DebuggerStepThrough] get { return _children; }
+                [DebuggerStepThrough] get => _children;
             }
 
             public int GetLeafCount()
             {
+                if (Children == null)
+                {
+                    return 0;
+                }
+
                 var scopesToVisit = new Queue<ConventionScope>();
                 scopesToVisit.Enqueue(this);
                 var leafCount = 0;
                 while (scopesToVisit.Count > 0)
                 {
                     var scope = scopesToVisit.Dequeue();
+                    if (scope.Children == null)
+                    {
+                        continue;
+                    }
+
                     foreach (var conventionNode in scope.Children)
                     {
                         if (conventionNode is ConventionScope nextScope)
@@ -62,14 +74,24 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             public void Add(ConventionNode node)
             {
-                if (_readonly)
+#if DEBUG
+                Debug.Assert(!_readonly);
+#endif
+
+                if (_children == null)
                 {
-                    throw new InvalidOperationException();
+                    _children = new List<ConventionNode>();
                 }
+
                 _children.Add(node);
             }
 
-            public void MakeReadonly() => _readonly = true;
+            public void MakeReadonly()
+            {
+#if DEBUG
+                _readonly = true;
+#endif
+            }
 
             public override ConventionNode Accept(ConventionVisitor visitor) => visitor.VisitConventionScope(this);
 
@@ -82,6 +104,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             public virtual bool OnEntityTypeIgnored([NotNull] InternalModelBuilder modelBuilder, [NotNull] string name, [CanBeNull] Type type)
             {
                 Add(new OnEntityTypeIgnoredNode(modelBuilder, name, type));
+                return true;
+            }
+
+            public virtual bool OnEntityTypeRemoved([NotNull] InternalModelBuilder modelBuilder, [NotNull] EntityType type)
+            {
+                Add(new OnEntityTypeRemovedNode(modelBuilder, type));
                 return true;
             }
 
@@ -179,8 +207,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 [NotNull] InternalEntityTypeBuilder sourceEntityTypeBuilder,
                 [NotNull] InternalEntityTypeBuilder targetEntityTypeBuilder,
                 [NotNull] string navigationName,
-                [CanBeNull] PropertyInfo propertyInfo)
-                => Add(new OnNavigationRemovedNode(sourceEntityTypeBuilder, targetEntityTypeBuilder, navigationName, propertyInfo));
+                [CanBeNull] MemberInfo memberInfo)
+                => Add(new OnNavigationRemovedNode(sourceEntityTypeBuilder, targetEntityTypeBuilder, navigationName, memberInfo));
 
             public virtual InternalRelationshipBuilder OnForeignKeyUniquenessChanged([NotNull] InternalRelationshipBuilder relationshipBuilder)
             {
@@ -235,7 +263,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             private readonly ConventionSet _conventionSet;
 
             public ImmediateConventionScope([NotNull] ConventionSet conventionSet)
-                : base(parent: null, children: null)
+                : base(parent: null)
             {
                 _conventionSet = conventionSet;
                 MakeReadonly();
@@ -265,6 +293,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 foreach (var entityTypeIgnoredConvention in _conventionSet.EntityTypeIgnoredConventions)
                 {
                     if (!entityTypeIgnoredConvention.Apply(modelBuilder, name, type))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            public override bool OnEntityTypeRemoved(InternalModelBuilder modelBuilder, EntityType type)
+            {
+                foreach (var entityTypeRemovedConvention in _conventionSet.EntityTypeRemovedConventions)
+                {
+                    if (!entityTypeRemovedConvention.Apply(modelBuilder, type))
                     {
                         return false;
                     }
@@ -537,7 +578,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 InternalEntityTypeBuilder sourceEntityTypeBuilder,
                 InternalEntityTypeBuilder targetEntityTypeBuilder,
                 string navigationName,
-                PropertyInfo propertyInfo)
+                MemberInfo memberInfo)
             {
                 if (sourceEntityTypeBuilder.Metadata.Builder == null)
                 {
@@ -546,7 +587,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
                 foreach (var navigationConvention in _conventionSet.NavigationRemovedConventions)
                 {
-                    if (!navigationConvention.Apply(sourceEntityTypeBuilder, targetEntityTypeBuilder, navigationName, propertyInfo))
+                    if (!navigationConvention.Apply(sourceEntityTypeBuilder, targetEntityTypeBuilder, navigationName, memberInfo))
                     {
                         break;
                     }
@@ -748,6 +789,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             public Type Type { get; }
 
             public override ConventionNode Accept(ConventionVisitor visitor) => visitor.VisitOnEntityTypeIgnored(this);
+        }
+
+        private class OnEntityTypeRemovedNode : ConventionNode
+        {
+            public OnEntityTypeRemovedNode(InternalModelBuilder modelBuilder, EntityType type)
+            {
+                ModelBuilder = modelBuilder;
+                Type = type;
+            }
+
+            public InternalModelBuilder ModelBuilder { get; }
+            public EntityType Type { get; }
+
+            public override ConventionNode Accept(ConventionVisitor visitor) => visitor.VisitOnEntityTypeRemoved(this);
         }
 
         private class OnEntityTypeMemberIgnoredNode : ConventionNode
@@ -964,18 +1019,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 InternalEntityTypeBuilder sourceEntityTypeBuilder,
                 InternalEntityTypeBuilder targetEntityTypeBuilder,
                 string navigationName,
-                PropertyInfo propertyInfo)
+                MemberInfo memberInfo)
             {
                 SourceEntityTypeBuilder = sourceEntityTypeBuilder;
                 TargetEntityTypeBuilder = targetEntityTypeBuilder;
                 NavigationName = navigationName;
-                PropertyInfo = propertyInfo;
+                MemberInfo = memberInfo;
             }
 
             public InternalEntityTypeBuilder SourceEntityTypeBuilder { get; }
             public InternalEntityTypeBuilder TargetEntityTypeBuilder { get; }
             public string NavigationName { get; }
-            public PropertyInfo PropertyInfo { get; }
+            public MemberInfo MemberInfo { get; }
 
             public override ConventionNode Accept(ConventionVisitor visitor) => visitor.VisitOnNavigationRemoved(this);
         }

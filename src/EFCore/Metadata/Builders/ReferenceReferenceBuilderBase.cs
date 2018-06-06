@@ -82,8 +82,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 ForeignKey.AreCompatible(
                     foreignKey.PrincipalEntityType,
                     foreignKey.DeclaringEntityType,
-                    foreignKey.DependentToPrincipal?.PropertyInfo,
-                    foreignKey.PrincipalToDependent?.PropertyInfo,
+                    foreignKey.DependentToPrincipal?.GetIdentifyingMemberInfo(),
+                    foreignKey.PrincipalToDependent?.GetIdentifyingMemberInfo(),
                     _foreignKeyProperties,
                     _principalKeyProperties,
                     foreignKey.IsUnique,
@@ -105,7 +105,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <summary>
         ///     Gets the internal builder being used to configure this relationship.
         /// </summary>
-        protected virtual InternalRelationshipBuilder Builder { get; }
+        protected virtual InternalRelationshipBuilder Builder { get; [param: NotNull] set; }
 
         /// <summary>
         ///     Gets the internal builder being used to configure this relationship.

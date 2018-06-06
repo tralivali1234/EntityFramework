@@ -75,6 +75,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
             {
                 throw new ArgumentOutOfRangeException(nameof(maxRetryCount));
             }
+
             if (maxRetryDelay.TotalMilliseconds < 0.0)
             {
                 throw new ArgumentOutOfRangeException(nameof(maxRetryDelay));
@@ -199,6 +200,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
                         throw new RetryLimitExceededException(CoreStrings.RetryLimitExceeded(MaxRetryCount, GetType().Name), ex);
                     }
 
+                    Dependencies.Logger.ExecutionStrategyRetrying(ExceptionsEncountered, delay.Value, async: true);
+
                     OnRetry();
                 }
 
@@ -291,6 +294,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
                     {
                         throw new RetryLimitExceededException(CoreStrings.RetryLimitExceeded(MaxRetryCount, GetType().Name), ex);
                     }
+
+                    Dependencies.Logger.ExecutionStrategyRetrying(ExceptionsEncountered, delay.Value, async: true);
 
                     OnRetry();
                 }

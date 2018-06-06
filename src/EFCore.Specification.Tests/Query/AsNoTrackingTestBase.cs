@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
@@ -57,7 +58,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                     = (from c in context.Set<Customer>().AsNoTracking()
                        from o in context.Set<Order>().AsNoTracking()
                        where c.CustomerID == o.CustomerID
-                       select new { c, o })
+                       select new
+                       {
+                           c,
+                           o
+                       })
                     .ToList();
 
                 Assert.Equal(830, customers.Count);
@@ -75,7 +80,13 @@ namespace Microsoft.EntityFrameworkCore.Query
                        join o in context.Set<Order>().AsNoTracking()
                            on c.CustomerID equals o.CustomerID
                        where c.CustomerID == "ALFKI"
-                       select new { c.CustomerID, c, ocid = o.CustomerID, o })
+                       select new
+                       {
+                           c.CustomerID,
+                           c,
+                           ocid = o.CustomerID,
+                           o
+                       })
                     .ToList();
 
                 Assert.Equal(6, customers.Count);
@@ -93,7 +104,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                        join o in context.Set<Order>().AsNoTracking()
                            on c.CustomerID equals o.CustomerID
                        where c.CustomerID == "ALFKI"
-                       select new { c, o })
+                       select new
+                       {
+                           c,
+                           o
+                       })
                     .AsNoTracking()
                     .ToList();
 
@@ -149,6 +164,34 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual void Query_fast_path_when_ctor_binding()
+        {
+            using (var context = CreateContext())
+            {
+                var employees
+                    = context.Set<Customer>()
+                        .AsNoTracking()
+                        .ToList();
+
+                Assert.Equal(91, employees.Count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual async Task Query_fast_path_when_ctor_binding_async()
+        {
+            using (var context = CreateContext())
+            {
+                var employees
+                    = await context.Set<Customer>()
+                        .AsNoTracking()
+                        .ToListAsync();
+
+                Assert.Equal(91, employees.Count);
+            }
+        }
+
+        [ConditionalFact]
         public virtual void SelectMany_simple()
         {
             using (var context = CreateContext())
@@ -156,7 +199,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var results
                     = (from e in context.Set<Employee>()
                        from c in context.Set<Customer>()
-                       select new { c, e })
+                       select new
+                       {
+                           c,
+                           e
+                       })
                     .AsNoTracking()
                     .ToList();
 

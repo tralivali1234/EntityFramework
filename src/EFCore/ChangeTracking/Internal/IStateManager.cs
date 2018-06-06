@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -46,7 +47,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         InternalEntityEntry StartTrackingFromQuery(
             [NotNull] IEntityType baseEntityType,
             [NotNull] object entity,
-            ValueBuffer valueBuffer,
+            in ValueBuffer valueBuffer,
             [CanBeNull] ISet<IForeignKey> handledForeignKeys);
 
         /// <summary>
@@ -65,7 +66,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        InternalEntityEntry TryGetEntry([NotNull] IKey key, ValueBuffer valueBuffer, bool throwOnNullKey);
+        InternalEntityEntry TryGetEntry([NotNull] IKey key, in ValueBuffer valueBuffer, bool throwOnNullKey);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -235,5 +236,41 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         void Unsubscribe();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        event EventHandler<EntityTrackedEventArgs> Tracked;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        void OnTracked([NotNull] InternalEntityEntry internalEntityEntry, bool fromQuery);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        event EventHandler<EntityStateChangedEventArgs> StateChanged;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        void OnStateChanged([NotNull] InternalEntityEntry internalEntityEntry, EntityState oldState);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        bool SensitiveLoggingEnabled { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IDiagnosticsLogger<DbLoggerCategory.Update> UpdateLogger { get; }
     }
 }

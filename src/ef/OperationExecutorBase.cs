@@ -35,11 +35,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 ? AssemblyFileName
                 : Path.GetFileNameWithoutExtension(startupAssembly);
 
-            AppBasePath = Path.GetDirectoryName(startupAssembly ?? assembly);
-            if (!Path.IsPathRooted(AppBasePath))
-            {
-                AppBasePath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), AppBasePath));
-            }
+            AppBasePath = Path.GetFullPath(
+                Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(startupAssembly ?? assembly)));
 
             RootNamespace = rootNamespace ?? AssemblyFileName;
             ProjectDirectory = projectDir ?? Directory.GetCurrentDirectory();
@@ -96,14 +93,13 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     ["contextType"] = contextType
                 });
 
-        public IDictionary RemoveMigration(string contextType, bool force, bool revert)
+        public IDictionary RemoveMigration(string contextType, bool force)
             => InvokeOperation<IDictionary>(
                 "RemoveMigration",
                 new Dictionary<string, object>
                 {
                     ["contextType"] = contextType,
-                    ["force"] = force,
-                    ["revert"] = revert
+                    ["force"] = force
                 });
 
         public IEnumerable<IDictionary> GetMigrations(string contextType)
@@ -146,6 +142,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
             string provider,
             string connectionString,
             string outputDir,
+            string outputDbContextDir,
             string dbContextClassName,
             IEnumerable<string> schemaFilters,
             IEnumerable<string> tableFilters,
@@ -159,6 +156,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     ["provider"] = provider,
                     ["connectionString"] = connectionString,
                     ["outputDir"] = outputDir,
+                    ["outputDbContextDir"] = outputDbContextDir,
                     ["dbContextClassName"] = dbContextClassName,
                     ["schemaFilters"] = schemaFilters,
                     ["tableFilters"] = tableFilters,

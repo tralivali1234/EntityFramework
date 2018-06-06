@@ -17,11 +17,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var entitySorters = new Dictionary<Type, Func<dynamic, object>>
             {
-                { typeof(Customer), e => e.CustomerID },
-                { typeof(Order), e => e.OrderID },
-                { typeof(Employee), e => e.EmployeeID },
-                { typeof(Product), e => e.ProductID },
-                { typeof(OrderDetail), e => e.OrderID.ToString() + " " + e.ProductID.ToString() }
+                { typeof(Customer), e => e?.CustomerID },
+                { typeof(CustomerView), e => e?.CompanyName },
+                { typeof(Order), e => e?.OrderID },
+                { typeof(OrderQuery), e => e?.CustomerID },
+                { typeof(Employee), e => e?.EmployeeID },
+                { typeof(Product), e => e?.ProductID },
+                { typeof(OrderDetail), e => e?.OrderID.ToString() + " " + e?.ProductID.ToString() }
             };
 
             var entityAsserters = new Dictionary<Type, Action<dynamic, dynamic>>();
@@ -35,7 +37,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         protected override string StoreName { get; } = "Northwind";
 
-        protected override bool UsePooling => false;
+        protected override bool UsePooling => typeof(TModelCustomizer) == typeof(NoopModelCustomizer);
 
         public QueryAsserterBase QueryAsserter { get; set; }
 

@@ -8,19 +8,25 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+#if Test20
+using Microsoft.EntityFrameworkCore.Internal;
+#else
+using Microsoft.EntityFrameworkCore.SqlServer.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+#endif
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     // Tests are split into classes to enable parallel execution
     // Some combinations are skipped to reduce run time
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorExistsTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
@@ -60,14 +66,18 @@ namespace Microsoft.EntityFrameworkCore
 
         [ConditionalTheory]
         [InlineData(true, false)]
+#if !Test20
         [InlineData(false, true)]
+#endif
         public Task Returns_true_when_database_exists(bool async, bool ambientTransaction)
         {
             return Returns_true_when_database_exists_test(async, ambientTransaction, file: false);
         }
 
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true)]
+#endif
         [InlineData(false, false)]
         [SqlServerCondition(SqlServerCondition.SupportsAttach)]
         public Task Returns_true_when_database_with_filename_exists(bool async, bool ambientTransaction)
@@ -95,13 +105,16 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorEnsureDeletedTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true, true)]
+        [InlineData(false, false, true)]
+#endif
         [InlineData(true, false, false)]
         [InlineData(false, true, false)]
-        [InlineData(false, false, true)]
         public Task Deletes_database(bool async, bool open, bool ambientTransaction)
         {
             return Delete_database_test(async, open, ambientTransaction, file: false);
@@ -109,8 +122,10 @@ namespace Microsoft.EntityFrameworkCore
 
         [ConditionalTheory]
         [InlineData(true, true, false)]
+#if !Test20
         [InlineData(true, false, true)]
         [InlineData(false, true, true)]
+#endif
         [InlineData(false, false, false)]
         [SqlServerCondition(SqlServerCondition.SupportsAttach)]
         public Task Deletes_database_with_filename(bool async, bool open, bool ambientTransaction)
@@ -200,10 +215,13 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorEnsureCreatedTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true)]
+#endif
         [InlineData(false, false)]
         public Task Creates_schema_in_existing_database(bool async, bool ambientTransaction)
         {
@@ -212,7 +230,9 @@ namespace Microsoft.EntityFrameworkCore
 
         [ConditionalTheory]
         [InlineData(true, false)]
+#if !Test20
         [InlineData(false, true)]
+#endif
         [SqlServerCondition(SqlServerCondition.SupportsAttach)]
         public Task Creates_schema_in_existing_database_with_filename(bool async, bool ambientTransaction)
         {
@@ -229,7 +249,9 @@ namespace Microsoft.EntityFrameworkCore
 
         [ConditionalTheory]
         [InlineData(true, false)]
+#if !Test20
         [InlineData(false, true)]
+#endif
         [SqlServerCondition(SqlServerCondition.IsNotSqlAzure)]
         public Task Creates_physical_database_and_schema(bool async, bool ambientTransaction)
         {
@@ -237,7 +259,9 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true)]
+#endif
         [InlineData(false, false)]
         [SqlServerCondition(SqlServerCondition.SupportsAttach)]
         public Task Creates_physical_database_with_filename_and_schema(bool async, bool ambientTransaction)
@@ -365,6 +389,7 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorHasTablesTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
@@ -378,24 +403,26 @@ namespace Microsoft.EntityFrameworkCore
                 await databaseCreator.ExecutionStrategyFactory.Create().ExecuteAsync(
                     databaseCreator,
                     async creator =>
-                        {
-                            var errorNumber = async
-                                ? (await Assert.ThrowsAsync<SqlException>(() => creator.HasTablesAsyncBase())).Number
-                                : Assert.Throws<SqlException>(() => creator.HasTablesBase()).Number;
+                    {
+                        var errorNumber = async
+                            ? (await Assert.ThrowsAsync<SqlException>(() => creator.HasTablesAsyncBase())).Number
+                            : Assert.Throws<SqlException>(() => creator.HasTablesBase()).Number;
 
-                            if (errorNumber != 233) // skip if no-process transient failure
-                            {
-                                Assert.Equal(
-                                    4060, // Login failed error number
-                                    errorNumber);
-                            }
-                        });
+                        if (errorNumber != 233) // skip if no-process transient failure
+                        {
+                            Assert.Equal(
+                                4060, // Login failed error number
+                                errorNumber);
+                        }
+                    });
             }
         }
 
         [ConditionalTheory]
         [InlineData(true, false)]
+#if !Test20
         [InlineData(false, true)]
+#endif
         public async Task Returns_false_when_database_exists_but_has_no_tables(bool async, bool ambientTransaction)
         {
             using (var testDatabase = SqlServerTestStore.GetOrCreateInitialized("Empty"))
@@ -409,7 +436,9 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true)]
+#endif
         [InlineData(false, false)]
         public async Task Returns_true_when_database_exists_and_has_any_tables(bool async, bool ambientTransaction)
         {
@@ -425,10 +454,13 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorDeleteTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true)]
+#endif
         [InlineData(false, false)]
         public static async Task Deletes_database(bool async, bool ambientTransaction)
         {
@@ -457,7 +489,9 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [ConditionalTheory]
+#if !Test20
         [InlineData(true)]
+#endif
         [InlineData(false)]
         public async Task Throws_when_database_does_not_exist(bool async)
         {
@@ -490,10 +524,13 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorCreateTablesTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
+#if !Test20
         [InlineData(true, true)]
+#endif
         [InlineData(false, false)]
         public async Task Creates_schema_in_existing_database_test(bool async, bool ambientTransaction)
         {
@@ -569,6 +606,7 @@ namespace Microsoft.EntityFrameworkCore
             }
         }
 
+#if !Test20
         [Fact]
         public void GenerateCreateScript_works()
         {
@@ -576,36 +614,40 @@ namespace Microsoft.EntityFrameworkCore
             {
                 var script = context.Database.GenerateCreateScript();
                 Assert.Equal(
-                    "CREATE TABLE [Blogs] (" + EOL +
-                    "    [Key1] nvarchar(450) NOT NULL," + EOL +
-                    "    [Key2] varbinary(900) NOT NULL," + EOL +
-                    "    [Cheese] nvarchar(max) NULL," + EOL +
-                    "    [ErMilan] int NOT NULL," + EOL +
-                    "    [George] bit NOT NULL," + EOL +
-                    "    [TheGu] uniqueidentifier NOT NULL," + EOL +
-                    "    [NotFigTime] datetime2 NOT NULL," + EOL +
-                    "    [ToEat] tinyint NOT NULL," + EOL +
-                    "    [OrNothing] float NOT NULL," + EOL +
-                    "    [Fuse] smallint NOT NULL," + EOL +
-                    "    [WayRound] bigint NOT NULL," + EOL +
-                    "    [On] real NOT NULL," + EOL +                    
-                    "    [AndChew] varbinary(max) NULL," + EOL +                    
-                    "    [AndRow] rowversion NULL," + EOL +
-                    "    CONSTRAINT [PK_Blogs] PRIMARY KEY ([Key1], [Key2])" + EOL +
-                    ");" + EOL +
-                    "GO" + EOL + EOL + EOL,
+                    "CREATE TABLE [Blogs] (" + _eol +
+                    "    [Key1] nvarchar(450) NOT NULL," + _eol +
+                    "    [Key2] varbinary(900) NOT NULL," + _eol +
+                    "    [Cheese] nvarchar(max) NULL," + _eol +
+                    "    [ErMilan] int NOT NULL," + _eol +
+                    "    [George] bit NOT NULL," + _eol +
+                    "    [TheGu] uniqueidentifier NOT NULL," + _eol +
+                    "    [NotFigTime] datetime2 NOT NULL," + _eol +
+                    "    [ToEat] tinyint NOT NULL," + _eol +
+                    "    [OrNothing] float NOT NULL," + _eol +
+                    "    [Fuse] smallint NOT NULL," + _eol +
+                    "    [WayRound] bigint NOT NULL," + _eol +
+                    "    [On] real NOT NULL," + _eol +
+                    "    [AndChew] varbinary(max) NULL," + _eol +
+                    "    [AndRow] rowversion NULL," + _eol +
+                    "    CONSTRAINT [PK_Blogs] PRIMARY KEY ([Key1], [Key2])" + _eol +
+                    ");" + _eol +
+                    "GO" + _eol + _eol + _eol,
                     script);
             }
         }
+#endif
 
-        private static readonly string EOL = Environment.NewLine;
+        private static readonly string _eol = Environment.NewLine;
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorCreateTest : SqlServerDatabaseCreatorTest
     {
         [ConditionalTheory]
         [InlineData(true, false)]
+#if !Test20
         [InlineData(false, true)]
+#endif
         public async Task Creates_physical_database_but_not_tables(bool async, bool ambientTransaction)
         {
             using (var testDatabase = SqlServerTestStore.GetOrCreate("CreateTest"))
@@ -665,9 +707,9 @@ namespace Microsoft.EntityFrameworkCore
         }
     }
 
+    [SqlServerCondition(SqlServerCondition.IsNotSqlAzure | SqlServerCondition.IsNotTeamCity)]
     public class SqlServerDatabaseCreatorTest
     {
-
         public static IDisposable CreateTransactionScope(bool useTransaction)
         {
 #if NET461
@@ -742,10 +784,15 @@ namespace Microsoft.EntityFrameworkCore
             {
                 modelBuilder.Entity<Blog>(
                     b =>
-                        {
-                            b.HasKey(e => new { e.Key1, e.Key2 });
-                            b.Property(e => e.AndRow).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
-                        });
+                    {
+                        b.HasKey(
+                            e => new
+                            {
+                                e.Key1,
+                                e.Key2
+                            });
+                        b.Property(e => e.AndRow).IsConcurrencyToken().ValueGeneratedOnAddOrUpdate();
+                    });
             }
 
             public DbSet<Blog> Blogs { get; set; }

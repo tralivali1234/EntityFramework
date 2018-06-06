@@ -78,13 +78,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 newMemberExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
                     memberExpression,
                     (properties, querySource) =>
-                        {
-                            var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+                    {
+                        var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
 
-                            return collectionNavigation != null
-                                ? InjectSubquery(memberExpression, collectionNavigation)
-                                : default;
-                        });
+                        return collectionNavigation != null
+                            ? InjectSubquery(memberExpression, collectionNavigation)
+                            : default;
+                    });
             }
 
             return newMemberExpression ?? base.VisitMember(memberExpression);
@@ -104,16 +104,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return methodCallExpression;
             }
 
-            if (methodCallExpression.Method.MethodIsClosedFormOf(
-                CollectionNavigationIncludeExpressionRewriter.ProjectCollectionNavigationMethodInfo))
-            {
-                var newArgument = Visit(methodCallExpression.Arguments[0]);
-
-                return newArgument != methodCallExpression.Arguments[0]
-                    ? methodCallExpression.Update(methodCallExpression.Object, new[] { newArgument, methodCallExpression.Arguments[1] })
-                    : methodCallExpression;
-            }
-
             var shouldInject = ShouldInject;
             if (!methodCallExpression.Method.IsEFPropertyMethod()
                 && !_collectionMaterializingMethods.Any(m => methodCallExpression.Method.MethodIsClosedFormOf(m)))
@@ -127,13 +117,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 newMethodCallExpression = _queryModelVisitor.BindNavigationPathPropertyExpression(
                     methodCallExpression,
                     (properties, querySource) =>
-                        {
-                            var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
+                    {
+                        var collectionNavigation = properties.OfType<INavigation>().SingleOrDefault(n => n.IsCollection());
 
-                            return collectionNavigation != null
-                                ? InjectSubquery(methodCallExpression, collectionNavigation)
-                                : default;
-                        });
+                        return collectionNavigation != null
+                            ? InjectSubquery(methodCallExpression, collectionNavigation)
+                            : default;
+                    });
             }
 
             try

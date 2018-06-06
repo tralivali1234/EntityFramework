@@ -11,7 +11,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public DbFunctionsSqliteTest(NorthwindQuerySqliteFixture<NoopModelCustomizer> fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
-            //TestSqlLoggerFactory.CaptureOutput(testOutputHelper);
+            Fixture.TestSqlLoggerFactory.Clear();
         }
     }
 }

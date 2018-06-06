@@ -3,25 +3,28 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Internal;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
-using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal;
-using Microsoft.EntityFrameworkCore.Query.Internal;
+using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
 using Microsoft.EntityFrameworkCore.Query.Sql;
-using Microsoft.EntityFrameworkCore.Query.Sql.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Infrastructure.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Query.ExpressionTranslators.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Query.ExpressionVisitors.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Query.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Query.Sql.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Update.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.ValueGeneration.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
-using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection
@@ -46,17 +49,17 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         /// <example>
         ///     <code>
-        ///           public void ConfigureServices(IServiceCollection services)
-        ///           {
-        ///               var connectionString = "connection string to database";
+        ///            public void ConfigureServices(IServiceCollection services)
+        ///            {
+        ///                var connectionString = "connection string to database";
         /// 
-        ///               services
-        ///                   .AddEntityFrameworkSqlServer()
-        ///                   .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
-        ///                       options.UseSqlServer(connectionString)
-        ///                              .UseInternalServiceProvider(serviceProvider));
-        ///           }
-        ///       </code>
+        ///                services
+        ///                    .AddEntityFrameworkSqlServer()
+        ///                    .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
+        ///                        options.UseSqlServer(connectionString)
+        ///                               .UseInternalServiceProvider(serviceProvider));
+        ///            }
+        ///        </code>
         /// </example>
         /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
         /// <returns>
@@ -69,13 +72,13 @@ namespace Microsoft.Extensions.DependencyInjection
             var builder = new EntityFrameworkRelationalServicesBuilder(serviceCollection)
                 .TryAdd<IDatabaseProvider, DatabaseProvider<SqlServerOptionsExtension>>()
                 .TryAdd<IValueGeneratorCache>(p => p.GetService<ISqlServerValueGeneratorCache>())
-                .TryAdd<IRelationalTypeMapper, SqlServerTypeMapper>()
+                .TryAdd<IRelationalTypeMappingSource, SqlServerTypeMappingSource>()
                 .TryAdd<ISqlGenerationHelper, SqlServerSqlGenerationHelper>()
                 .TryAdd<IMigrationsAnnotationProvider, SqlServerMigrationsAnnotationProvider>()
-                .TryAdd<IRelationalValueBufferFactoryFactory, UntypedRelationalValueBufferFactoryFactory>()
                 .TryAdd<IModelValidator, SqlServerModelValidator>()
                 .TryAdd<IConventionSetBuilder, SqlServerConventionSetBuilder>()
                 .TryAdd<IUpdateSqlGenerator>(p => p.GetService<ISqlServerUpdateSqlGenerator>())
+                .TryAdd<ISingletonUpdateSqlGenerator>(p => p.GetService<ISqlServerUpdateSqlGenerator>())
                 .TryAdd<IModificationCommandBatchFactory, SqlServerModificationCommandBatchFactory>()
                 .TryAdd<IValueGeneratorSelector, SqlServerValueGeneratorSelector>()
                 .TryAdd<IRelationalConnection>(p => p.GetService<ISqlServerConnection>())
@@ -88,6 +91,7 @@ namespace Microsoft.Extensions.DependencyInjection
                 .TryAdd<IMemberTranslator, SqlServerCompositeMemberTranslator>()
                 .TryAdd<ICompositeMethodCallTranslator, SqlServerCompositeMethodCallTranslator>()
                 .TryAdd<IQuerySqlGeneratorFactory, SqlServerQuerySqlGeneratorFactory>()
+                .TryAdd<ISqlTranslatingExpressionVisitorFactory, SqlServerSqlTranslatingExpressionVisitorFactory>()
                 .TryAdd<ISingletonOptions, ISqlServerOptions>(p => p.GetService<ISqlServerOptions>())
                 .TryAddProviderSpecificServices(
                     b => b

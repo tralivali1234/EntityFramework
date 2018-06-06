@@ -24,13 +24,50 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                 .GetSection("Test:SqlServer");
         }
 
-        private const string DefaultConnectionString = "Data Source=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;Connect Timeout=30";
+        private const string DefaultConnectionString
+            = "Data Source=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;Connect Timeout=30";
 
         public static string DefaultConnection => Config["DefaultConnection"] ?? DefaultConnectionString;
 
-        public static bool IsSqlAzure => new SqlConnectionStringBuilder(DefaultConnection).DataSource.Contains("database.windows.net");
+        private static bool? _isSqlAzure;
+
+        public static bool IsSqlAzure =>
+            (bool)(_isSqlAzure
+                   ?? (_isSqlAzure = new SqlConnectionStringBuilder(DefaultConnection).DataSource.Contains("database.windows.net")));
 
         public static bool IsTeamCity => Environment.GetEnvironmentVariable("TEAMCITY_VERSION") != null;
+
+        public static bool IsFullTestSearchSupported
+        {
+            get
+            {
+                var fullTextInstalled = false;
+                using (var sqlConnection = new SqlConnection(SqlServerTestStore.CreateConnectionString("master")))
+                {
+                    sqlConnection.Open();
+
+                    using (var command = new SqlCommand(
+                        "SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')", sqlConnection))
+                    {
+                        var result = (int)command.ExecuteScalar();
+
+                        fullTextInstalled = result == 1;
+                    }
+                }
+
+                if (fullTextInstalled)
+                {
+                    var flag = GetFlag("SupportsFullTextSearch");
+
+                    if (flag.HasValue)
+                    {
+                        return flag.Value;
+                    }
+                }
+
+                return false;
+            }
+        }
 
         public static string ElasticPoolName => Config["ElasticPoolName"];
 

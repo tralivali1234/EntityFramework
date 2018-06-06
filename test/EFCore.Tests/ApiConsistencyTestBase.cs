@@ -25,6 +25,26 @@ namespace Microsoft.EntityFrameworkCore
         protected const BindingFlags AnyInstance
             = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
+        protected virtual IEnumerable<Type> FluentApiTypes
+            => Enumerable.Empty<Type>();
+
+        [Fact]
+        public void Fluent_api_methods_should_not_return_void()
+        {
+            var voidMethods
+                = (from type in GetAllTypes(FluentApiTypes)
+                   where type.GetTypeInfo().IsVisible
+                   from method in type.GetMethods(PublicInstance | BindingFlags.Static)
+                   where method.ReturnType == typeof(void)
+                   select type.Name + "." + method.Name)
+                .Except(new[] { "SqlServerDbContextOptionsBuilder.UseRowNumberForPaging" }) // TODO: #10808
+                .ToList();
+
+            Assert.False(
+                voidMethods.Any(),
+                "\r\n-- Missing fluent returns --\r\n" + string.Join(Environment.NewLine, voidMethods));
+        }
+
         [Fact]
         public virtual void Service_implementations_should_use_dependencies_parameter_object()
         {
@@ -68,15 +88,16 @@ namespace Microsoft.EntityFrameworkCore
                    where type.GetTypeInfo().IsVisible
                          && !type.GetTypeInfo().IsSealed
                          && type.GetConstructors(AnyInstance).Any(c => c.IsPublic || c.IsFamily || c.IsFamilyOrAssembly)
-                         && (type.Namespace != null)
+                         && type.Namespace != null
                          && !type.Namespace.EndsWith(".Compiled")
+                         && ShouldHaveVirtualMethods(type)
                    from method in type.GetMethods(AnyInstance)
-                   where (method.DeclaringType == type)
+                   where method.DeclaringType == type
                          && !(method.IsVirtual && !method.IsFinal)
                          && !method.Name.StartsWith("add_")
                          && !method.Name.StartsWith("remove_")
                          && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly)
-                         && (method.Name != "GenerateCacheKeyCore")
+                         && method.Name != "GenerateCacheKeyCore"
                    select type.FullName + "." + method.Name)
                 .ToList();
 
@@ -85,12 +106,16 @@ namespace Microsoft.EntityFrameworkCore
                 "\r\n-- Missing virtual APIs --\r\n" + string.Join(Environment.NewLine, nonVirtualMethods));
         }
 
+        protected virtual bool ShouldHaveVirtualMethods(Type type)
+            => true;
+
         [Fact]
         public virtual void Public_api_arguments_should_have_not_null_annotation()
         {
             var parametersMissingAttribute
                 = (from type in GetAllTypes(TargetAssembly.GetTypes())
                    where type.GetTypeInfo().IsVisible && !typeof(Delegate).GetTypeInfo().IsAssignableFrom(type.GetTypeInfo())
+                                                      && type.Name == "IdentityShaper"
                    let interfaceMappings = type.GetInterfaces().Select(i => type.GetTypeInfo().GetRuntimeInterfaceMap(i))
                    let events = type.GetEvents()
                    from method in type.GetMethods(AnyInstance | BindingFlags.Static | BindingFlags.DeclaredOnly)
@@ -134,14 +159,14 @@ namespace Microsoft.EntityFrameworkCore
                    from parameter in method.GetParameters()
                    let parameterType = parameter.ParameterType.IsByRef ? parameter.ParameterType.GetElementType() : parameter.ParameterType
                    let attributes = parameter.GetCustomAttributes(inherit: false)
-                   where ((!ShouldHaveNotNullAnnotation(method, type)
-                           || !type.GetTypeInfo().IsInterface && interfaceMappings.Any(im => im.TargetMethods.Contains(method))
-                           || events.Any(e => e.AddMethod == method || e.RemoveMethod == method)
-                           || (parameterType.GetTypeInfo().IsValueType && !parameterType.GetTypeInfo().IsNullableType()))
-                          && attributes.Any(a => a.GetType().Name == nameof(NotNullAttribute) || a.GetType().Name == nameof(CanBeNullAttribute)))
-                         || (parameterType.GetTypeInfo().IsValueType
-                             && parameterType.GetTypeInfo().IsNullableType()
-                             && attributes.Any(a => a.GetType().Name == nameof(CanBeNullAttribute)))
+                   where (!ShouldHaveNotNullAnnotation(method, type)
+                          || !type.GetTypeInfo().IsInterface && interfaceMappings.Any(im => im.TargetMethods.Contains(method))
+                          || events.Any(e => e.AddMethod == method || e.RemoveMethod == method)
+                          || parameterType.GetTypeInfo().IsValueType && !parameterType.GetTypeInfo().IsNullableType())
+                         && attributes.Any(a => a.GetType().Name == nameof(NotNullAttribute) || a.GetType().Name == nameof(CanBeNullAttribute))
+                         || parameterType.GetTypeInfo().IsValueType
+                         && parameterType.GetTypeInfo().IsNullableType()
+                         && attributes.Any(a => a.GetType().Name == nameof(CanBeNullAttribute))
                    select type.FullName + "." + method.Name + "[" + parameter.Name + "]").ToList();
 
             Assert.False(
@@ -156,7 +181,7 @@ namespace Microsoft.EntityFrameworkCore
                 = (from type in GetAllTypes(TargetAssembly.GetTypes())
                    where type.GetTypeInfo().IsVisible
                    from method in type.GetMethods(AnyInstance | BindingFlags.Static)
-                   where (method.DeclaringType == type)
+                   where method.DeclaringType == type
                          && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly)
                    where typeof(Task).GetTypeInfo().IsAssignableFrom(method.ReturnType.GetTypeInfo())
                    select method).ToList();
@@ -175,8 +200,8 @@ namespace Microsoft.EntityFrameworkCore
                 = (from methodWithoutToken in asyncMethodsWithoutToken
                    where !asyncMethodsWithToken
                        .Any(
-                           methodWithToken => (methodWithoutToken.Name == methodWithToken.Name)
-                                              && (methodWithoutToken.DeclaringType == methodWithToken.DeclaringType))
+                           methodWithToken => methodWithoutToken.Name == methodWithToken.Name
+                                              && methodWithoutToken.DeclaringType == methodWithToken.DeclaringType)
                    // ReSharper disable once PossibleNullReferenceException
                    select methodWithoutToken.DeclaringType.Name + "." + methodWithoutToken.Name)
                 .Except(GetCancellationTokenExceptions())
@@ -188,7 +213,7 @@ namespace Microsoft.EntityFrameworkCore
 
             var missingSuffixMethods
                 = asyncMethods
-                    .Where(method => !method.Name.EndsWith("Async") && (method.DeclaringType != null))
+                    .Where(method => !method.Name.EndsWith("Async") && method.DeclaringType != null)
                     .Select(method => method.DeclaringType.Name + "." + method.Name)
                     .Except(GetAsyncSuffixExceptions())
                     .ToList();

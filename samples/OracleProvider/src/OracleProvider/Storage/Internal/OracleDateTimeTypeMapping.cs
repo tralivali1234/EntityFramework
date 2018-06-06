@@ -3,8 +3,10 @@
 
 using System.Data;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Storage.Internal
 {
     public class OracleDateTimeTypeMapping : DateTimeTypeMapping
     {
@@ -13,23 +15,20 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public OracleDateTimeTypeMapping(
             [NotNull] string storeType,
             [CanBeNull] DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, dbType)
         {
         }
 
-        public OracleDateTimeTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            [CanBeNull] DbType? dbType = null)
-            : base(storeType, converter, dbType)
+        protected OracleDateTimeTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new OracleDateTimeTypeMapping(storeType, Converter, DbType);
+            => new OracleDateTimeTypeMapping(Parameters.WithStoreTypeAndSize(storeType, size));
 
         public override CoreTypeMapping Clone(ValueConverter converter)
-            => new OracleDateTimeTypeMapping(StoreType, ComposeConverter(converter), DbType);
+            => new OracleDateTimeTypeMapping(Parameters.WithComposedConverter(converter));
 
         protected override string SqlLiteralFormatString => DateTimeFormatConst;
     }

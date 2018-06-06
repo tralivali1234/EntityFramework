@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
@@ -113,7 +114,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         new
                         {
                             g.Key,
-                            Average = g.LongCount()
+                            LongCount = g.LongCount()
                         }),
                 e => e.Key);
         }
@@ -127,7 +128,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         new
                         {
                             g.Key,
-                            Average = g.Max(o => o.OrderID)
+                            Max = g.Max(o => o.OrderID)
                         }),
                 e => e.Key);
         }
@@ -141,7 +142,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         new
                         {
                             g.Key,
-                            Average = g.Min(o => o.OrderID)
+                            Min = g.Min(o => o.OrderID)
                         }),
                 e => e.Key);
         }
@@ -155,7 +156,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         new
                         {
                             g.Key,
-                            Average = g.Sum(o => o.OrderID)
+                            Sum = g.Sum(o => o.OrderID)
                         }),
                 e => e.Key);
         }
@@ -201,44 +202,78 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_Average()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID }).Select(g => g.Average(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(g => g.Average(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_Count()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID }).Select(g => g.Count()));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(g => g.Count()));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_LongCount()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID }).Select(g => g.LongCount()));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(g => g.LongCount()));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_Max()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID }).Select(g => g.Max(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(g => g.Max(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_Min()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID }).Select(g => g.Min(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(g => g.Min(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_Sum()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID }).Select(g => g.Sum(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(g => g.Sum(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_anonymous_Select_Sum_Min_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID
+                    }).Select(
                     g =>
                         new
                         {
@@ -251,46 +286,104 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual async Task GroupBy_anonymous_with_alias_Select_Key_Sum()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        Id = o.CustomerID
+                    }).Select(
+                    g =>
+                        new
+                        {
+                            Key = g.Key.Id,
+                            Sum = g.Sum(o => o.OrderID)
+                        }));
+        }
+
+        [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Average()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(g => g.Average(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(g => g.Average(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Count()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(g => g.Count()));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(g => g.Count()));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_LongCount()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(g => g.LongCount()));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(g => g.LongCount()));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Max()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(g => g.Max(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(g => g.Max(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Min()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(g => g.Min(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(g => g.Min(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Sum()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(g => g.Sum(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(g => g.Sum(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Sum_Min_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -306,7 +399,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_Average()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -320,7 +418,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_Count()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -334,12 +437,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_LongCount()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
                             g.Key,
-                            Average = g.LongCount()
+                            LongCount = g.LongCount()
                         }),
                 e => e.Key.CustomerID + " " + e.Key.EmployeeID);
         }
@@ -348,12 +456,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_Max()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
                             g.Key,
-                            Average = g.Max(o => o.OrderID)
+                            Max = g.Max(o => o.OrderID)
                         }),
                 e => e.Key.CustomerID + " " + e.Key.EmployeeID);
         }
@@ -362,12 +475,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_Min()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
                             g.Key,
-                            Average = g.Min(o => o.OrderID)
+                            Min = g.Min(o => o.OrderID)
                         }),
                 e => e.Key.CustomerID + " " + e.Key.EmployeeID);
         }
@@ -376,12 +494,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_Sum()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
                             g.Key,
-                            Average = g.Sum(o => o.OrderID)
+                            Sum = g.Sum(o => o.OrderID)
                         }),
                 e => e.Key.CustomerID + " " + e.Key.EmployeeID);
         }
@@ -390,7 +513,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Key_Sum_Min_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -407,7 +535,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Sum_Min_Key_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -424,7 +557,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_Composite_Select_Sum_Min_Key_flattened_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -439,10 +577,146 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual async Task GroupBy_Dto_as_key_Select_Sum()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(
+                    o => new NominalType
+                    {
+                        CustomerID = o.CustomerID,
+                        EmployeeID = o.EmployeeID
+                    }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                            g.Key
+                        }));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Dto_as_element_selector_Select_Sum()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(
+                        o => o.CustomerID,
+                        o => new NominalType
+                        {
+                            CustomerID = o.CustomerID,
+                            EmployeeID = o.EmployeeID
+                        })
+                    .Select(
+                        g =>
+                            new
+                            {
+                                Sum = g.Sum(o => o.EmployeeID),
+                                g.Key
+                            }));
+        }
+
+        protected class NominalType
+        {
+            public string CustomerID { get; set; }
+#if Test20
+            public int? EmployeeID { get; set; }
+#else
+            public uint? EmployeeID { get; set; }
+#endif
+
+            public override bool Equals(object obj)
+            {
+                if (obj is null)
+                {
+                    return false;
+                }
+
+                if (ReferenceEquals(this, obj))
+                {
+                    return true;
+                }
+
+                return obj.GetType() == GetType() && Equals((NominalType)obj);
+            }
+
+            public override int GetHashCode() => 0;
+
+            private bool Equals(NominalType other)
+                => string.Equals(CustomerID, other.CustomerID)
+                   && EmployeeID == other.EmployeeID;
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Composite_Select_Dto_Sum_Min_Key_flattened_Max_Avg()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
+                    g =>
+                        new CompositeDto
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                            Min = g.Min(o => o.OrderID),
+                            CustomerId = g.Key.CustomerID,
+                            EmployeeId = g.Key.EmployeeID,
+                            Max = g.Max(o => o.OrderID),
+                            Avg = g.Average(o => o.OrderID)
+                        }),
+                e => e.CustomerId + " " + e.EmployeeId);
+        }
+
+        protected class CompositeDto
+        {
+            public int Sum { get; set; }
+            public int Min { get; set; }
+            public int Max { get; set; }
+            public double Avg { get; set; }
+            public string CustomerId { get; set; }
+#if Test20
+            public int? EmployeeId { get; set; }
+#else
+            public uint? EmployeeId { get; set; }
+#endif
+
+            public override bool Equals(object obj)
+            {
+                if (obj is null)
+                {
+                    return false;
+                }
+
+                if (ReferenceEquals(this, obj))
+                {
+                    return true;
+                }
+
+                return obj.GetType() == GetType() && Equals((CompositeDto)obj);
+            }
+
+            public override int GetHashCode() => 0;
+
+            private bool Equals(CompositeDto other)
+                => Sum == other.Sum
+                   && Min == other.Min
+                   && Max == other.Max
+                   && Avg == other.Avg
+                   && EmployeeId == other.EmployeeId
+                   && string.Equals(CustomerId, other.CustomerId);
+        }
+
+        [ConditionalFact]
         public virtual async Task GroupBy_Composite_Select_Sum_Min_part_Key_flattened_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => new { o.CustomerID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -453,6 +727,168 @@ namespace Microsoft.EntityFrameworkCore.Query
                             Avg = g.Average(o => o.OrderID)
                         }),
                 e => e.Min + " " + e.Max);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Constant_Select_Sum_Min_Key_Max_Avg()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => 2).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                            Min = g.Min(o => o.OrderID),
+                            g.Key,
+                            Max = g.Max(o => o.OrderID),
+                            Avg = g.Average(o => o.OrderID)
+                        }),
+                e => e.Min + " " + e.Max);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Constant_with_element_selector_Select_Sum()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => 2, o => new { o.OrderID, o.OrderDate }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Constant_with_element_selector_Select_Sum2()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => 2, o => new { o.OrderID }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Constant_with_element_selector_Select_Sum3()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => 2, o => new { o.OrderID, o.OrderDate, o.CustomerID }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_after_predicate_Constant_Select_Sum_Min_Key_Max_Avg()
+        {
+            await AssertQuery<Order>(
+                os => os.Where(o => o.OrderID > 10500).GroupBy(o => 2).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                            Min = g.Min(o => o.OrderID),
+                            Random = g.Key,
+                            Max = g.Max(o => o.OrderID),
+                            Avg = g.Average(o => o.OrderID)
+                        }),
+                e => e.Min + " " + e.Max);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Constant_with_element_selector_Select_Sum_Min_Key_Max_Avg()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => 2, o => o.OrderID).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(),
+                            g.Key
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_param_Select_Sum_Min_Key_Max_Avg()
+        {
+            var a = 2;
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => a).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                            Min = g.Min(o => o.OrderID),
+                            g.Key,
+                            Max = g.Max(o => o.OrderID),
+                            Avg = g.Average(o => o.OrderID)
+                        }),
+                e => e.Min + " " + e.Max);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_param_with_element_selector_Select_Sum()
+        {
+            var a = 2;
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => a, o => new { o.OrderID, o.OrderDate }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_param_with_element_selector_Select_Sum2()
+        {
+            var a = 2;
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => a, o => new { o.OrderID }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_param_with_element_selector_Select_Sum3()
+        {
+            var a = 2;
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => a, o => new { o.OrderID, o.OrderDate, o.CustomerID }).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(o => o.OrderID),
+                        }),
+                e => e.Sum);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_param_with_element_selector_Select_Sum_Min_Key_Max_Avg()
+        {
+            var a = 2;
+            await AssertQuery<Order>(
+                os => os.GroupBy(o => a, o => o.OrderID).Select(
+                    g =>
+                        new
+                        {
+                            Sum = g.Sum(),
+                            g.Key
+                        }),
+                e => e.Sum);
         }
 
         #endregion
@@ -514,44 +950,85 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_Average()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(g => g.Average(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(g => g.Average(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_Count()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(g => g.Count()));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(g => g.Count()));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_LongCount()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(g => g.LongCount()));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(g => g.LongCount()));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_Max()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(g => g.Max(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(g => g.Max(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_Min()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(g => g.Min(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(g => g.Min(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_Sum()
         {
-            await AssertQueryScalar<Order>(os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(g => g.Sum(o => o.OrderID)));
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(g => g.Sum(o => o.OrderID)));
         }
 
         [ConditionalFact]
         public virtual async Task GroupBy_Property_anonymous_element_selector_Sum_Min_Max_Avg()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.EmployeeID }).Select(
+                os => os.GroupBy(
+                    o => o.CustomerID, o => new
+                    {
+                        o.OrderID,
+                        o.EmployeeID
+                    }).Select(
                     g =>
                         new
                         {
@@ -563,9 +1040,70 @@ namespace Microsoft.EntityFrameworkCore.Query
                 e => e.Sum + " " + e.Avg);
         }
 
+        [ConditionalFact]
+        public virtual async Task GroupBy_element_selector_complex_aggregate()
+        {
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID })
+                        .Select(g => g.Sum(e => e.OrderID + 1)));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_element_selector_complex_aggregate2()
+        {
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(o => o.CustomerID, o => new { o.OrderID, o.OrderDate })
+                        .Select(g => g.Sum(e => e.OrderID + 1)));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_element_selector_complex_aggregate3()
+        {
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(o => o.CustomerID, o => o.OrderID)
+                        .Select(g => g.Sum(e => e + 1)));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_element_selector_complex_aggregate4()
+        {
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(o => o.CustomerID, o => o.OrderID + 1)
+                        .Select(g => g.Sum(e => e)));
+        }
+
         #endregion
 
         #region GroupByAfterComposition
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_empty_key_Aggregate()
+        {
+            await AssertQueryScalar<Order>(
+                os =>
+                    os.GroupBy(
+                            o => new
+                            {
+                            })
+                        .Select(g => g.Sum(o => o.OrderID)));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_empty_key_Aggregate_Key()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(
+                            o => new
+                            {
+                            })
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                Sum = g.Sum(o => o.OrderID)
+                            }));
+        }
 
         [ConditionalFact]
         public virtual async Task OrderBy_GroupBy_Aggregate()
@@ -618,7 +1156,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 os =>
                     os.Distinct()
                         .GroupBy(o => o.CustomerID)
-                        .Select(g => new { g.Key, c = g.Count() }),
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                c = g.Count()
+                            }),
                 e => e.Key);
         }
 
@@ -627,10 +1170,20 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             await AssertQuery<Order>(
                 os =>
-                    os.Select(o => new { o.OrderID, o.EmployeeID })
+                    os.Select(
+                            o => new
+                            {
+                                o.OrderID,
+                                o.EmployeeID
+                            })
                         .Distinct()
                         .GroupBy(o => o.EmployeeID)
-                        .Select(g => new { g.Key, c = g.Count() }),
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                c = g.Count()
+                            }),
                 e => e.Key);
         }
 
@@ -641,7 +1194,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 cs =>
                     cs.SelectMany(c => c.Orders)
                         .GroupBy(o => o.EmployeeID)
-                        .Select(g => new { g.Key, c = g.Count() }),
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                c = g.Count()
+                            }),
                 e => e.Key);
         }
 
@@ -654,8 +1212,29 @@ namespace Microsoft.EntityFrameworkCore.Query
                      join c in cs
                          on o.CustomerID equals c.CustomerID
                      group o by c.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Average(o => o.OrderID) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Count = g.Average(o => o.OrderID)
+                        }),
                 e => e.Key);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_required_navigation_member_Aggregate()
+        {
+            await AssertQuery<OrderDetail>(
+                ods =>
+                    ods.GroupBy(od => od.Order.CustomerID)
+                        .Select(
+                            g =>
+                                new
+                                {
+                                    CustomerId = g.Key,
+                                    Count = g.Count()
+                                }),
+                e => e.CustomerId);
         }
 
         [ConditionalFact]
@@ -667,7 +1246,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                      join c in cs.Where(c => c.CustomerID != "DRACD" && c.CustomerID != "FOLKO").OrderBy(c => c.City).Skip(10).Take(50)
                          on o.CustomerID equals c.CustomerID
                      group o by c.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Average(o => o.OrderID) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Count = g.Average(o => o.OrderID)
+                        }),
                 e => e.Key);
         }
 
@@ -679,10 +1263,16 @@ namespace Microsoft.EntityFrameworkCore.Query
                     (from c in cs
                      join o in os
                          on c.CustomerID equals o.CustomerID into grouping
-                     from o in grouping
+                     from o in grouping.DefaultIfEmpty()
+                     where o != null
                      select o)
                     .GroupBy(o => o.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Average(o => o.OrderID) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Average = g.Average(o => o.OrderID)
+                        }),
                 e => e.Key);
         }
 
@@ -694,10 +1284,15 @@ namespace Microsoft.EntityFrameworkCore.Query
                     (from c in cs
                      join o in os
                          on c.CustomerID equals o.CustomerID into grouping
-                     from o in grouping
+                     from o in grouping.DefaultIfEmpty()
                      select c)
                     .GroupBy(c => c.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Max(c => c.City) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Max = g.Max(c => c.City)
+                        }),
                 e => e.Key);
         }
 
@@ -709,11 +1304,72 @@ namespace Microsoft.EntityFrameworkCore.Query
                     (from o in os
                      join c in cs
                          on o.CustomerID equals c.CustomerID into grouping
-                     from c in grouping
+                     from c in grouping.DefaultIfEmpty()
                      select o)
                     .GroupBy(o => o.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Average(o => o.OrderID) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Average = g.Average(o => o.OrderID)
+                        }),
                 e => e.Key);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupJoin_GroupBy_Aggregate_4()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    (from c in cs
+                     join o in os
+                         on c.CustomerID equals o.CustomerID into grouping
+                     from o in grouping.DefaultIfEmpty()
+                     select c)
+                    .GroupBy(c => c.CustomerID)
+                    .Select(
+                        g => new
+                        {
+                            Value = g.Key,
+                            Max = g.Max(c => c.City)
+                        }),
+                e => e.Value);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupJoin_GroupBy_Aggregate_5()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    (from o in os
+                     join c in cs
+                         on o.CustomerID equals c.CustomerID into grouping
+                     from c in grouping.DefaultIfEmpty()
+                     select o)
+                    .GroupBy(o => o.OrderID)
+                    .Select(
+                        g => new
+                        {
+                            Value = g.Key,
+                            Average = g.Average(o => o.OrderID)
+                        }),
+                e => e.Value);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_optional_navigation_member_Aggregate()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.Customer.Country)
+                        .Select(
+                            g =>
+                                new
+                                {
+                                    Country = g.Key,
+                                    Count = g.Count()
+                                }),
+                e => e.Country);
         }
 
         [ConditionalFact]
@@ -728,7 +1384,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                      where o.OrderID > 10300
                      select o)
                     .GroupBy(o => o.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Average(o => o.OrderID) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Count = g.Average(o => o.OrderID)
+                        }),
                 e => e.Key);
         }
 
@@ -741,8 +1402,34 @@ namespace Microsoft.EntityFrameworkCore.Query
                      join o2 in os2
                          on o1.OrderID equals o2.OrderID
                      group o2 by o1.CustomerID)
-                    .Select(g => new { g.Key, Count = g.Average(o => o.OrderID) }),
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Count = g.Average(o => o.OrderID)
+                        }),
                 e => e.Key);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_multi_navigation_members_Aggregate()
+        {
+            await AssertQuery<OrderDetail>(
+                ods =>
+                    ods.GroupBy(
+                            od => new
+                            {
+                                od.Order.CustomerID,
+                                od.Product.ProductName
+                            })
+                        .Select(
+                            g =>
+                                new
+                                {
+                                    CompositeKey = g.Key,
+                                    Count = g.Count()
+                                }),
+                e => e.CompositeKey.CustomerID + " " + e.CompositeKey.ProductName);
         }
 
         [ConditionalFact(Skip = "Unable to bind group by. See Issue#6658")]
@@ -761,9 +1448,325 @@ namespace Microsoft.EntityFrameworkCore.Query
                 entryCount: 19);
         }
 
+        [ConditionalFact]
+        public virtual async Task Select_anonymous_GroupBy_Aggregate()
+        {
+            await AssertQuery<Order>(
+                os => os.Where(o => o.OrderID < 10300)
+                    .Select(
+                        o => new
+                        {
+                            A = o.CustomerID,
+                            B = o.OrderDate,
+                            C = o.OrderID
+                        })
+                    .GroupBy(e => e.A)
+                    .Select(
+                        g => new
+                        {
+                            Min = g.Min(o => o.B),
+                            Max = g.Max(o => o.B),
+                            Sum = g.Sum(o => o.C),
+                            Avg = g.Average(o => o.C)
+                        }));
+        }
+
         #endregion
 
-        #region GroupByAggregateVariations
+        #region GroupByAggregateComposition
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_OrderBy_key()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.CustomerID)
+                        .OrderBy(o => o.Key)
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                c = g.Count()
+                            }),
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_OrderBy_count()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.CustomerID)
+                        .OrderBy(o => o.Count())
+                        .ThenBy(o => o.Key)
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                Count = g.Count()
+                            }),
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_OrderBy_count_Select_sum()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.CustomerID)
+                        .OrderBy(o => o.Count())
+                        .ThenBy(o => o.Key)
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                Sum = g.Sum(o => o.OrderID)
+                            }),
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_aggregate_Contains()
+        {
+            await AssertQuery<Order>(
+                os => os.Where(
+                    o => os.GroupBy(e => e.CustomerID)
+                        .Where(g => g.Count() > 30)
+                        .Select(g => g.Key)
+                        .Contains(o.CustomerID)),
+                entryCount: 31);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_aggregate_Pushdown()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(e => e.CustomerID)
+                    .Where(g => g.Count() > 10)
+                    .Select(g => g.Key)
+                    .OrderBy(t => t)
+                    .Take(20)
+                    .Skip(4));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Select_sum_over_unmapped_property()
+        {
+            using (var context = CreateContext())
+            {
+                var query = await context.Orders
+                    .GroupBy(o => o.CustomerID)
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Sum = g.Sum(o => o.Freight)
+                        })
+                    .ToListAsync();
+
+                // Do not do deep assertion of result. We don't have data for unmapped property in EF model
+                Assert.Equal(89, query.Count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_filter_key()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.CustomerID)
+                        .Where(o => o.Key == "ALFKI")
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                c = g.Count()
+                            }));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_filter_count()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.CustomerID)
+                        .Where(o => o.Count() > 4)
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                Count = g.Count()
+                            }));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_filter_count_OrderBy_count_Select_sum()
+        {
+            await AssertQuery<Order>(
+                os =>
+                    os.GroupBy(o => o.CustomerID)
+                        .Where(o => o.Count() > 4)
+                        .OrderBy(o => o.Count())
+                        .ThenBy(o => o.Key)
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                Count = g.Count(),
+                                Sum = g.Sum(o => o.OrderID)
+                            }));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Aggregate_Join()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    from a in os.GroupBy(o => o.CustomerID)
+                        .Where(g => g.Count() > 5)
+                        .Select(
+                            g => new
+                            {
+                                CustomerID = g.Key,
+                                LastOrderID = g.Max(o => o.OrderID)
+                            })
+                    join c in cs on a.CustomerID equals c.CustomerID
+                    join o in os on a.LastOrderID equals o.OrderID
+                    select new
+                    {
+                        c,
+                        o
+                    },
+                entryCount: 126);
+        }
+
+        [ConditionalFact]
+        public virtual async Task Join_GroupBy_Aggregate_multijoins()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    from c in cs
+                    join a in os.GroupBy(o => o.CustomerID)
+                            .Where(g => g.Count() > 5)
+                            .Select(
+                                g => new
+                                {
+                                    CustomerID = g.Key,
+                                    LastOrderID = g.Max(o => o.OrderID)
+                                })
+                        on c.CustomerID equals a.CustomerID
+                    join o in os on a.LastOrderID equals o.OrderID
+                    select new
+                    {
+                        c,
+                        o
+                    },
+                entryCount: 126);
+        }
+
+        [ConditionalFact]
+        public virtual async Task Join_GroupBy_Aggregate_single_join()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    from c in cs
+                    join a in os.GroupBy(o => o.CustomerID)
+                            .Where(g => g.Count() > 5)
+                            .Select(
+                                g => new
+                                {
+                                    CustomerID = g.Key,
+                                    LastOrderID = g.Max(o => o.OrderID)
+                                })
+                        on c.CustomerID equals a.CustomerID
+                    select new
+                    {
+                        c,
+                        a.LastOrderID
+                    },
+                entryCount: 63);
+        }
+
+        [ConditionalFact]
+        public virtual async Task Join_GroupBy_Aggregate_with_another_join()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    from c in cs
+                    join a in os.GroupBy(o => o.CustomerID)
+                            .Where(g => g.Count() > 5)
+                            .Select(
+                                g => new
+                                {
+                                    CustomerID = g.Key,
+                                    LastOrderID = g.Max(o => o.OrderID)
+                                })
+                        on c.CustomerID equals a.CustomerID
+                    join o in os on c.CustomerID equals o.CustomerID into grouping
+                    from g in grouping
+                    select new
+                    {
+                        c,
+                        a.LastOrderID,
+                        g.OrderID
+                    },
+                entryCount: 63);
+        }
+
+        [ConditionalFact]
+        public virtual async Task Join_GroupBy_Aggregate_in_subquery()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    from o in os.Where(o => o.OrderID < 10400)
+                    join i in (from c in cs
+                               join a in os.GroupBy(o => o.CustomerID)
+                                       .Where(g => g.Count() > 5)
+                                       .Select(
+                                           g => new
+                                           {
+                                               CustomerID = g.Key,
+                                               LastOrderID = g.Max(o => o.OrderID)
+                                           })
+                                   on c.CustomerID equals a.CustomerID
+                               select new
+                               {
+                                   c,
+                                   a.LastOrderID
+                               })
+                        on o.CustomerID equals i.c.CustomerID
+                    select new
+                    {
+                        o,
+                        i.c,
+                        i.c.CustomerID
+                    },
+                entryCount: 133);
+        }
+
+        [ConditionalFact]
+        public virtual async Task Join_GroupBy_Aggregate_on_key()
+        {
+            await AssertQuery<Order, Customer>(
+                (os, cs) =>
+                    (from c in cs
+                     join a in os.GroupBy(o => o.CustomerID)
+                             .Where(g => g.Count() > 5)
+                             .Select(
+                                 g => new
+                                 {
+                                     g.Key,
+                                     LastOrderID = g.Max(o => o.OrderID)
+                                 })
+                         on c.CustomerID equals a.Key
+                     select new
+                     {
+                         c,
+                         a.LastOrderID
+                     }),
+                e => e.c.CustomerID,
+                entryCount: 63);
+        }
 
         [ConditionalFact]
         public virtual async Task GroupBy_with_result_selector()
@@ -792,9 +1795,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 os => os.GroupBy(o => o.CustomerID).Select(g => g.Sum(e => 1)));
         }
 
-        #endregion
-
-        #region GroupByKeyBinding
+        [ConditionalFact]
+        public virtual async Task GroupBy_Sum_constant_cast()
+        {
+            await AssertQueryScalar<Order>(
+                os => os.GroupBy(o => o.CustomerID).Select(g => g.Sum(e => 1L)));
+        }
 
         [ConditionalFact]
         public virtual async Task Distinct_GroupBy_OrderBy_key()
@@ -804,7 +1810,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                     os.Distinct()
                         .GroupBy(o => o.CustomerID)
                         .OrderBy(o => o.Key)
-                        .Select(g => new { g.Key, c = g.Count() }),
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                c = g.Count()
+                            }),
                 assertOrder: true);
         }
 
@@ -821,7 +1832,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     .Select(
                         c => c.Orders.Any()
                             ? c.Orders.GroupBy(o => o.OrderID).Select(g => g.Key).ToArray()
-                            : new int[0]).ToList();
+                            : Array.Empty<int>()).ToList();
 
                 var query = context.Customers
                     // ReSharper disable once StringStartsWithIsCultureSpecific
@@ -829,7 +1840,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     .Select(
                         c => c.Orders.Any()
                             ? c.Orders.GroupBy(o => o.OrderID).Select(g => g.Key).ToArray()
-                            : new int[0]);
+                            : Array.Empty<int>());
 
                 var result = await query.ToListAsync();
 
@@ -870,6 +1881,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 {
                     return false;
                 }
+
                 if (ReferenceEquals(this, obj))
                 {
                     return true;
@@ -883,6 +1895,61 @@ namespace Microsoft.EntityFrameworkCore.Query
             public override int GetHashCode() => Order.GetHashCode();
         }
 
+        [ConditionalFact]
+        public virtual async Task GroupBy_Where_in_aggregate()
+        {
+            await AssertQueryScalar<Order>(
+                os => from o in os
+                      group o by new
+                      {
+                          o.CustomerID
+                      }
+                      into g
+                      select g.Where(e => e.OrderID < 10300).Count());
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Key_as_part_of_element_selector()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(
+                        o => o.OrderID, o => new
+                        {
+                            o.OrderID,
+                            o.OrderDate
+                        })
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Avg = g.Average(e => e.OrderID),
+                            Max = g.Max(o => o.OrderDate)
+                        }));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_composite_Key_as_part_of_element_selector()
+        {
+            await AssertQuery<Order>(
+                os => os.GroupBy(
+                        o => new
+                        {
+                            o.OrderID,
+                            o.CustomerID
+                        }, o => new
+                        {
+                            o.OrderID,
+                            o.OrderDate
+                        })
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Avg = g.Average(e => e.OrderID),
+                            Max = g.Max(o => o.OrderDate)
+                        }));
+        }
+
         #endregion
 
         #region GroupByWithoutAggregate
@@ -891,7 +1958,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_anonymous()
         {
             await AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.City, c.CustomerID }).GroupBy(a => a.City),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.City,
+                        c.CustomerID
+                    }).GroupBy(a => a.City),
                 elementSorter: GroupingSorter<string, object>(),
                 elementAsserter: GroupingAsserter<string, dynamic>(d => d.CustomerID));
         }
@@ -902,7 +1974,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             var countries = new[] { "Argentina", "Austria", "Brazil", "France", "Germany", "USA" };
             await AssertQuery<Customer>(
                 cs => cs.Where(c => countries.Contains(c.Country))
-                    .Select(c => new { c.City, c.CustomerID })
+                    .Select(
+                        c => new
+                        {
+                            c.City,
+                            c.CustomerID
+                        })
                     .GroupBy(a => a.City),
                 elementSorter: GroupingSorter<string, object>(),
                 elementAsserter: GroupingAsserter<string, dynamic>(d => d.CustomerID));
@@ -913,7 +1990,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             await AssertQuery<Customer>(
                 cs =>
-                    cs.Select(c => new { c.City, c.CustomerID })
+                    cs.Select(
+                            c => new
+                            {
+                                c.City,
+                                c.CustomerID
+                            })
                         .GroupBy(a => from c2 in cs select c2),
                 assertOrder: true);
         }
@@ -923,7 +2005,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             await AssertQuery<Customer>(
                 cs =>
-                    cs.Select(c => new { c.Country, c.CustomerID })
+                    cs.Select(
+                            c => new
+                            {
+                                c.Country,
+                                c.CustomerID
+                            })
                         .OrderBy(a => a.Country)
                         .GroupBy(a => a.Country)
                         .Select(g => g.OrderBy(a => a.CustomerID)),
@@ -1016,7 +2103,13 @@ namespace Microsoft.EntityFrameworkCore.Query
             await AssertQuery<Employee>(
                 es => es.GroupBy(e => e.EmployeeID)
                     .OrderBy(g => g.Key)
-                    .Select(g => g.Select(e => new { Title = EF.Property<string>(e, "Title"), e }).ToList()),
+                    .Select(
+                        g => g.Select(
+                            e => new
+                            {
+                                Title = EF.Property<string>(e, "Title"),
+                                e
+                            }).ToList()),
                 assertOrder: true);
         }
 
@@ -1066,15 +2159,20 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_with_orderby_and_anonymous_projection()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(o => o.CustomerID).OrderBy(g => g.Key).Select(g => new { Foo = "Foo", Group = g }),
+                os => os.GroupBy(o => o.CustomerID).OrderBy(g => g.Key).Select(
+                    g => new
+                    {
+                        Foo = "Foo",
+                        Group = g
+                    }),
                 e => GroupingSorter<string, object>()(e.Group),
                 elementAsserter: (e, a) =>
-                    {
-                        Assert.Equal(e.Foo, a.Foo);
-                        IGrouping<string, Order> eGrouping = e.Group;
-                        IGrouping<string, Order> aGrouping = a.Group;
-                        Assert.Equal(eGrouping.OrderBy(p => p.OrderID), aGrouping.OrderBy(p => p.OrderID));
-                    },
+                {
+                    Assert.Equal(e.Foo, a.Foo);
+                    IGrouping<string, Order> eGrouping = e.Group;
+                    IGrouping<string, Order> aGrouping = a.Group;
+                    Assert.Equal(eGrouping.OrderBy(p => p.OrderID), aGrouping.OrderBy(p => p.OrderID));
+                },
                 entryCount: 830);
         }
 
@@ -1114,14 +2212,15 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             await AssertQuery<Order>(
                 os =>
-                    os.GroupBy(o => o.CustomerID).Distinct().Select(g => g.Key));
+                    // TODO: See issue#11215
+                        os.GroupBy(o => o.CustomerID).Distinct().Select(g => g.Key));
         }
 
         [ConditionalFact]
         public virtual async Task OrderBy_Skip_GroupBy()
         {
             await AssertQuery<Order>(
-                os => os.OrderBy(o => o.OrderDate).Skip(800).GroupBy(o => o.CustomerID),
+                os => os.OrderBy(o => o.OrderDate).ThenBy(o => o.OrderID).Skip(800).GroupBy(o => o.CustomerID),
                 elementSorter: GroupingSorter<string, object>(),
                 elementAsserter: GroupingAsserter<string, dynamic>(d => d.OrderDate),
                 entryCount: 30);
@@ -1151,7 +2250,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task Select_Distinct_GroupBy()
         {
             await AssertQuery<Order>(
-                os => os.Select(o => new { o.CustomerID, o.EmployeeID }).OrderBy(a => a.EmployeeID).Distinct().GroupBy(o => o.CustomerID),
+                os => os.Select(
+                    o => new
+                    {
+                        o.CustomerID,
+                        o.EmployeeID
+                    }).OrderBy(a => a.EmployeeID).Distinct().GroupBy(o => o.CustomerID),
                 elementSorter: GroupingSorter<string, object>(),
                 elementAsserter: GroupingAsserter<string, dynamic>(d => d.EmployeeID));
         }
@@ -1160,8 +2264,58 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual async Task GroupBy_with_aggregate_through_navigation_property()
         {
             await AssertQuery<Order>(
-                os => os.GroupBy(c => c.EmployeeID).Select(g => new { max = g.Max(i => i.Customer.Region) }),
+                os => os.GroupBy(c => c.EmployeeID).Select(
+                    g => new
+                    {
+                        max = g.Max(i => i.Customer.Region)
+                    }),
                 elementSorter: e => e.max);
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_anonymous_key_without_aggregate()
+        {
+            using (var context = CreateContext())
+            {
+                var actual = (await context.Set<Order>()
+                        .GroupBy(
+                            o => new
+                            {
+                                o.CustomerID,
+                                o.OrderDate
+                            })
+                        .Select(
+                            g => new
+                            {
+                                g.Key,
+                                g
+                            })
+                        .ToListAsync())
+                    .OrderBy(g => g.Key + " " + g.g.Count()).ToList();
+
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Order>()
+                    .GroupBy(
+                        o => new
+                        {
+                            o.CustomerID,
+                            o.OrderDate
+                        })
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            g
+                        })
+                    .ToList()
+                    .OrderBy(g => g.Key + " " + g.g.Count()).ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].Key, actual[i].Key);
+                    Assert.Equal(expected[i].g.Count(), actual[i].g.Count());
+                }
+            }
         }
 
         #endregion
@@ -1200,6 +2354,18 @@ namespace Microsoft.EntityFrameworkCore.Query
                     es.Where(e => e.EmployeeID == 1)
                         .GroupBy(e => e.EmployeeID)
                         .Select(g => EF.Property<string>(g.First(), "Title")));
+        }
+
+        [ConditionalFact]
+        public virtual async Task GroupBy_Select_First_GroupBy()
+        {
+            await AssertQuery<Customer>(
+                cs =>
+                    cs.GroupBy(c => c.City)
+                        .Select(g => g.OrderBy(c => c.CustomerID).First())
+                        .GroupBy(c => c.ContactName),
+                elementSorter: GroupingSorter<string, object>(),
+                elementAsserter: GroupingAsserter<string, dynamic>(d => d.CustomerID));
         }
 
         #endregion
@@ -1261,6 +2427,96 @@ namespace Microsoft.EntityFrameworkCore.Query
                 for (var i = 0; i < expected.Count; i++)
                 {
                     Assert.Equal(expected[i], actual[i]);
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual async Task Join_GroupBy_entity_ToList()
+        {
+            using (var context = CreateContext())
+            {
+                var actual = await (from c in context.Customers.OrderBy(c => c.CustomerID).Take(5)
+                                    join o in context.Orders.OrderBy(o => o.OrderID).Take(50)
+                                        on c.CustomerID equals o.CustomerID
+                                    group o by c
+                                    into grp
+                                    select new
+                                    {
+                                        C = grp.Key,
+                                        Os = grp.ToList()
+                                    }).ToListAsync();
+
+                var expected = (from c in Fixture.QueryAsserter.ExpectedData.Set<Customer>()
+                                    .OrderBy(c => c.CustomerID).Take(5)
+                                join o in Fixture.QueryAsserter.ExpectedData.Set<Order>()
+                                        .OrderBy(o => o.OrderID).Take(50)
+                                    on c.CustomerID equals o.CustomerID
+                                group o by c
+                                into grp
+                                select new
+                                {
+                                    C = grp.Key,
+                                    Os = grp.ToList()
+                                }).ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].C, actual[i].C);
+                    Assert.Equal(expected[i].Os, actual[i].Os);
+                }
+            }
+        }
+
+        #endregion
+
+        #region DoubleGroupBy
+
+        [ConditionalFact(Skip = "Issue #11917")]
+        public virtual async Task Double_GroupBy_with_aggregate()
+        {
+            using (var context = CreateContext())
+            {
+                var actual = await context.Set<Order>()
+                    .GroupBy(
+                        o => new
+                        {
+                            o.OrderID,
+                            o.OrderDate
+                        })
+                    .GroupBy(g => g.Key.OrderDate)
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Lastest = g.OrderBy(e => e.Key.OrderID).FirstOrDefault()
+                        })
+                    .ToListAsync();
+
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Order>()
+                    .GroupBy(
+                        o => new
+                        {
+                            o.OrderID,
+                            o.OrderDate
+                        })
+                    .GroupBy(g => g.Key.OrderDate)
+                    .Select(
+                        g => new
+                        {
+                            g.Key,
+                            Lastest = g.OrderBy(e => e.Key.OrderID).FirstOrDefault()
+                        })
+                    .ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].Key, actual[i].Key);
+                    Assert.Equal(expected[i].Lastest.Key, actual[i].Lastest.Key);
+                    Assert.Equal(expected[i].Lastest.Count(), actual[i].Lastest.Count());
                 }
             }
         }

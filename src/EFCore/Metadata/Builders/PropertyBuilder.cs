@@ -6,6 +6,7 @@ using System.ComponentModel;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 
@@ -327,6 +328,41 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         public virtual PropertyBuilder UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
         {
             Builder.UsePropertyAccessMode(propertyAccessMode, ConfigurationSource.Explicit);
+
+            return this;
+        }
+
+        /// <summary>
+        ///     Configures the property so that the property value is converted to the given type before
+        ///     writing to the database and converted back when reading from the database.
+        /// </summary>
+        /// <typeparam name="TProvider"> The type to convert to and from. </typeparam>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public virtual PropertyBuilder HasConversion<TProvider>()
+            => HasConversion(typeof(TProvider));
+
+        /// <summary>
+        ///     Configures the property so that the property value is converted to the given type before
+        ///     writing to the database and converted back when reading from the database.
+        /// </summary>
+        /// <param name="providerClrType"> The type to convert to and from. </param>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public virtual PropertyBuilder HasConversion([CanBeNull] Type providerClrType)
+        {
+            Builder.HasConversion(providerClrType, ConfigurationSource.Explicit);
+
+            return this;
+        }
+
+        /// <summary>
+        ///     Configures the property so that the property value is converted to and from the database
+        ///     using the given <see cref="ValueConverter" />.
+        /// </summary>
+        /// <param name="converter"> The converter to use. </param>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public virtual PropertyBuilder HasConversion([CanBeNull] ValueConverter converter)
+        {
+            Builder.HasConversion(converter, ConfigurationSource.Explicit);
 
             return this;
         }

@@ -74,8 +74,14 @@ namespace Microsoft.EntityFrameworkCore
         {
             var optionsBuilder = new DbContextOptionsBuilder();
 
-            var extension1 = new FakeDbContextOptionsExtension1 { Something = "One " };
-            var extension2 = new FakeDbContextOptionsExtension1 { Something = "Two " };
+            var extension1 = new FakeDbContextOptionsExtension1
+            {
+                Something = "One "
+            };
+            var extension2 = new FakeDbContextOptionsExtension1
+            {
+                Something = "Two "
+            };
 
             ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(extension1);
             ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(extension2);
@@ -184,6 +190,12 @@ namespace Microsoft.EntityFrameworkCore
         public void EnableSensitiveDataLogging_on_generic_builder_returns_generic_builder()
         {
             GenericCheck(new DbContextOptionsBuilder<UnkoolContext>().EnableSensitiveDataLogging());
+        }
+
+        [Fact]
+        public void EnableRichDataErrorHandling_on_generic_builder_returns_generic_builder()
+        {
+            GenericCheck(new DbContextOptionsBuilder<UnkoolContext>().EnableRichDataErrorHandling());
         }
 
         [Fact]

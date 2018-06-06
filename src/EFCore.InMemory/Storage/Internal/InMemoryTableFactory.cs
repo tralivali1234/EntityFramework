@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.InMemory.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -19,7 +19,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     /// </summary>
     public class InMemoryTableFactory : IdentityMapFactoryFactoryBase, IInMemoryTableFactory
     {
-        private readonly bool _sensitiveLoggingEnabled = false;
+        private readonly bool _sensitiveLoggingEnabled;
 
         private readonly ConcurrentDictionary<IKey, Func<IInMemoryTable>> _factories
             = new ConcurrentDictionary<IKey, Func<IInMemoryTable>>();

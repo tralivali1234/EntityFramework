@@ -99,11 +99,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         InternalRelationshipBuilder IInfrastructure<InternalRelationshipBuilder>.Instance => Builder;
 
         /// <summary>
-        ///     Configures this as a one-to-many relationship.
+        ///     <para>
+        ///         Configures this as a one-to-many relationship.
+        ///     </para>
+        ///     <para>
+        ///         Note that calling this method with no parameters will explicitly configure this side
+        ///         of the relationship to use no navigation property, even if such a property exists on the
+        ///         entity type. If the navigation property is to be used, then it must be specified.
+        ///     </para>
         /// </summary>
         /// <param name="navigationName">
         ///     The name of the reference navigation property on the other end of this relationship.
-        ///     If null, there is no navigation property on the other end of the relationship.
+        ///     If null or not specified, then there is no navigation property on the other end of the relationship.
         /// </param>
         /// <returns> An object to further configure the relationship. </returns>
         public virtual ReferenceCollectionBuilder WithOne([CanBeNull] string navigationName = null)
@@ -128,27 +135,27 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
 
         private InternalRelationshipBuilder WithOneBuilder(PropertyIdentity reference)
         {
-            var foreingKey = Builder.Metadata;
+            var foreignKey = Builder.Metadata;
             var referenceName = reference.Name;
             if (referenceName != null
-                && foreingKey.DependentToPrincipal != null
-                && foreingKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
-                && foreingKey.DependentToPrincipal.Name != referenceName)
+                && foreignKey.DependentToPrincipal != null
+                && foreignKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
+                && foreignKey.DependentToPrincipal.Name != referenceName)
             {
                 throw new InvalidOperationException(
                     CoreStrings.ConflictingRelationshipNavigation(
-                        foreingKey.PrincipalEntityType.DisplayName(),
-                        foreingKey.PrincipalToDependent.Name,
-                        foreingKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName(),
+                        foreignKey.PrincipalToDependent.Name,
+                        foreignKey.DeclaringEntityType.DisplayName(),
                         referenceName,
-                        foreingKey.PrincipalEntityType.DisplayName(),
-                        foreingKey.PrincipalToDependent.Name,
-                        foreingKey.DeclaringEntityType.DisplayName(),
-                        foreingKey.DependentToPrincipal.Name));
+                        foreignKey.PrincipalEntityType.DisplayName(),
+                        foreignKey.PrincipalToDependent.Name,
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.DependentToPrincipal.Name));
             }
 
             if (referenceName != null
-                && RelatedEntityType != foreingKey.DeclaringEntityType)
+                && RelatedEntityType != foreignKey.DeclaringEntityType)
             {
                 return reference.Property == null && CollectionProperty == null
                     ? Builder.Navigations(reference.Name, CollectionName, DeclaringEntityType, RelatedEntityType, ConfigurationSource.Explicit)

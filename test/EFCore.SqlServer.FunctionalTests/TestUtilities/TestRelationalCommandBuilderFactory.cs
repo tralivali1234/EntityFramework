@@ -15,18 +15,18 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
     public class TestRelationalCommandBuilderFactory : IRelationalCommandBuilderFactory
     {
         private readonly IDiagnosticsLogger<DbLoggerCategory.Database.Command> _logger;
-        private readonly IRelationalTypeMapper _typeMapper;
+        private readonly IRelationalTypeMappingSource _typeMappingSource;
 
         public TestRelationalCommandBuilderFactory(
             IDiagnosticsLogger<DbLoggerCategory.Database.Command> logger,
-            IRelationalTypeMapper typeMapper)
+            IRelationalTypeMappingSource typeMappingSource)
         {
             _logger = logger;
-            _typeMapper = typeMapper;
+            _typeMappingSource = typeMappingSource;
         }
 
         public virtual IRelationalCommandBuilder Create()
-            => new TestRelationalCommandBuilder(_logger, _typeMapper);
+            => new TestRelationalCommandBuilder(_logger, _typeMappingSource);
 
         private class TestRelationalCommandBuilder : IRelationalCommandBuilder
         {
@@ -34,10 +34,10 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
             public TestRelationalCommandBuilder(
                 IDiagnosticsLogger<DbLoggerCategory.Database.Command> logger,
-                IRelationalTypeMapper typeMapper)
+                IRelationalTypeMappingSource typeMappingSource)
             {
                 _logger = logger;
-                ParameterBuilder = new RelationalParameterBuilder(typeMapper);
+                ParameterBuilder = new RelationalParameterBuilder(typeMappingSource);
             }
 
             IndentedStringBuilder IInfrastructure<IndentedStringBuilder>.Instance { get; } = new IndentedStringBuilder();
@@ -78,6 +78,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     connection.DbConnection.Close();
                     throw SqlExceptionFactory.CreateSqlException(errorNumber.Value);
                 }
+
                 return result;
             }
 
@@ -92,6 +93,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     connection.DbConnection.Close();
                     throw SqlExceptionFactory.CreateSqlException(errorNumber.Value);
                 }
+
                 return result;
             }
 
@@ -106,6 +108,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     connection.DbConnection.Close();
                     throw SqlExceptionFactory.CreateSqlException(errorNumber.Value);
                 }
+
                 return result;
             }
 
@@ -120,6 +123,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     connection.DbConnection.Close();
                     throw SqlExceptionFactory.CreateSqlException(errorNumber.Value);
                 }
+
                 return result;
             }
 
@@ -135,6 +139,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     result.Dispose(); // Normally, in non-test case, reader is disposed by using in caller code
                     throw SqlExceptionFactory.CreateSqlException(errorNumber.Value);
                 }
+
                 return result;
             }
 
@@ -150,6 +155,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     result.Dispose(); // Normally, in non-test case, reader is disposed by using in caller code
                     throw SqlExceptionFactory.CreateSqlException(errorNumber.Value);
                 }
+
                 return result;
             }
 
@@ -169,9 +175,11 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                             testConnection.DbConnection.Close();
                             throw SqlExceptionFactory.CreateSqlException(testConnection.ErrorNumber);
                         }
+
                         errorNumber = testConnection.ErrorNumber;
                     }
                 }
+
                 return errorNumber;
             }
         }

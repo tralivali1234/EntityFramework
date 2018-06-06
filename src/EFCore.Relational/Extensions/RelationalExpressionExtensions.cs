@@ -40,7 +40,10 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static ColumnReferenceExpression LiftExpressionFromSubquery([NotNull] this Expression expression, [NotNull] TableExpressionBase table)
+        // Issue#11266 This method is being used by provider code. Do not break.
+        public static ColumnReferenceExpression LiftExpressionFromSubquery(
+            [NotNull] this Expression expression,
+            [NotNull] TableExpressionBase table)
         {
             Check.NotNull(expression, nameof(expression));
             Check.NotNull(table, nameof(table));
@@ -64,6 +67,16 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static Expression UnwrapNullableExpression(this Expression expression)
+            => expression is NullableExpression nullableExpression
+                ? nullableExpression.Operand
+                : expression;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static IProperty FindProperty([NotNull] this Expression expression, [NotNull] Type targetType)
         {
             targetType = targetType.UnwrapNullableType();
@@ -79,7 +92,6 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 case UnaryExpression unaryExpression:
                     return unaryExpression.Operand.FindProperty(targetType);
                 case SqlFunctionExpression functionExpression:
-                {
                     var properties = functionExpression.Arguments
                         .Select(e => e.FindProperty(targetType))
                         .Where(p => p != null && p.ClrType.UnwrapNullableType() == targetType)
@@ -98,8 +110,32 @@ namespace Microsoft.EntityFrameworkCore.Internal
                             }
                         }
                     }
+
                     return property;
-                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static ColumnExpression FindOriginatingColumnExpression([NotNull] this Expression expression)
+        {
+            switch (expression)
+            {
+                case ColumnExpression columnExpression:
+                    return columnExpression;
+
+                case ColumnReferenceExpression columnReferenceExpression:
+                    return columnReferenceExpression.Expression.FindOriginatingColumnExpression();
+
+                case AliasExpression aliasExpression:
+                    return aliasExpression.Expression.FindOriginatingColumnExpression();
+
+                case UnaryExpression unaryExpression:
+                    return unaryExpression.Operand.FindOriginatingColumnExpression();
             }
 
             return null;

@@ -26,41 +26,26 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public DoubleTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, typeof(double), dbType)
         {
         }
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="DoubleTypeMapping" /> class.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="converter"> Converts values to and from the store whenever this mapping is used. </param>
-        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
-        public DoubleTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null)
-            : base(storeType, typeof(double), converter, dbType)
+        /// <param name="parameters"> Parameter object for <see cref="RelationalTypeMapping" />. </param>
+        protected DoubleTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         /// <summary>
         ///     Creates a copy of this mapping.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        /// <param name="parameters"> The parameters for this mapping. </param>
         /// <returns> The newly created mapping. </returns>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new DoubleTypeMapping(storeType, Converter, DbType);
-
-        /// <summary>
-        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
-        ///    added.
-        /// </summary>
-        /// <param name="converter"> The converter to use. </param>
-        /// <returns> A new type mapping </returns>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new DoubleTypeMapping(StoreType, ComposeConverter(converter), DbType);
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new DoubleTypeMapping(parameters);
 
         /// <summary>
         ///     Generates the SQL representation of a literal value.
@@ -71,7 +56,19 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </returns>
         protected override string GenerateNonNullSqlLiteral(object value)
         {
-            return ((double)value).ToString("G17", CultureInfo.InvariantCulture);
+            var doubleValue = (double)value;
+            var literal = doubleValue.ToString("G17", CultureInfo.InvariantCulture);
+
+            if (!literal.Contains("E")
+                && !literal.Contains("e")
+                && !literal.Contains(".")
+                && !double.IsNaN(doubleValue)
+                && !double.IsInfinity(doubleValue))
+            {
+                return literal + ".0";
+            }
+
+            return literal;
         }
     }
 }

@@ -8,8 +8,9 @@ using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Update;
 
-namespace Microsoft.EntityFrameworkCore.Update.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Update.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -94,8 +95,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     return false;
                 }
 
-                var avarageCommandLength = commandTextLength / ModificationCommands.Count;
-                var expectedAdditionalCommandCapacity = (MaxScriptLength - commandTextLength) / avarageCommandLength;
+                var averageCommandLength = commandTextLength / ModificationCommands.Count;
+                var expectedAdditionalCommandCapacity = (MaxScriptLength - commandTextLength) / averageCommandLength;
                 _commandsLeftToLengthCheck = Math.Max(1, expectedAdditionalCommandCapacity / 4);
             }
 
@@ -112,8 +113,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         private static int CountParameters(ModificationCommand modificationCommand)
         {
             var parameterCount = 0;
-            foreach (var columnModification in modificationCommand.ColumnModifications)
+            // ReSharper disable once ForCanBeConvertedToForeach
+            for (var columnIndex = 0; columnIndex < modificationCommand.ColumnModifications.Count; columnIndex++)
             {
+                var columnModification = modificationCommand.ColumnModifications[columnIndex];
                 if (columnModification.UseCurrentValueParameter)
                 {
                     parameterCount++;
@@ -183,6 +186,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     CachedCommandText.Append(GetBulkInsertCommandText(commandPosition));
                     _bulkInsertCommands.Clear();
                 }
+
                 _bulkInsertCommands.Add(newModificationCommand);
 
                 LastCachedCommandIndex = commandPosition;

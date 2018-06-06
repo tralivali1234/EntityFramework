@@ -283,12 +283,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("SensitiveInformationWarning");
 
         /// <summary>
-        ///     Removing migration '{name}' without checking the database. If this migration has been applied to the database, you will need to manually reverse the changes it made.
+        ///     Unable to check if the migration '{name}' has been applied to the database. If it has, you will need to manually reverse the changes it made. Error encountered while checking: {error}
         /// </summary>
-        public static string ForceRemoveMigration([CanBeNull] object name)
+        public static string ForceRemoveMigration([CanBeNull] object name, [CanBeNull] object error)
             => string.Format(
-                GetString("ForceRemoveMigration", nameof(name)),
-                name);
+                GetString("ForceRemoveMigration", nameof(name), nameof(error)),
+                name, error);
 
         /// <summary>
         ///     Unable to create an object of type '{contextType}'. Add an implementation of 'IDesignTimeDbContextFactory&lt;{contextType}&gt;' to the project, or see https://go.microsoft.com/fwlink/?linkid=851728 for additional patterns supported at design time.
@@ -315,7 +315,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 environment);
 
         /// <summary>
-        ///     Finding BuildWebHost method...
+        ///     Finding IWebHost accessor...
         /// </summary>
         public static string FindingBuildWebHost
             => GetString("FindingBuildWebHost");
@@ -327,7 +327,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("FindingServiceProvider");
 
         /// <summary>
-        ///     No BuildWebHost method was found on type '{programClass}'.
+        ///     No CreateWebHostBuilder(string[]) method was found on type '{programClass}'.
         /// </summary>
         public static string NoBuildWebHost([CanBeNull] object programClass)
             => string.Format(
@@ -349,7 +349,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("NoServiceProvider");
 
         /// <summary>
-        ///     Using application service provider from BuildWebHost method on '{programClass}'.
+        ///     Using application service provider from IWebHost accessor on '{programClass}'.
         /// </summary>
         public static string UsingBuildWebHost([CanBeNull] object programClass)
             => string.Format(
@@ -565,7 +565,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("SequencesRequireName");
 
         /// <summary>
-        ///     An error occurred while calling method 'BuildWebHost' on class '{startupClass}'. Continuing without the application service provider. Error: {error}
+        ///     An error occurred while accessing the IWebHost on class '{startupClass}'. Continuing without the application service provider. Error: {error}
         /// </summary>
         public static string InvokeBuildWebHostFailed([CanBeNull] object startupClass, [CanBeNull] object error)
             => string.Format(
@@ -587,6 +587,36 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => string.Format(
                 GetString("RevertingMigration", nameof(name)),
                 name);
+
+        /// <summary>
+        ///     Finding design-time services referenced by assembly '{startupAssembly}'.
+        /// </summary>
+        public static string FindingReferencedServices([CanBeNull] object startupAssembly)
+            => string.Format(
+                GetString("FindingReferencedServices", nameof(startupAssembly)),
+                startupAssembly);
+
+        /// <summary>
+        ///     No referenced design-time services were found.
+        /// </summary>
+        public static string NoReferencedServices
+            => GetString("NoReferencedServices");
+
+        /// <summary>
+        ///     Using design-time services from assembly '{referencedAssembly}'.
+        /// </summary>
+        public static string UsingReferencedServices([CanBeNull] object referencedAssembly)
+            => string.Format(
+                GetString("UsingReferencedServices", nameof(referencedAssembly)),
+                referencedAssembly);
+
+        /// <summary>
+        ///     The EF Core tools version '{toolsVersion}' is older than that of the runtime '{runtimeVersion}'. Update the tools for the latest features and bug fixes.
+        /// </summary>
+        public static string VersionMismatch([CanBeNull] object toolsVersion, [CanBeNull] object runtimeVersion)
+            => string.Format(
+                GetString("VersionMismatch", nameof(toolsVersion), nameof(runtimeVersion)),
+                toolsVersion, runtimeVersion);
 
         private static string GetString(string name, params string[] formatterNames)
         {

@@ -41,14 +41,15 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             [NotNull] Assembly startupAssembly,
             [NotNull] string projectDir,
             [NotNull] string rootNamespace,
-            [NotNull] string language)
+            [CanBeNull] string language,
+            [NotNull] string[] args)
         {
             Check.NotNull(reporter, nameof(reporter));
             Check.NotNull(assembly, nameof(assembly));
             Check.NotNull(startupAssembly, nameof(startupAssembly));
             Check.NotNull(projectDir, nameof(projectDir));
             Check.NotNull(rootNamespace, nameof(rootNamespace));
-            Check.NotNull(language, nameof(language));
+            Check.NotNull(args, nameof(args));
 
             _reporter = reporter;
             _assembly = assembly;
@@ -58,9 +59,10 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             _contextOperations = new DbContextOperations(
                 reporter,
                 assembly,
-                startupAssembly);
+                startupAssembly,
+                args);
 
-            _servicesBuilder = new DesignTimeServicesBuilder(startupAssembly, reporter);
+            _servicesBuilder = new DesignTimeServicesBuilder(startupAssembly, reporter, args);
         }
 
         /// <summary>
@@ -74,7 +76,11 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         {
             Check.NotEmpty(name, nameof(name));
 
-            outputDir = string.IsNullOrWhiteSpace(outputDir) ? null : outputDir;
+            if (outputDir != null)
+            {
+                outputDir = Path.GetFullPath(Path.Combine(_projectDir, outputDir));
+            }
+
             var subNamespace = SubnamespaceFromOutputPath(outputDir);
 
             using (var context = _contextOperations.CreateContext(contextType))
@@ -83,7 +89,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 EnsureServices(services);
                 EnsureMigrationsAssembly(services);
 
-                var scaffolder = services.GetRequiredService<MigrationsScaffolder>();
+                var scaffolder = services.GetRequiredService<IMigrationsScaffolder>();
                 var migration = scaffolder.ScaffoldMigration(name, _rootNamespace, subNamespace, _language);
                 var files = scaffolder.Save(_projectDir, migration, outputDir);
 
@@ -129,7 +135,11 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 var idGenerator = services.GetRequiredService<IMigrationsIdGenerator>();
 
                 return from id in migrationsAssembly.Migrations.Keys
-                       select new MigrationInfo { Id = id, Name = idGenerator.GetName(id) };
+                       select new MigrationInfo
+                       {
+                           Id = id,
+                           Name = idGenerator.GetName(id)
+                       };
             }
         }
 
@@ -180,7 +190,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual MigrationFiles RemoveMigration(
-            [CanBeNull] string contextType, bool force, bool revert)
+            [CanBeNull] string contextType, bool force)
         {
             using (var context = _contextOperations.CreateContext(contextType))
             {
@@ -188,9 +198,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 EnsureServices(services);
                 EnsureMigrationsAssembly(services);
 
-                var scaffolder = services.GetRequiredService<MigrationsScaffolder>();
+                var scaffolder = services.GetRequiredService<IMigrationsScaffolder>();
 
-                var files = scaffolder.RemoveMigration(_projectDir, _rootNamespace, force, revert, _language);
+                var files = scaffolder.RemoveMigration(_projectDir, _rootNamespace, force, _language);
 
                 _reporter.WriteInformation(DesignStrings.Done);
 
@@ -198,7 +208,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             }
         }
 
-        private void EnsureServices(IServiceProvider services)
+        private static void EnsureServices(IServiceProvider services)
         {
             var migrator = services.GetService<IMigrator>();
             if (migrator == null)

@@ -11,6 +11,7 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
@@ -24,6 +25,8 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         private readonly IDatabaseModelFactory _databaseModelFactory;
         private readonly IScaffoldingModelFactory _factory;
         private readonly ICSharpUtilities _cSharpUtilities;
+        private readonly ICSharpHelper _code;
+        private readonly INamedConnectionStringResolver _connectionStringResolver;
         private const string DbContextSuffix = "Context";
         private const string DefaultDbContextName = "Model" + DbContextSuffix;
 
@@ -34,47 +37,51 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         public ReverseEngineerScaffolder(
             [NotNull] IDatabaseModelFactory databaseModelFactory,
             [NotNull] IScaffoldingModelFactory scaffoldingModelFactory,
-            [NotNull] ScaffoldingCodeGeneratorSelector scaffoldingCodeGeneratorSelector,
-            [NotNull] ICSharpUtilities cSharpUtilities)
+            [NotNull] IModelCodeGeneratorSelector modelCodeGeneratorSelector,
+            [NotNull] ICSharpUtilities cSharpUtilities,
+            [NotNull] ICSharpHelper cSharpHelper,
+            [NotNull] INamedConnectionStringResolver connectionStringResolver)
         {
             Check.NotNull(databaseModelFactory, nameof(databaseModelFactory));
             Check.NotNull(scaffoldingModelFactory, nameof(scaffoldingModelFactory));
-            Check.NotNull(scaffoldingCodeGeneratorSelector, nameof(scaffoldingCodeGeneratorSelector));
+            Check.NotNull(modelCodeGeneratorSelector, nameof(modelCodeGeneratorSelector));
+            Check.NotNull(cSharpHelper, nameof(cSharpHelper));
 
             _databaseModelFactory = databaseModelFactory;
             _factory = scaffoldingModelFactory;
-            ScaffoldingCodeGeneratorSelector = scaffoldingCodeGeneratorSelector;
+            ModelCodeGeneratorSelector = modelCodeGeneratorSelector;
             _cSharpUtilities = cSharpUtilities;
+            _code = cSharpHelper;
+            _connectionStringResolver = connectionStringResolver;
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        private ScaffoldingCodeGeneratorSelector ScaffoldingCodeGeneratorSelector { get; }
+        private IModelCodeGeneratorSelector ModelCodeGeneratorSelector { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual ScaffoldedModel Generate(
+        public virtual ScaffoldedModel ScaffoldModel(
             string connectionString,
             IEnumerable<string> tables,
             IEnumerable<string> schemas,
-            string projectPath,
-            string outputPath,
-            string rootNamespace,
+            string @namespace,
             string language,
+            string contextDir,
             string contextName,
-            bool useDataAnnotations,
-            bool useDatabaseNames)
+            ModelReverseEngineerOptions modelOptions,
+            ModelCodeGenerationOptions codeOptions)
         {
             Check.NotEmpty(connectionString, nameof(connectionString));
             Check.NotNull(tables, nameof(tables));
             Check.NotNull(schemas, nameof(schemas));
-            Check.NotEmpty(projectPath, nameof(projectPath));
-            Check.NotEmpty(rootNamespace, nameof(rootNamespace));
-            Check.NotNull(language, nameof(language));
+            Check.NotEmpty(@namespace, nameof(@namespace));
+            Check.NotNull(modelOptions, nameof(modelOptions));
+            Check.NotNull(codeOptions, nameof(codeOptions));
 
             if (!string.IsNullOrWhiteSpace(contextName)
                 && (!_cSharpUtilities.IsValidIdentifier(contextName)
@@ -84,24 +91,20 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                     DesignStrings.ContextClassNotValidCSharpIdentifier(contextName));
             }
 
-            var databaseModel = _databaseModelFactory.Create(connectionString, tables, schemas);
-            var model = _factory.Create(databaseModel, useDatabaseNames);
+            var resolvedConnectionString = _connectionStringResolver.ResolveConnectionString(connectionString);
+            if (resolvedConnectionString != connectionString)
+            {
+                codeOptions.SuppressConnectionStringWarning = true;
+            }
+
+            var databaseModel = _databaseModelFactory.Create(resolvedConnectionString, tables, schemas);
+            var model = _factory.Create(databaseModel, modelOptions.UseDatabaseNames);
 
             if (model == null)
             {
                 throw new InvalidOperationException(
                     DesignStrings.ProviderReturnedNullModel(
                         _factory.GetType().ShortDisplayName()));
-            }
-
-            outputPath = string.IsNullOrWhiteSpace(outputPath) ? null : outputPath;
-            var subNamespace = SubnamespaceFromOutputPath(projectPath, outputPath);
-
-            var @namespace = rootNamespace;
-
-            if (!string.IsNullOrEmpty(subNamespace))
-            {
-                @namespace += "." + subNamespace;
             }
 
             if (string.IsNullOrEmpty(contextName))
@@ -111,69 +114,41 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 var annotatedName = model.Scaffolding().DatabaseName;
                 if (!string.IsNullOrEmpty(annotatedName))
                 {
-                    contextName = _cSharpUtilities.GenerateCSharpIdentifier(
-                        annotatedName + DbContextSuffix,
-                        existingIdentifiers: null,
-                        singularizePluralizer: null);
+                    contextName = _code.Identifier(annotatedName + DbContextSuffix);
                 }
             }
 
-            var codeGenerator = ScaffoldingCodeGeneratorSelector.Select(language);
+            var codeGenerator = ModelCodeGeneratorSelector.Select(language);
 
-            return codeGenerator.WriteCode(model, @namespace, contextName, connectionString, useDataAnnotations);
+            return codeGenerator.GenerateModel(model, @namespace, contextDir ?? string.Empty, contextName, connectionString, codeOptions);
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual ReverseEngineerFiles Save(
+        public virtual SavedModelFiles Save(
             ScaffoldedModel scaffoldedModel,
-            string projectPath,
-            string outputPath,
+            string outputDir,
             bool overwriteFiles)
         {
-            Check.NotEmpty(projectPath, nameof(projectPath));
-
-            var outputDir = outputPath == null
-                ? projectPath
-                : Path.GetFullPath(Path.Combine(projectPath, outputPath));
-
             CheckOutputFiles(scaffoldedModel, outputDir, overwriteFiles);
 
-            var files = new ReverseEngineerFiles();
             Directory.CreateDirectory(outputDir);
 
-            var contextPath = Path.Combine(outputDir, scaffoldedModel.ContextFile.Path);
+            var contextPath = Path.GetFullPath(Path.Combine(outputDir, scaffoldedModel.ContextFile.Path));
+            Directory.CreateDirectory(Path.GetDirectoryName(contextPath));
             File.WriteAllText(contextPath, scaffoldedModel.ContextFile.Code, Encoding.UTF8);
-            files.ContextFile = contextPath;
 
-            foreach (var entityTypeFile in scaffoldedModel.EntityTypeFiles)
+            var additionalFiles = new List<string>();
+            foreach (var entityTypeFile in scaffoldedModel.AdditionalFiles)
             {
                 var additionalFilePath = Path.Combine(outputDir, entityTypeFile.Path);
                 File.WriteAllText(additionalFilePath, entityTypeFile.Code, Encoding.UTF8);
-                files.EntityTypeFiles.Add(additionalFilePath);
+                additionalFiles.Add(additionalFilePath);
             }
 
-            return files;
-        }
-
-        // if outputDir is a subfolder of projectDir, then use each subfolder as a subnamespace
-        // --output-dir $(projectFolder)/A/B/C
-        // => "namespace $(rootnamespace).A.B.C"
-        private string SubnamespaceFromOutputPath(string projectDir, string outputDir)
-        {
-            if (outputDir == null
-                || !outputDir.StartsWith(projectDir, StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            var subPath = outputDir.Substring(projectDir.Length);
-
-            return !string.IsNullOrWhiteSpace(subPath)
-                ? string.Join(".", subPath.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
-                : null;
+            return new SavedModelFiles(contextPath, additionalFiles);
         }
 
         private static void CheckOutputFiles(
@@ -181,7 +156,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             string outputDir,
             bool overwriteFiles)
         {
-            var paths = scaffoldedModel.EntityTypeFiles.Select(f => f.Path).ToList();
+            var paths = scaffoldedModel.AdditionalFiles.Select(f => f.Path).ToList();
             paths.Insert(0, scaffoldedModel.ContextFile.Path);
 
             var existingFiles = new List<string>();
@@ -201,13 +176,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 }
             }
 
-            if (!overwriteFiles && existingFiles.Count != 0)
+            if (!overwriteFiles
+                && existingFiles.Count != 0)
             {
                 throw new OperationException(
                     DesignStrings.ExistingFiles(
                         outputDir,
                         string.Join(CultureInfo.CurrentCulture.TextInfo.ListSeparator, existingFiles)));
             }
+
             if (readOnlyFiles.Count != 0)
             {
                 throw new OperationException(

@@ -58,6 +58,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual bool OnEntityTypeRemoved([NotNull] InternalModelBuilder modelBuilder, [NotNull] EntityType type)
+            => _scope.OnEntityTypeRemoved(Check.NotNull(modelBuilder, nameof(modelBuilder)), Check.NotNull(type, nameof(type)));
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual InternalEntityTypeBuilder OnEntityTypeMemberIgnored(
             [NotNull] InternalEntityTypeBuilder entityTypeBuilder,
             [NotNull] string ignoredMemberName)
@@ -196,12 +203,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             [NotNull] InternalEntityTypeBuilder sourceEntityTypeBuilder,
             [NotNull] InternalEntityTypeBuilder targetEntityTypeBuilder,
             [NotNull] string navigationName,
-            [CanBeNull] PropertyInfo propertyInfo)
+            [CanBeNull] MemberInfo memberInfo)
             => _scope.OnNavigationRemoved(
                 Check.NotNull(sourceEntityTypeBuilder, nameof(sourceEntityTypeBuilder)),
                 Check.NotNull(targetEntityTypeBuilder, nameof(targetEntityTypeBuilder)),
                 Check.NotNull(navigationName, nameof(navigationName)),
-                propertyInfo);
+                memberInfo);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -290,7 +297,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             {
                 _dispatcher = dispatcher;
                 var currentScope = _dispatcher._scope;
-                dispatcher._scope = new ConventionScope(currentScope, children: null);
+
+                if (currentScope.Children != null
+                    && currentScope.Children[currentScope.Children.Count - 1] is ConventionScope lastScope
+                    && lastScope.Children == null)
+                {
+                    dispatcher._scope = lastScope;
+                    return;
+                }
+
+                dispatcher._scope = new ConventionScope(currentScope);
 
                 if (currentScope != _dispatcher._immediateConventionScope)
                 {
@@ -314,6 +330,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     }
 
                     _dispatcher._scope = currentScope.Parent;
+
+                    if (currentScope.Children == null)
+                    {
+                        return;
+                    }
+
                     currentScope.MakeReadonly();
 
                     if (currentScope.Parent != _dispatcher._immediateConventionScope
@@ -323,7 +345,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     }
 
                     // Capture all nested convention invocations to unwind the stack
-                    _dispatcher._scope = new ConventionScope(_dispatcher._immediateConventionScope, children: null);
+                    _dispatcher._scope = new ConventionScope(_dispatcher._immediateConventionScope);
                     new RunVisitor(_dispatcher).VisitConventionScope(currentScope);
                 }
             }

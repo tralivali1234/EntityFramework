@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -24,8 +25,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             [NotNull] IQuerySource querySource,
             bool trackingQuery,
             [NotNull] IKey key,
-            [NotNull] Func<ValueBuffer, object> materializer)
-            : base(querySource, trackingQuery, key, materializer)
+            [NotNull] Func<MaterializationContext, object> materializer,
+            [CanBeNull] Expression materializerExpression)
+            : base(querySource, trackingQuery, key, materializer, materializerExpression)
         {
         }
 
@@ -39,7 +41,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual TEntity Shape(QueryContext queryContext, ValueBuffer valueBuffer)
+        public virtual TEntity Shape(QueryContext queryContext, in ValueBuffer valueBuffer)
         {
             if (IsTrackingQuery)
             {
@@ -51,7 +53,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 }
             }
 
-            return (TEntity)Materializer(valueBuffer);
+            return (TEntity)Materializer(
+                new MaterializationContext(
+                    valueBuffer,
+                    queryContext.Context));
         }
 
         /// <summary>

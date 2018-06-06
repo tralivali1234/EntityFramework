@@ -10,7 +10,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Storage.Internal;
 using Oracle.ManagedDataAccess.Client;
 
 // ReSharper disable SuggestBaseTypeForParameter
@@ -25,7 +25,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         //   ADMIN USER ef_pdb_admin IDENTIFIED BY ef_pdb_admin
         //   ROLES = (DBA)
         //   FILE_NAME_CONVERT = ('\pdbseed\', '\pdb_ef\');
-        //   
+        //
         //   ALTER PLUGGABLE DATABASE ef OPEN;
 
         public const int CommandTimeout = 600;
@@ -57,7 +57,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             string name,
             string scriptPath = null,
             bool shared = true)
-            : base(name, shared)
+            : base(name.Substring(0, Math.Min(name.Length, 30)), shared)
         {
             if (scriptPath != null)
             {

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class RelationalPropertyMappingValidationConventionTest : PropertyMappingValidationConventionTest
@@ -17,7 +18,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var modelBuilder = new InternalModelBuilder(new Model());
             var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveAsPropertyEntity), ConfigurationSource.Convention);
-            entityTypeBuilder.Property("LongProperty", typeof(Tuple<long>), ConfigurationSource.Convention);
+            entityTypeBuilder.Property("LongProperty", typeof(Tuple<long>), ConfigurationSource.Explicit);
+            entityTypeBuilder.Ignore(nameof(NonPrimitiveAsPropertyEntity.Property), ConfigurationSource.Explicit);
 
             Assert.Equal(
                 CoreStrings.PropertyNotMapped(
@@ -29,19 +31,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         public void Throws_when_added_property_is_not_mapped_to_store_even_if_configured_to_use_column_type()
         {
             var modelBuilder = new InternalModelBuilder(new Model());
-            var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveAsPropertyEntity), ConfigurationSource.Convention);
-            entityTypeBuilder.Property("LongProperty", typeof(Tuple<long>), ConfigurationSource.Convention).Relational(ConfigurationSource.Convention).HasColumnType("some_int_mapping");
+            var entityTypeBuilder = modelBuilder.Entity(typeof(NonPrimitiveNonNavigationAsPropertyEntity), ConfigurationSource.Convention);
+            entityTypeBuilder.Property("LongProperty", typeof(Tuple<long>), ConfigurationSource.Explicit).Relational(ConfigurationSource.Convention).HasColumnType("some_int_mapping");
 
             Assert.Equal(
                 CoreStrings.PropertyNotMapped(
-                    typeof(NonPrimitiveAsPropertyEntity).ShortDisplayName(), "LongProperty", typeof(Tuple<long>).ShortDisplayName()),
+                    typeof(NonPrimitiveNonNavigationAsPropertyEntity).ShortDisplayName(), "LongProperty", typeof(Tuple<long>).ShortDisplayName()),
                 Assert.Throws<InvalidOperationException>(() => CreateConvention().Apply(modelBuilder)).Message);
         }
 
         protected override PropertyMappingValidationConvention CreateConvention()
             => new PropertyMappingValidationConvention(
-                new TestRelationalTypeMapper(
-                    new CoreTypeMapperDependencies(),
-                    new RelationalTypeMapperDependencies()));
+                new TestRelationalTypeMappingSource(
+                    TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                    TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()),
+                TestServiceFactory.Instance.Create<IMemberClassifier>());
     }
 }

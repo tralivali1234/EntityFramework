@@ -13,6 +13,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             public virtual ConventionScope VisitConventionScope(ConventionScope node)
             {
+                if (node.Children == null)
+                {
+                    return null;
+                }
+
                 List<ConventionNode> visitedNodes = null;
                 foreach (var conventionNode in node.Children)
                 {
@@ -21,17 +26,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     {
                         continue;
                     }
+
                     if (visitedNodes == null)
                     {
                         visitedNodes = new List<ConventionNode>();
                     }
+
                     visitedNodes.Add(visitedNode);
                 }
+
                 return (visitedNodes?.Count ?? 0) == 0 ? null : new ConventionScope(node.Parent, visitedNodes);
             }
 
             public virtual OnEntityTypeAddedNode VisitOnEntityTypeAdded(OnEntityTypeAddedNode node) => node;
             public virtual OnEntityTypeIgnoredNode VisitOnEntityTypeIgnored(OnEntityTypeIgnoredNode node) => node;
+            public virtual OnEntityTypeRemovedNode VisitOnEntityTypeRemoved(OnEntityTypeRemovedNode node) => node;
             public virtual OnEntityTypeMemberIgnoredNode VisitOnEntityTypeMemberIgnored(OnEntityTypeMemberIgnoredNode node) => node;
             public virtual OnBaseEntityTypeChangedNode VisitOnBaseEntityTypeChanged(OnBaseEntityTypeChangedNode node) => node;
             public virtual OnEntityTypeAnnotationChangedNode VisitOnEntityTypeAnnotationChanged(OnEntityTypeAnnotationChangedNode node) => node;
@@ -72,6 +81,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             public override OnEntityTypeIgnoredNode VisitOnEntityTypeIgnored(OnEntityTypeIgnoredNode node)
             {
                 Dispatcher._immediateConventionScope.OnEntityTypeIgnored(node.ModelBuilder, node.Name, node.Type);
+                return null;
+            }
+
+            public override OnEntityTypeRemovedNode VisitOnEntityTypeRemoved(OnEntityTypeRemovedNode node)
+            {
+                Dispatcher._immediateConventionScope.OnEntityTypeRemoved(node.ModelBuilder, node.Type);
                 return null;
             }
 
@@ -162,7 +177,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             public override OnNavigationRemovedNode VisitOnNavigationRemoved(OnNavigationRemovedNode node)
             {
                 Dispatcher._immediateConventionScope.OnNavigationRemoved(
-                    node.SourceEntityTypeBuilder, node.TargetEntityTypeBuilder, node.NavigationName, node.PropertyInfo);
+                    node.SourceEntityTypeBuilder, node.TargetEntityTypeBuilder, node.NavigationName, node.MemberInfo);
                 return null;
             }
 

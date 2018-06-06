@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 
@@ -38,7 +37,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
             {
                 NotEmpty(parameterName, nameof(parameterName));
 
-                throw new ArgumentException(CoreStrings.CollectionArgumentIsEmpty(parameterName));
+                throw new ArgumentException(AbstractionsStrings.CollectionArgumentIsEmpty(parameterName));
             }
 
             return value;
@@ -54,7 +53,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
             }
             else if (value.Trim().Length == 0)
             {
-                e = new ArgumentException(CoreStrings.ArgumentIsEmpty(parameterName));
+                e = new ArgumentException(AbstractionsStrings.ArgumentIsEmpty(parameterName));
             }
 
             if (e != null)
@@ -74,7 +73,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
             {
                 NotEmpty(parameterName, nameof(parameterName));
 
-                throw new ArgumentException(CoreStrings.ArgumentIsEmpty(parameterName));
+                throw new ArgumentException(AbstractionsStrings.ArgumentIsEmpty(parameterName));
             }
 
             return value;
@@ -90,18 +89,6 @@ namespace Microsoft.EntityFrameworkCore.Utilities
                 NotEmpty(parameterName, nameof(parameterName));
 
                 throw new ArgumentException(parameterName);
-            }
-
-            return value;
-        }
-
-        public static Type ValidEntityType(Type value, [InvokerParameterName] [NotNull] string parameterName)
-        {
-            if (!value.GetTypeInfo().IsClass)
-            {
-                NotEmpty(parameterName, nameof(parameterName));
-
-                throw new ArgumentException(CoreStrings.InvalidEntityType(value, parameterName));
             }
 
             return value;

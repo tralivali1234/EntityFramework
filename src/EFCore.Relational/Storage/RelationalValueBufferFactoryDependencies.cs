@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -37,26 +38,43 @@ namespace Microsoft.EntityFrameworkCore.Storage
         ///         the constructor at any point in this process.
         ///     </para>
         /// </summary>
-        /// <param name="typeMapper"> The type mapper. </param>
+        /// <param name="typeMappingSource"> The type mapping source. </param>
+        /// <param name="coreOptions"> The core options. </param>
         public RelationalValueBufferFactoryDependencies(
-            [NotNull] IRelationalTypeMapper typeMapper)
+            [NotNull] IRelationalTypeMappingSource typeMappingSource,
+            [NotNull] ICoreSingletonOptions coreOptions)
         {
-            Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
+            Check.NotNull(coreOptions, nameof(coreOptions));
 
-            TypeMapper = typeMapper;
+            TypeMappingSource = typeMappingSource;
+            CoreOptions = coreOptions;
         }
 
         /// <summary>
-        ///     Gets the type mapper.
+        ///     Gets the type mapping source.
         /// </summary>
-        public IRelationalTypeMapper TypeMapper { get; }
+        public IRelationalTypeMappingSource TypeMappingSource { get; }
+
+        /// <summary>
+        ///     Gets core options.
+        /// </summary>
+        public ICoreSingletonOptions CoreOptions { get; }
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
-        /// <param name="typeMapper"> A replacement for the current dependency of this type. </param>
+        /// <param name="typeMappingSource"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
-        public RelationalValueBufferFactoryDependencies With([NotNull] IRelationalTypeMapper typeMapper)
-            => new RelationalValueBufferFactoryDependencies(typeMapper);
+        public RelationalValueBufferFactoryDependencies With([NotNull] IRelationalTypeMappingSource typeMappingSource)
+            => new RelationalValueBufferFactoryDependencies(typeMappingSource, CoreOptions);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="coreOptions"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public RelationalValueBufferFactoryDependencies With([NotNull] ICoreSingletonOptions coreOptions)
+            => new RelationalValueBufferFactoryDependencies(TypeMappingSource, coreOptions);
     }
 }

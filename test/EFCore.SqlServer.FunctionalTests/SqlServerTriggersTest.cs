@@ -21,7 +21,10 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateContext())
             {
-                var product = new Product { Name = "blah" };
+                var product = new Product
+                {
+                    Name = "blah"
+                };
                 context.Products.Add(product);
                 context.SaveChanges();
 
@@ -49,20 +52,38 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateContext())
             {
-                var productToBeUpdated1 = new Product { Name = "u1" };
-                var productToBeUpdated2 = new Product { Name = "u2" };
+                var productToBeUpdated1 = new Product
+                {
+                    Name = "u1"
+                };
+                var productToBeUpdated2 = new Product
+                {
+                    Name = "u2"
+                };
                 context.Products.Add(productToBeUpdated1);
                 context.Products.Add(productToBeUpdated2);
 
-                var productToBeDeleted1 = new Product { Name = "d1" };
-                var productToBeDeleted2 = new Product { Name = "d2" };
+                var productToBeDeleted1 = new Product
+                {
+                    Name = "d1"
+                };
+                var productToBeDeleted2 = new Product
+                {
+                    Name = "d2"
+                };
                 context.Products.Add(productToBeDeleted1);
                 context.Products.Add(productToBeDeleted2);
 
                 context.SaveChanges();
 
-                var productToBeAdded1 = new Product { Name = "a1" };
-                var productToBeAdded2 = new Product { Name = "a2" };
+                var productToBeAdded1 = new Product
+                {
+                    Name = "a1"
+                };
+                var productToBeAdded2 = new Product
+                {
+                    Name = "a2"
+                };
                 context.Products.Add(productToBeAdded1);
                 context.Products.Add(productToBeAdded2);
 
@@ -97,7 +118,7 @@ namespace Microsoft.EntityFrameworkCore
 
         protected TriggersContext CreateContext() => (TriggersContext)Fixture.CreateContext();
 
-        protected class TriggersContext : DbContext
+        protected class TriggersContext : PoolableDbContext
         {
             public TriggersContext(DbContextOptions options)
                 : base(options)
@@ -111,12 +132,12 @@ namespace Microsoft.EntityFrameworkCore
             {
                 modelBuilder.Entity<Product>(
                     eb =>
-                        {
-                            eb.Property(e => e.Version)
-                                .ValueGeneratedOnAddOrUpdate()
-                                .IsConcurrencyToken();
-                            eb.Ignore(e => e.StoreUpdated);
-                        });
+                    {
+                        eb.Property(e => e.Version)
+                            .ValueGeneratedOnAddOrUpdate()
+                            .IsConcurrencyToken();
+                        eb.Ignore(e => e.StoreUpdated);
+                    });
 
                 modelBuilder.Entity<ProductBackup>()
                     .Property(e => e.Id).ValueGeneratedNever();
@@ -138,13 +159,13 @@ namespace Microsoft.EntityFrameworkCore
             public virtual string Name { get; set; }
         }
 
-        public class SqlServerTriggersFixture : SharedStoreFixtureBase<DbContext>
+        public class SqlServerTriggersFixture : SharedStoreFixtureBase<PoolableDbContext>
         {
             protected override string StoreName { get; } = "SqlServerTriggers";
             protected override Type ContextType { get; } = typeof(TriggersContext);
             protected override ITestStoreFactory TestStoreFactory => SqlServerTestStoreFactory.Instance;
 
-            protected override void Seed(DbContext context)
+            protected override void Seed(PoolableDbContext context)
             {
                 context.Database.EnsureCreated();
 
@@ -154,9 +175,9 @@ CREATE TRIGGER TRG_InsertProduct
 ON Products
 AFTER INSERT AS
 BEGIN
-	IF @@ROWCOUNT = 0
-		return
-	SET nocount on;
+    IF @@ROWCOUNT = 0
+        return
+    SET nocount on;
 
     INSERT INTO ProductBackups
     SELECT * FROM INSERTED;
@@ -168,9 +189,9 @@ CREATE TRIGGER TRG_UpdateProduct
 ON Products
 AFTER UPDATE AS
 BEGIN
-	IF @@ROWCOUNT = 0
-		return
-	SET nocount on;
+    IF @@ROWCOUNT = 0
+        return
+    SET nocount on;
 
     UPDATE b
     SET b.Name = p.Name, b.Version = p.Version
@@ -186,9 +207,9 @@ CREATE TRIGGER TRG_DeleteProduct
 ON Products
 AFTER DELETE AS
 BEGIN
-	IF @@ROWCOUNT = 0
-		return
-	SET nocount on;
+    IF @@ROWCOUNT = 0
+        return
+    SET nocount on;
 
     DELETE FROM ProductBackups
     WHERE Id IN(SELECT DELETED.Id FROM DELETED);

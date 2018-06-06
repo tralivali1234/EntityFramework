@@ -10,20 +10,57 @@
     <NoPackageAnalysis>true</NoPackageAnalysis>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IncludeSource>false</IncludeSource>
-    <IncludeSymbols>false</IncludeSymbols>
     <EnableApiCheck>false</EnableApiCheck>
+    <Description>Entity Framework Core Tools for the NuGet Package Manager Console in Visual Studio.
+
+Enables these commonly used commands:
+Add-Migration
+Drop-Database
+Get-DbContext
+Scaffold-DbContext
+Script-Migrations
+Update-Database
+  </Description>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ef\ef.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- PowerShell files should be code signed -->
+    <SignedPackageFile Include="tools/EntityFrameworkCore.PowerShell2.psd1" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/EntityFrameworkCore.PowerShell2.psm1" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/EntityFrameworkCore.psd1" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/EntityFrameworkCore.psm1" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/init.ps1" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/install.ps1" Certificate="$(AssemblySigningCertName)" />
+
+    <!-- Additional assemblies to be code signed -->
+    <SignedPackageFile Include="tools/net461/any/ef.exe" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/net461/win-x86/ef.exe" Certificate="$(AssemblySigningCertName)" />
+    <SignedPackageFile Include="tools/netcoreapp2.0/any/ef.dll" Certificate="$(AssemblySigningCertName)" />
+  </ItemGroup>
+
   <Target Name="SetPackageProperties" BeforeTargets="GenerateNuspec">
     <PropertyGroup>
+      <!-- Make sure we create a symbols.nupkg -->
+      <IncludeSymbols>true</IncludeSymbols>
+
       <NuspecProperties>
         id=$(PackageId);
         version=$(PackageVersion);
-        configuration=$(Configuration)
+        configuration=$(Configuration);
+        tags=$(PackageTags.Replace(';',' '));
+        projectUrl=$(PackageProjectUrl);
+        licenseUrl=$(PackageLicenseUrl);
+        iconUrl=$(PackageIconUrl);
+        repositoryUrl=$(RepositoryUrl);
+        repositoryType=$(RepositoryType);
+        repositoryCommit=$(RepositoryCommit);
+        author=$(Authors);
+        copyright=$(Copyright);
+        description=$(Description);
       </NuspecProperties>
     </PropertyGroup>
   </Target>

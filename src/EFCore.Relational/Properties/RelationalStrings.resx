@@ -122,6 +122,7 @@
   </data>
   <data name="UpdateConcurrencyException" xml:space="preserve">
     <value>Database operation expected to affect {expectedRows} row(s) but actually affected {actualRows} row(s). Data may have been modified or deleted since entities were loaded. See http://go.microsoft.com/fwlink/?LinkId=527962 for information on understanding and handling optimistic concurrency exceptions.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="MultipleProvidersConfigured" xml:space="preserve">
     <value>Multiple relational database provider configurations found. A context can only be configured to use a single database provider.</value>
@@ -134,6 +135,7 @@
   </data>
   <data name="NoConnectionOrConnectionString" xml:space="preserve">
     <value>A relational store has been configured without specifying either the DbConnection or connection string to use.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="NamedConnectionStringNotFound" xml:space="preserve">
     <value>A named connection string was used, but the name '{name}' was not found in the application's configuration. Note that named connection strings are only supported when using 'IConfiguration' and a service provider, such as in a typical ASP.NET Core application. See https://go.microsoft.com/fwlink/?linkid=850912 for more information.</value>
@@ -145,17 +147,20 @@
     <value>Relational-specific methods can only be used when the context is using a relational database provider.</value>
   </data>
   <data name="LogBoolWithDefaultWarning" xml:space="preserve">
-    <value>The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used when the property value is 'null'.</value>
+    <value>The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'.</value>
     <comment>Warning RelationalEventId.BoolWithDefaultWarning string string</comment>
   </data>
   <data name="UpdateStoreException" xml:space="preserve">
     <value>An error occurred while updating the entries. See the inner exception for details.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="TransactionAlreadyStarted" xml:space="preserve">
     <value>The connection is already in a transaction and cannot participate in another transaction.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="TransactionAssociatedWithDifferentConnection" xml:space="preserve">
     <value>The specified transaction is not associated with the current connection. Only transactions associated with the current connection may be used.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="LogRelationalLoggerOpeningConnection" xml:space="preserve">
     <value>Opening connection to database '{database}' on server '{server}'.</value>
@@ -210,6 +215,7 @@
   </data>
   <data name="BadSequenceString" xml:space="preserve">
     <value>Unable to deserialize sequence from model metadata. See inner exception for details.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="MigrationNotFound" xml:space="preserve">
     <value>The migration '{migrationName}' was not found.</value>
@@ -222,6 +228,7 @@
   </data>
   <data name="InvalidMaxBatchSize" xml:space="preserve">
     <value>The specified MaxBatchSize value is not valid. It must be a positive number.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="UnableToDiscriminate" xml:space="preserve">
     <value>Unable to materialize entity of type '{entityType}'. No discriminators were matched.</value>
@@ -282,10 +289,7 @@
     <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and the name '{keyName}' of the primary key {primaryKey} does not match the name '{otherName}' of the primary key {otherPrimaryKey}.</value>
   </data>
   <data name="IncompatibleTableNoRelationship" xml:space="preserve">
-    <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between the primary key {primaryKey} and the primary key {otherPrimaryKey}.</value>
-  </data>
-  <data name="IncompatibleTableDerivedPrincipal" xml:space="preserve">
-    <value>Cannot use table '{table}' for entity type '{dependentType}' since it has a relationship to a derived entity type '{principalType}'. Either point the relationship to the base type '{rootType}' or map '{dependentType}' to a different table.</value>
+    <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between their primary keys.</value>
   </data>
   <data name="LogKeyHasDefaultValue" xml:space="preserve">
     <value>Property '{property}' on entity type '{entityType}' is part of a primary or alternate key but has a constant default value set. Constant default values are not useful for primary or alternate keys since these properties must always have non-null unqiue values.</value>
@@ -312,6 +316,7 @@
   </data>
   <data name="MissingParameterValue" xml:space="preserve">
     <value>No value provided for required parameter '{parameter}'.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="ParameterNotObjectArray" xml:space="preserve">
     <value>Cannot use the value provided for parameter '{parameter}' because it isn't assignable to type object[].</value>
@@ -333,6 +338,7 @@
   </data>
   <data name="NoActiveTransaction" xml:space="preserve">
     <value>The connection does not have any active transactions.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="ConflictingRowUpdateTypes" xml:space="preserve">
     <value>An instance of entity type '{firstEntityType}' is marked as '{firstState}', but an instance of entity type '{secondEntityType}' is marked as '{secondState}' and both are mapped to the same row. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
@@ -353,10 +359,10 @@
     <value>The instance of entity type '{firstEntityType}' and the instance of entity type '{secondEntityType}' are mapped to the same row with the key value '{keyValue}', but have different original property values '{firstConflictingValues}' and '{secondConflictingValues}' mapped to {columns}.</value>
   </data>
   <data name="SharedRowEntryCountMismatch" xml:space="preserve">
-    <value>The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
+    <value>The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
   </data>
   <data name="SharedRowEntryCountMismatchSensitive" xml:space="preserve">
-    <value>The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.</value>
+    <value>The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.</value>
   </data>
   <data name="IncorrectDefaultValueType" xml:space="preserve">
     <value>Cannot set default value '{value}' of type '{valueType}' on property '{property}' of type '{propertyType}' in entity type '{entityType}'.</value>
@@ -375,6 +381,7 @@
   </data>
   <data name="ConflictingColumnServerGeneration" xml:space="preserve">
     <value>{conflictingConfiguration} cannot be set for '{property}', because {existingConfiguration} is already set.</value>
+    <comment>// Issue#11266 This resource is being used by provider code. Do not break.</comment>
   </data>
   <data name="DuplicateForeignKeyColumnMismatch" xml:space="preserve">
     <value>The foreign keys {index1} on '{entityType1}' and {index2} on '{entityType2}' are both mapped to '{table}.{foreignKeyName}' but use different columns ({columnNames1} and {columnNames2}).</value>
@@ -442,5 +449,38 @@
   </data>
   <data name="InvalidMinBatchSize" xml:space="preserve">
     <value>The specified MinBatchSize value is not valid. It must be a positive number.</value>
+  </data>
+  <data name="ExpectedNonNullParameter" xml:space="preserve">
+    <value>Expected a non-null value for query parameter '{parameter}'.</value>
+  </data>
+  <data name="LogAmbientTransactionEnlisted" xml:space="preserve">
+    <value>Enlisted in an ambient transaction with isolation level '{isolationLevel}'.</value>
+    <comment>Debug RelationalEventId.AmbientTransactionEnlisted string</comment>
+  </data>
+  <data name="LogExplicitTransactionEnlisted" xml:space="preserve">
+    <value>Enlisted in an explicit transaction with isolation level '{isolationLevel}'.</value>
+    <comment>Debug RelationalEventId.ExplicitTransactionEnlisted string</comment>
+  </data>
+  <data name="LogBatchSmallerThanMinBatchSize" xml:space="preserve">
+    <value>Executing update commands individually as the number of batchable commands ({batchableCommandsCount}) is smaller than the minimum batch size ({minBatchSize}).</value>
+    <comment>Debug RelationalEventId.BatchSmallerThanMinBatchSize int int</comment>
+  </data>
+  <data name="LogBatchReadyForExecution" xml:space="preserve">
+    <value>Executing {batchCommandsCount} update commands as a batch.</value>
+    <comment>Debug RelationalEventId.BatchReadyForExecution int</comment>
+  </data>
+  <data name="LogMigrationAttributeMissingWarning" xml:space="preserve">
+    <value>A MigrationAttribute isn't specified on the '{class}' class.</value>
+    <comment>Warning RelationalEventId.MigrationAttributeMissingWarning string</comment>
+  </data>
+  <data name="LogValueConversionSqlLiteralWarning" xml:space="preserve">
+    <value>A SQL parameter or literal was generated for the type '{type}' using the ValueConverter '{valueConverter}'. Review the generated SQL for correctness and consider evaluating the target expression in-memory instead.</value>
+    <comment>Warning RelationalEventId.ValueConversionSqlLiteralWarning object object</comment>
+  </data>
+  <data name="DerivedQueryTypeView" xml:space="preserve">
+    <value>The query type '{queryType}' cannot be mapped to a view bacause it is derived from '{baseType}'. Only base query types can be mapped to a view.</value>
+  </data>
+  <data name="RelationalCloneNotImplemented" xml:space="preserve">
+    <value>The '{mapping}' does not support 2.2 style type mapping. The database provider needs to be updated to support the full set of mapping customization.</value>
   </data>
 </root>

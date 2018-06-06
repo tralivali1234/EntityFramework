@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
 namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
@@ -20,15 +21,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void TraverseGraph(EntityEntryGraphNode node, Func<EntityEntryGraphNode, bool> handleNode)
+        public virtual void TraverseGraph<TState>(
+            EntityEntryGraphNode node,
+            TState state,
+            Func<EntityEntryGraphNode, TState, bool> handleNode)
         {
-            if (!handleNode(node))
+            if (!handleNode(node, state))
             {
                 return;
             }
 
             var internalEntityEntry = node.GetInfrastructure();
-            var navigations = internalEntityEntry.EntityType.GetNavigations();
+            var navigations = ((EntityType)internalEntityEntry.EntityType).GetNavigations();
             var stateManager = internalEntityEntry.StateManager;
 
             foreach (var navigation in navigations)
@@ -43,6 +47,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                         {
                             TraverseGraph(
                                 node.CreateNode(node, stateManager.GetOrCreateEntry(relatedEntity), navigation),
+                                state,
                                 handleNode);
                         }
                     }
@@ -52,7 +57,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                         var targetEntry = targetEntityType.HasDefiningNavigation()
                             ? stateManager.GetOrCreateEntry(navigationValue, targetEntityType)
                             : stateManager.GetOrCreateEntry(navigationValue);
-                        TraverseGraph(node.CreateNode(node, targetEntry, navigation), handleNode);
+                        TraverseGraph(
+                            node.CreateNode(node, targetEntry, navigation),
+                            state,
+                            handleNode);
                     }
                 }
             }
@@ -62,12 +70,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual async Task TraverseGraphAsync(
+        public virtual async Task TraverseGraphAsync<TState>(
             EntityEntryGraphNode node,
-            Func<EntityEntryGraphNode, CancellationToken, Task<bool>> handleNode,
+            TState state,
+            Func<EntityEntryGraphNode, TState, CancellationToken, Task<bool>> handleNode,
             CancellationToken cancellationToken = default)
         {
-            if (!await handleNode(node, cancellationToken))
+            if (!await handleNode(node, state, cancellationToken))
             {
                 return;
             }
@@ -88,6 +97,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                         {
                             await TraverseGraphAsync(
                                 node.CreateNode(node, stateManager.GetOrCreateEntry(relatedEntity), navigation),
+                                state,
                                 handleNode,
                                 cancellationToken);
                         }
@@ -100,6 +110,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                             : stateManager.GetOrCreateEntry(navigationValue);
                         await TraverseGraphAsync(
                             node.CreateNode(node, entry, navigation),
+                            state,
                             handleNode,
                             cancellationToken);
                     }

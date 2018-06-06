@@ -366,6 +366,7 @@ LEFT JOIN [LevelTwo] AS [e1.OneToOne_Optional_FK] ON [e1].[Id] = [e1.OneToOne_Op
 WHERE ([e1.OneToOne_Optional_FK].[Name] LIKE [e1.OneToOne_Optional_FK].[Name] + N'%' AND (LEFT([e1.OneToOne_Optional_FK].[Name], LEN([e1.OneToOne_Optional_FK].[Name])) = [e1.OneToOne_Optional_FK].[Name])) OR ([e1.OneToOne_Optional_FK].[Name] = N'')");
         }
 
+#if !Test20
         public override void Optional_navigation_inside_method_call_translated_to_join_keeps_original_nullability()
         {
             base.Optional_navigation_inside_method_call_translated_to_join_keeps_original_nullability();
@@ -374,7 +375,7 @@ WHERE ([e1.OneToOne_Optional_FK].[Name] LIKE [e1.OneToOne_Optional_FK].[Name] + 
                 @"SELECT [e1].[Id], [e1].[Date], [e1].[Name], [e1].[OneToMany_Optional_Self_InverseId], [e1].[OneToMany_Required_Self_InverseId], [e1].[OneToOne_Optional_SelfId]
 FROM [LevelOne] AS [e1]
 LEFT JOIN [LevelTwo] AS [e1.OneToOne_Optional_FK] ON [e1].[Id] = [e1.OneToOne_Optional_FK].[Level1_Optional_Id]
-WHERE DATEADD(day, 10E0, [e1.OneToOne_Optional_FK].[Date]) > '2000-02-01T00:00:00.000'");
+WHERE DATEADD(day, 10.0E0, [e1.OneToOne_Optional_FK].[Date]) > '2000-02-01T00:00:00.0000000'");
         }
 
         public override void Optional_navigation_inside_nested_method_call_translated_to_join_keeps_original_nullability()
@@ -385,7 +386,7 @@ WHERE DATEADD(day, 10E0, [e1.OneToOne_Optional_FK].[Date]) > '2000-02-01T00:00:0
                 @"SELECT [e1].[Id], [e1].[Date], [e1].[Name], [e1].[OneToMany_Optional_Self_InverseId], [e1].[OneToMany_Required_Self_InverseId], [e1].[OneToOne_Optional_SelfId]
 FROM [LevelOne] AS [e1]
 LEFT JOIN [LevelTwo] AS [e1.OneToOne_Optional_FK] ON [e1].[Id] = [e1.OneToOne_Optional_FK].[Level1_Optional_Id]
-WHERE DATEADD(month, 2, DATEADD(day, 15E0, DATEADD(day, 10E0, [e1.OneToOne_Optional_FK].[Date]))) > '2002-02-01T00:00:00.000'");
+WHERE DATEADD(month, 2, DATEADD(day, 15.0E0, DATEADD(day, 10.0E0, [e1.OneToOne_Optional_FK].[Date]))) > '2002-02-01T00:00:00.0000000'");
         }
 
         public override void Optional_navigation_inside_nested_method_call_translated_to_join_keeps_original_nullability_also_for_arguments()
@@ -396,8 +397,9 @@ WHERE DATEADD(month, 2, DATEADD(day, 15E0, DATEADD(day, 10E0, [e1.OneToOne_Optio
                 @"SELECT [e1].[Id], [e1].[Date], [e1].[Name], [e1].[OneToMany_Optional_Self_InverseId], [e1].[OneToMany_Required_Self_InverseId], [e1].[OneToOne_Optional_SelfId]
 FROM [LevelOne] AS [e1]
 LEFT JOIN [LevelTwo] AS [e1.OneToOne_Optional_FK] ON [e1].[Id] = [e1.OneToOne_Optional_FK].[Level1_Optional_Id]
-WHERE DATEADD(day, [e1.OneToOne_Optional_FK].[Id], DATEADD(day, 15E0, [e1.OneToOne_Optional_FK].[Date])) > '2002-02-01T00:00:00.000'");
+WHERE DATEADD(day, [e1.OneToOne_Optional_FK].[Id], DATEADD(day, 15.0E0, [e1.OneToOne_Optional_FK].[Date])) > '2002-02-01T00:00:00.0000000'");
         }
+#endif
 
         public override void Join_navigation_in_outer_selector_translated_to_extra_join()
         {
@@ -441,11 +443,11 @@ INNER JOIN [LevelOne] AS [e1] ON [e3.OneToOne_Required_FK_Inverse.OneToOne_Optio
             AssertSql(
                 @"SELECT [e2].[Id] AS [Id2], [e1].[Id] AS [Id1]
 FROM [LevelTwo] AS [e2]
-INNER JOIN [LevelOne] AS [e1] ON [e2].[Id] = (
+INNER JOIN [LevelOne] AS [e1] ON [e2].[Id] = COALESCE((
     SELECT TOP(1) [subQuery0].[Id]
     FROM [LevelTwo] AS [subQuery0]
     WHERE [subQuery0].[Level1_Optional_Id] = [e1].[Id]
-)");
+), 0)");
         }
 
         public override void Join_navigations_in_inner_selector_translated_to_multiple_subquery_without_collision()
@@ -455,11 +457,11 @@ INNER JOIN [LevelOne] AS [e1] ON [e2].[Id] = (
             AssertSql(
                 @"SELECT [e2].[Id] AS [Id2], [e1].[Id] AS [Id1], [e3].[Id] AS [Id3]
 FROM [LevelTwo] AS [e2]
-INNER JOIN [LevelOne] AS [e1] ON [e2].[Id] = (
+INNER JOIN [LevelOne] AS [e1] ON [e2].[Id] = COALESCE((
     SELECT TOP(1) [subQuery0].[Id]
     FROM [LevelTwo] AS [subQuery0]
     WHERE [subQuery0].[Level1_Optional_Id] = [e1].[Id]
-)
+), 0)
 INNER JOIN [LevelThree] AS [e3] ON [e2].[Id] = [e3].[Level2_Optional_Id]");
         }
 
@@ -1139,7 +1141,7 @@ FROM [LevelThree] AS [e3]
 INNER JOIN [LevelOne] AS [e1] ON [e3].[Id] = (
     SELECT TOP(1) [subQuery30].[Id]
     FROM [LevelTwo] AS [subQuery20]
-    LEFT JOIN [LevelThree] AS [subQuery30] ON [subQuery20].[Id] = [subQuery30].[Level2_Optional_Id]
+    LEFT JOIN [LevelThree] AS [subQuery30] ON ([subQuery20].[Id] = [subQuery30].[Level2_Optional_Id]) OR ([subQuery20].[Id] IS NULL AND [subQuery30].[Level2_Optional_Id] IS NULL)
     ORDER BY [subQuery30].[Id]
 )");
         }
@@ -2044,6 +2046,86 @@ INNER JOIN (
 ORDER BY [t].[Id]");
         }
 
+        public override void Optional_navigation_with_order_by_and_Include()
+        {
+            base.Optional_navigation_with_order_by_and_Include();
+
+            AssertSql(
+                @"SELECT [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
+ORDER BY [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[Id]",
+                //
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id], [l1.OneToOne_Optional_FK0].[Name]
+    FROM [LevelOne] AS [l10]
+    LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
+) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
+ORDER BY [t].[Name], [t].[Id]");
+        }
+
+        public override void Optional_navigation_with_Include_and_order()
+        {
+            base.Optional_navigation_with_Include_and_order();
+
+            AssertSql(
+                @"SELECT [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
+ORDER BY [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[Id]",
+                //
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id], [l1.OneToOne_Optional_FK0].[Name]
+    FROM [LevelOne] AS [l10]
+    LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
+) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
+ORDER BY [t].[Name], [t].[Id]");
+        }
+
+        public override void SelectMany_with_order_by_and_Include()
+        {
+            base.SelectMany_with_order_by_and_Include();
+
+            AssertSql(
+                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Optional] ON [l1].[Id] = [l1.OneToMany_Optional].[OneToMany_Optional_InverseId]
+ORDER BY [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[Id]",
+                //
+                @"SELECT [l1.OneToMany_Optional.OneToMany_Optional].[Id], [l1.OneToMany_Optional.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToMany_Optional.OneToMany_Optional].[Level2_Required_Id], [l1.OneToMany_Optional.OneToMany_Optional].[Name], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelThree] AS [l1.OneToMany_Optional.OneToMany_Optional]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToMany_Optional0].[Id], [l1.OneToMany_Optional0].[Name]
+    FROM [LevelOne] AS [l10]
+    INNER JOIN [LevelTwo] AS [l1.OneToMany_Optional0] ON [l10].[Id] = [l1.OneToMany_Optional0].[OneToMany_Optional_InverseId]
+) AS [t] ON [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
+ORDER BY [t].[Name], [t].[Id]");
+        }
+
+        public override void SelectMany_with_Include_and_order_by()
+        {
+            base.SelectMany_with_Include_and_order_by();
+
+            AssertSql(
+                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Optional] ON [l1].[Id] = [l1.OneToMany_Optional].[OneToMany_Optional_InverseId]
+ORDER BY [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[Id]",
+                //
+                @"SELECT [l1.OneToMany_Optional.OneToMany_Optional].[Id], [l1.OneToMany_Optional.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToMany_Optional.OneToMany_Optional].[Level2_Required_Id], [l1.OneToMany_Optional.OneToMany_Optional].[Name], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelThree] AS [l1.OneToMany_Optional.OneToMany_Optional]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToMany_Optional0].[Id], [l1.OneToMany_Optional0].[Name]
+    FROM [LevelOne] AS [l10]
+    INNER JOIN [LevelTwo] AS [l1.OneToMany_Optional0] ON [l10].[Id] = [l1.OneToMany_Optional0].[OneToMany_Optional_InverseId]
+) AS [t] ON [l1.OneToMany_Optional.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
+ORDER BY [t].[Name], [t].[Id]");
+        }
+
         public override void SelectMany_with_navigation_and_explicit_DefaultIfEmpty()
         {
             base.SelectMany_with_navigation_and_explicit_DefaultIfEmpty();
@@ -2165,11 +2247,11 @@ INNER JOIN (
             AssertSql(
                 @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l2].[Id], [l2].[Date], [l2].[Level1_Optional_Id], [l2].[Level1_Required_Id], [l2].[Name], [l2].[OneToMany_Optional_InverseId], [l2].[OneToMany_Optional_Self_InverseId], [l2].[OneToMany_Required_InverseId], [l2].[OneToMany_Required_Self_InverseId], [l2].[OneToOne_Optional_PK_InverseId], [l2].[OneToOne_Optional_SelfId]
 FROM [LevelOne] AS [l1]
-INNER JOIN [LevelTwo] AS [l2] ON [l1].[Id] = (
+INNER JOIN [LevelTwo] AS [l2] ON [l1].[Id] = COALESCE((
     SELECT TOP(1) [l0].[Id]
     FROM [LevelTwo] AS [l0]
     ORDER BY [l0].[Id]
-)");
+), 0)");
         }
 
         public override void Contains_with_subquery_optional_navigation_and_constant_item()
@@ -2237,7 +2319,7 @@ ORDER BY [l2i0].[Id]");
 FROM [LevelTwo] AS [l2o]
 WHERE [l2o].[Id] = 7",
                 //
-                @"SELECT TOP(1) [l2i.OneToOne_Required_FK_Inverse].[Id], [l2i.OneToOne_Required_FK_Inverse].[Date], [l2i.OneToOne_Required_FK_Inverse].[Name], [l2i.OneToOne_Required_FK_Inverse].[OneToMany_Optional_Self_InverseId], [l2i.OneToOne_Required_FK_Inverse].[OneToMany_Required_Self_InverseId], [l2i.OneToOne_Required_FK_Inverse].[OneToOne_Optional_SelfId]
+                @"SELECT TOP(1) [l2i.OneToOne_Required_FK_Inverse].[Id], [l2i.OneToOne_Required_FK_Inverse].[Date], [l2i.OneToOne_Required_FK_Inverse].[Name], [l2i.OneToOne_Required_FK_Inverse].[OneToMany_Optional_Self_InverseId], [l2i.OneToOne_Required_FK_Inverse].[OneToMany_Required_Self_InverseId], [l2i.OneToOne_Required_FK_Inverse].[OneToOne_Optional_SelfId], 7 AS [Constant]
 FROM [LevelTwo] AS [l2i]
 INNER JOIN [LevelOne] AS [l2i.OneToOne_Required_FK_Inverse] ON [l2i].[Level1_Required_Id] = [l2i.OneToOne_Required_FK_Inverse].[Id]
 INNER JOIN [LevelOne] AS [l1i] ON [l2i].[Level1_Required_Id] = [l1i].[Id]
@@ -2989,11 +3071,11 @@ WHERE [l1].[Id] < 3");
             base.Project_collection_navigation();
 
             AssertSql(
-                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId]
+                @"SELECT [l1].[Id]
 FROM [LevelOne] AS [l1]
 ORDER BY [l1].[Id]",
                 //
-                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id]
 FROM [LevelTwo] AS [l1.OneToMany_Optional]
 INNER JOIN (
     SELECT [l10].[Id]
@@ -3007,19 +3089,19 @@ ORDER BY [t].[Id]");
             base.Project_collection_navigation_nested();
 
             AssertSql(
-                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK].[Id]
 FROM [LevelOne] AS [l1]
 LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
-ORDER BY [l1.OneToOne_Optional_FK].[Id]",
+ORDER BY [l1].[Id], [l1.OneToOne_Optional_FK].[Id]",
                 //
-                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id], [t].[Id0]
 FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
 INNER JOIN (
-    SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id]
+    SELECT [l10].[Id], [l1.OneToOne_Optional_FK0].[Id] AS [Id0]
     FROM [LevelOne] AS [l10]
     LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
-) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
-ORDER BY [t].[Id]");
+) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id0]
+ORDER BY [t].[Id], [t].[Id0]");
         }
 
         public override void Project_collection_navigation_using_ef_property()
@@ -3027,19 +3109,19 @@ ORDER BY [t].[Id]");
             base.Project_collection_navigation_using_ef_property();
 
             AssertSql(
-                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK].[Id]
 FROM [LevelOne] AS [l1]
 LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
-ORDER BY [l1.OneToOne_Optional_FK].[Id]",
+ORDER BY [l1].[Id], [l1.OneToOne_Optional_FK].[Id]",
                 //
-                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id], [t].[Id0]
 FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
 INNER JOIN (
-    SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id]
+    SELECT [l10].[Id], [l1.OneToOne_Optional_FK0].[Id] AS [Id0]
     FROM [LevelOne] AS [l10]
     LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
-) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
-ORDER BY [t].[Id]");
+) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id0]
+ORDER BY [t].[Id], [t].[Id0]");
         }
 
         public override void Project_collection_navigation_nested_anonymous()
@@ -3047,19 +3129,19 @@ ORDER BY [t].[Id]");
             base.Project_collection_navigation_nested_anonymous();
 
             AssertSql(
-                @"SELECT [l1].[Id] AS [Id0], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+                @"SELECT [l1].[Id], [l1.OneToOne_Optional_FK].[Id]
 FROM [LevelOne] AS [l1]
 LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
-ORDER BY [l1.OneToOne_Optional_FK].[Id]",
+ORDER BY [l1].[Id], [l1.OneToOne_Optional_FK].[Id]",
                 //
-                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id], [t].[Id0]
 FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
 INNER JOIN (
-    SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id]
+    SELECT [l10].[Id], [l1.OneToOne_Optional_FK0].[Id] AS [Id0]
     FROM [LevelOne] AS [l10]
     LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
-) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
-ORDER BY [t].[Id]");
+) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id0]
+ORDER BY [t].[Id], [t].[Id0]");
         }
 
         public override void Project_collection_navigation_count()
@@ -3083,19 +3165,18 @@ LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Op
             AssertSql(
                 @"SELECT [l1].[Id]
 FROM [LevelOne] AS [l1]
-WHERE [l1].[Id] < 3",
+WHERE [l1].[Id] < 3
+ORDER BY [l1].[Id]",
                 //
-                @"@_outer_Id='1'
-
-SELECT [l2].[Id], [l2].[Date], [l2].[Level1_Optional_Id], [l2].[Level1_Required_Id], [l2].[Name], [l2].[OneToMany_Optional_InverseId], [l2].[OneToMany_Optional_Self_InverseId], [l2].[OneToMany_Required_InverseId], [l2].[OneToMany_Required_Self_InverseId], [l2].[OneToOne_Optional_PK_InverseId], [l2].[OneToOne_Optional_SelfId]
-FROM [LevelTwo] AS [l2]
-WHERE (([l2].[Name] <> N'Foo') OR [l2].[Name] IS NULL) AND (@_outer_Id = [l2].[OneToMany_Optional_InverseId])",
-                //
-                @"@_outer_Id='2'
-
-SELECT [l2].[Id], [l2].[Date], [l2].[Level1_Optional_Id], [l2].[Level1_Required_Id], [l2].[Name], [l2].[OneToMany_Optional_InverseId], [l2].[OneToMany_Optional_Self_InverseId], [l2].[OneToMany_Required_InverseId], [l2].[OneToMany_Required_Self_InverseId], [l2].[OneToOne_Optional_PK_InverseId], [l2].[OneToOne_Optional_SelfId]
-FROM [LevelTwo] AS [l2]
-WHERE (([l2].[Name] <> N'Foo') OR [l2].[Name] IS NULL) AND (@_outer_Id = [l2].[OneToMany_Optional_InverseId])");
+                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id]
+FROM [LevelTwo] AS [l1.OneToMany_Optional]
+INNER JOIN (
+    SELECT [l10].[Id]
+    FROM [LevelOne] AS [l10]
+    WHERE [l10].[Id] < 3
+) AS [t] ON [l1.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
+WHERE ([l1.OneToMany_Optional].[Name] <> N'Foo') OR [l1.OneToMany_Optional].[Name] IS NULL
+ORDER BY [t].[Id]");
         }
 
         public override void Project_collection_and_root_entity()
@@ -3107,7 +3188,7 @@ WHERE (([l2].[Name] <> N'Foo') OR [l2].[Name] IS NULL) AND (@_outer_Id = [l2].[O
 FROM [LevelOne] AS [l1]
 ORDER BY [l1].[Id]",
                 //
-                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToMany_Optional].[Id], [l1.OneToMany_Optional].[Date], [l1.OneToMany_Optional].[Level1_Optional_Id], [l1.OneToMany_Optional].[Level1_Required_Id], [l1.OneToMany_Optional].[Name], [l1.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id]
 FROM [LevelTwo] AS [l1.OneToMany_Optional]
 INNER JOIN (
     SELECT [l10].[Id]
@@ -3131,7 +3212,15 @@ INNER JOIN (
     SELECT [l0].[Id]
     FROM [LevelOne] AS [l0]
 ) AS [t] ON [l.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
-ORDER BY [t].[Id]");
+ORDER BY [t].[Id]",
+                //
+                @"SELECT [l.OneToMany_Optional0].[Id], [l.OneToMany_Optional0].[Date], [l.OneToMany_Optional0].[Level1_Optional_Id], [l.OneToMany_Optional0].[Level1_Required_Id], [l.OneToMany_Optional0].[Name], [l.OneToMany_Optional0].[OneToMany_Optional_InverseId], [l.OneToMany_Optional0].[OneToMany_Optional_Self_InverseId], [l.OneToMany_Optional0].[OneToMany_Required_InverseId], [l.OneToMany_Optional0].[OneToMany_Required_Self_InverseId], [l.OneToMany_Optional0].[OneToOne_Optional_PK_InverseId], [l.OneToMany_Optional0].[OneToOne_Optional_SelfId], [t0].[Id]
+FROM [LevelTwo] AS [l.OneToMany_Optional0]
+INNER JOIN (
+    SELECT [l1].[Id]
+    FROM [LevelOne] AS [l1]
+) AS [t0] ON [l.OneToMany_Optional0].[OneToMany_Optional_InverseId] = [t0].[Id]
+ORDER BY [t0].[Id]");
         }
 
         public override void Project_navigation_and_collection()
@@ -3139,19 +3228,19 @@ ORDER BY [t].[Id]");
             base.Project_navigation_and_collection();
 
             AssertSql(
-                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
 FROM [LevelOne] AS [l1]
 LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
-ORDER BY [l1.OneToOne_Optional_FK].[Id]",
+ORDER BY [l1].[Id], [l1.OneToOne_Optional_FK].[Id]",
                 //
-                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId], [t].[Id], [t].[Id0]
 FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
 INNER JOIN (
-    SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id]
+    SELECT [l10].[Id], [l1.OneToOne_Optional_FK0].[Id] AS [Id0]
     FROM [LevelOne] AS [l10]
     LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
-) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
-ORDER BY [t].[Id]");
+) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id0]
+ORDER BY [t].[Id], [t].[Id0]");
         }
 
         public override void Include_inside_subquery()
@@ -3221,7 +3310,7 @@ ORDER BY ABS([l2].[Level1_Required_Id]), [l2].[Name], [l2].[Id]",
                 @"SELECT [l2.OneToMany_Optional].[Id], [l2.OneToMany_Optional].[Level2_Optional_Id], [l2.OneToMany_Optional].[Level2_Required_Id], [l2.OneToMany_Optional].[Name], [l2.OneToMany_Optional].[OneToMany_Optional_InverseId], [l2.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l2.OneToMany_Optional].[OneToMany_Required_InverseId], [l2.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l2.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l2.OneToMany_Optional].[OneToOne_Optional_SelfId]
 FROM [LevelThree] AS [l2.OneToMany_Optional]
 INNER JOIN (
-    SELECT [l20].[Id], ABS([l20].[Level1_Required_Id]) AS [c], [l20].[Name], [l20].[Level1_Required_Id]
+    SELECT [l20].[Id], ABS([l20].[Level1_Required_Id]) AS [c], [l20].[Name]
     FROM [LevelTwo] AS [l20]
 ) AS [t] ON [l2.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
 ORDER BY [t].[c], [t].[Name], [t].[Id]");
@@ -3239,7 +3328,7 @@ ORDER BY ABS([l2].[Level1_Required_Id]) + 7, [l2].[Name], [l2].[Id]",
                 @"SELECT [l2.OneToMany_Optional].[Id], [l2.OneToMany_Optional].[Level2_Optional_Id], [l2.OneToMany_Optional].[Level2_Required_Id], [l2.OneToMany_Optional].[Name], [l2.OneToMany_Optional].[OneToMany_Optional_InverseId], [l2.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l2.OneToMany_Optional].[OneToMany_Required_InverseId], [l2.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l2.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l2.OneToMany_Optional].[OneToOne_Optional_SelfId]
 FROM [LevelThree] AS [l2.OneToMany_Optional]
 INNER JOIN (
-    SELECT [l20].[Id], ABS([l20].[Level1_Required_Id]) + 7 AS [c], [l20].[Name], [l20].[Level1_Required_Id]
+    SELECT [l20].[Id], ABS([l20].[Level1_Required_Id]) + 7 AS [c], [l20].[Name]
     FROM [LevelTwo] AS [l20]
 ) AS [t] ON [l2.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
 ORDER BY [t].[c], [t].[Name], [t].[Id]");
@@ -3257,7 +3346,7 @@ ORDER BY -[l2].[Level1_Required_Id], [l2].[Name], [l2].[Id]",
                 @"SELECT [l2.OneToMany_Optional].[Id], [l2.OneToMany_Optional].[Level2_Optional_Id], [l2.OneToMany_Optional].[Level2_Required_Id], [l2.OneToMany_Optional].[Name], [l2.OneToMany_Optional].[OneToMany_Optional_InverseId], [l2.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l2.OneToMany_Optional].[OneToMany_Required_InverseId], [l2.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l2.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l2.OneToMany_Optional].[OneToOne_Optional_SelfId]
 FROM [LevelThree] AS [l2.OneToMany_Optional]
 INNER JOIN (
-    SELECT [l20].[Id], -[l20].[Level1_Required_Id] AS [c], [l20].[Name], [l20].[Level1_Required_Id]
+    SELECT [l20].[Id], -[l20].[Level1_Required_Id] AS [c], [l20].[Name]
     FROM [LevelTwo] AS [l20]
 ) AS [t] ON [l2.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
 ORDER BY [t].[c], [t].[Name], [t].[Id]");
@@ -3460,12 +3549,12 @@ ORDER BY [t5].[Id0], [t5].[Id]");
             base.Include_reference_collection_order_by_reference_navigation();
 
             AssertSql(
-    @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Id], [l1.OneToOne_Optional_FK].[Date], [l1.OneToOne_Optional_FK].[Level1_Optional_Id], [l1.OneToOne_Optional_FK].[Level1_Required_Id], [l1.OneToOne_Optional_FK].[Name], [l1.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
 FROM [LevelOne] AS [l1]
 LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]
 ORDER BY [l1.OneToOne_Optional_FK].[Id]",
-    //
-    @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+                //
+                @"SELECT [l1.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Optional_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Level2_Required_Id], [l1.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
 FROM [LevelThree] AS [l1.OneToOne_Optional_FK.OneToMany_Optional]
 INNER JOIN (
     SELECT DISTINCT [l1.OneToOne_Optional_FK0].[Id]
@@ -3473,6 +3562,139 @@ INNER JOIN (
     LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK0] ON [l10].[Id] = [l1.OneToOne_Optional_FK0].[Level1_Optional_Id]
 ) AS [t] ON [l1.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
 ORDER BY [t].[Id]");
+        }
+
+        public override void Nav_rewrite_doesnt_apply_null_protection_for_function_arguments()
+        {
+            base.Nav_rewrite_doesnt_apply_null_protection_for_function_arguments();
+
+            AssertSql(
+                @"SELECT [l1.OneToOne_Optional_PK].[Level1_Required_Id]
+FROM [LevelOne] AS [l1]
+LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_PK] ON [l1].[Id] = [l1.OneToOne_Optional_PK].[OneToOne_Optional_PK_InverseId]
+WHERE [l1.OneToOne_Optional_PK].[Id] IS NOT NULL");
+        }
+
+        public override void Accessing_optional_property_inside_result_operator_subquery()
+        {
+            base.Accessing_optional_property_inside_result_operator_subquery();
+
+            AssertSql(
+                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToOne_Optional_FK].[Name]
+FROM [LevelOne] AS [l1]
+LEFT JOIN [LevelTwo] AS [l1.OneToOne_Optional_FK] ON [l1].[Id] = [l1.OneToOne_Optional_FK].[Level1_Optional_Id]");
+        }
+
+        public override void Include_after_SelectMany_and_reference_navigation()
+        {
+            base.Include_after_SelectMany_and_reference_navigation();
+
+            AssertSql(
+                @"SELECT [l1.OneToMany_Required.OneToOne_Optional_FK].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Required] ON [l1].[Id] = [l1.OneToMany_Required].[OneToMany_Required_InverseId]
+LEFT JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK] ON [l1.OneToMany_Required].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Optional_Id]
+ORDER BY [l1.OneToMany_Required.OneToOne_Optional_FK].[Id]",
+                //
+                @"SELECT [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Level3_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Level3_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToMany_Required.OneToOne_Optional_FK0].[Id]
+    FROM [LevelOne] AS [l10]
+    INNER JOIN [LevelTwo] AS [l1.OneToMany_Required0] ON [l10].[Id] = [l1.OneToMany_Required0].[OneToMany_Required_InverseId]
+    LEFT JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK0] ON [l1.OneToMany_Required0].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK0].[Level2_Optional_Id]
+) AS [t] ON [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId] = [t].[Id]
+ORDER BY [t].[Id]");
+        }
+
+        public override void Include_after_multiple_SelectMany_and_reference_navigation()
+        {
+            base.Include_after_multiple_SelectMany_and_reference_navigation();
+
+            AssertSql(
+                @"SELECT [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[Id], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[Level3_Optional_Id], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[Level3_Required_Id], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[Name], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Required] ON [l1].[Id] = [l1.OneToMany_Required].[OneToMany_Required_InverseId]
+INNER JOIN [LevelThree] AS [l1.OneToMany_Required.OneToMany_Optional] ON [l1.OneToMany_Required].[Id] = [l1.OneToMany_Required.OneToMany_Optional].[OneToMany_Optional_InverseId]
+LEFT JOIN [LevelFour] AS [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK] ON [l1.OneToMany_Required.OneToMany_Optional].[Id] = [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[Level3_Required_Id]
+ORDER BY [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK].[Id]",
+                //
+                @"SELECT [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[Id], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[Level3_Optional_Id], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[Level3_Required_Id], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[Name], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToOne_Optional_SelfId]
+FROM [LevelFour] AS [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK0].[Id]
+    FROM [LevelOne] AS [l10]
+    INNER JOIN [LevelTwo] AS [l1.OneToMany_Required0] ON [l10].[Id] = [l1.OneToMany_Required0].[OneToMany_Required_InverseId]
+    INNER JOIN [LevelThree] AS [l1.OneToMany_Required.OneToMany_Optional0] ON [l1.OneToMany_Required0].[Id] = [l1.OneToMany_Required.OneToMany_Optional0].[OneToMany_Optional_InverseId]
+    LEFT JOIN [LevelFour] AS [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK0] ON [l1.OneToMany_Required.OneToMany_Optional0].[Id] = [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK0].[Level3_Required_Id]
+) AS [t] ON [l1.OneToMany_Required.OneToMany_Optional.OneToOne_Required_FK.OneToMany_Required_Self].[OneToMany_Required_Self_InverseId] = [t].[Id]
+ORDER BY [t].[Id]");
+        }
+
+        public override void Include_after_SelectMany_and_multiple_reference_navigations()
+        {
+            base.Include_after_SelectMany_and_multiple_reference_navigations();
+
+            AssertSql(
+                @"SELECT [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[Level3_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[Level3_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Required] ON [l1].[Id] = [l1.OneToMany_Required].[OneToMany_Required_InverseId]
+LEFT JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK] ON [l1.OneToMany_Required].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Optional_Id]
+LEFT JOIN [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK] ON [l1.OneToMany_Required.OneToOne_Optional_FK].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[Level3_Required_Id]
+ORDER BY [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK].[Id]",
+                //
+                @"SELECT [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[Level3_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[Level3_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToOne_Optional_SelfId]
+FROM [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self]
+INNER JOIN (
+    SELECT DISTINCT [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK0].[Id]
+    FROM [LevelOne] AS [l10]
+    INNER JOIN [LevelTwo] AS [l1.OneToMany_Required0] ON [l10].[Id] = [l1.OneToMany_Required0].[OneToMany_Required_InverseId]
+    LEFT JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK0] ON [l1.OneToMany_Required0].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK0].[Level2_Optional_Id]
+    LEFT JOIN [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK0] ON [l1.OneToMany_Required.OneToOne_Optional_FK0].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK0].[Level3_Required_Id]
+) AS [t] ON [l1.OneToMany_Required.OneToOne_Optional_FK.OneToOne_Required_FK.OneToMany_Optional_Self].[OneToMany_Optional_Self_InverseId] = [t].[Id]
+ORDER BY [t].[Id]");
+        }
+
+        public override void Include_after_SelectMany_and_reference_navigation_with_another_SelectMany_with_Distinct()
+        {
+            base.Include_after_SelectMany_and_reference_navigation_with_another_SelectMany_with_Distinct();
+
+            AssertContainsSql(
+                @"SELECT [l1].[Id], [l1].[Date], [l1].[Name], [l1].[OneToMany_Optional_Self_InverseId], [l1].[OneToMany_Required_Self_InverseId], [l1].[OneToOne_Optional_SelfId], [l1.OneToMany_Required.OneToOne_Optional_FK].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK].[OneToOne_Optional_SelfId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Level3_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Level3_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToOne_Optional_SelfId]
+FROM [LevelOne] AS [l1]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Required] ON [l1].[Id] = [l1.OneToMany_Required].[OneToMany_Required_InverseId]
+LEFT JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK] ON [l1.OneToMany_Required].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK].[Level2_Optional_Id]
+INNER JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK0] ON [l1.OneToMany_Required].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK0].[Level2_Optional_Id]
+LEFT JOIN [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional] ON [l1.OneToMany_Required.OneToOne_Optional_FK0].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional].[OneToMany_Optional_InverseId]
+ORDER BY [l1.OneToMany_Required.OneToOne_Optional_FK].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK0].[Id]",
+                //
+                @"SELECT [l11].[Id], [l11].[Date], [l11].[Name], [l11].[OneToMany_Optional_Self_InverseId], [l11].[OneToMany_Required_Self_InverseId], [l11].[OneToOne_Optional_SelfId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[Level3_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[Level3_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToOne_Optional_SelfId], [l1.OneToMany_Required.OneToOne_Optional_FK3].[Id]
+FROM [LevelOne] AS [l11]
+INNER JOIN [LevelTwo] AS [l1.OneToMany_Required1] ON [l11].[Id] = [l1.OneToMany_Required1].[OneToMany_Required_InverseId]
+LEFT JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK3] ON [l1.OneToMany_Required1].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK3].[Level2_Optional_Id]
+INNER JOIN [LevelThree] AS [l1.OneToMany_Required.OneToOne_Optional_FK4] ON [l1.OneToMany_Required1].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK4].[Level2_Optional_Id]
+LEFT JOIN [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2] ON [l1.OneToMany_Required.OneToOne_Optional_FK4].[Id] = [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional2].[OneToMany_Optional_InverseId]
+ORDER BY [l1.OneToMany_Required.OneToOne_Optional_FK4].[Id]",
+                //
+                @"SELECT [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[Level3_Optional_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[Level3_Required_Id], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[Name], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[OneToMany_Optional_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[OneToMany_Optional_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[OneToMany_Required_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[OneToMany_Required_Self_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[OneToOne_Optional_PK_InverseId], [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0].[OneToOne_Optional_SelfId]
+FROM [LevelFour] AS [l1.OneToMany_Required.OneToOne_Optional_FK.OneToMany_Optional0]");
+        }
+
+        public override void SelectMany_subquery_with_custom_projection()
+        {
+            base.SelectMany_subquery_with_custom_projection();
+
+            AssertSql(
+                @"@__p_0='1'
+
+SELECT TOP(@__p_0) [t].[Name]
+FROM [LevelOne] AS [l1]
+CROSS APPLY (
+    SELECT [l2].[Name]
+    FROM [LevelTwo] AS [l2]
+    WHERE [l1].[Id] = [l2].[OneToMany_Optional_InverseId]
+) AS [t]
+ORDER BY [l1].[Id]");
         }
 
         private void AssertSql(params string[] expected)

@@ -11,7 +11,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 {
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class)]
     [TraitDiscoverer("Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests.Utilities.SqlServerConditionTraitDiscoverer", "Microsoft.EntityFrameworkCore.SqlServer.FunctionalTests")]
-    public class SqlServerConditionAttribute : Attribute, ITestCondition, ITraitAttribute
+    public sealed class SqlServerConditionAttribute : Attribute, ITestCondition, ITraitAttribute
     {
         public SqlServerCondition Conditions { get; set; }
 
@@ -29,36 +29,49 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                 {
                     isMet &= TestEnvironment.GetFlag(nameof(SqlServerCondition.SupportsSequences)) ?? true;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.SupportsOffset))
                 {
                     isMet &= TestEnvironment.GetFlag(nameof(SqlServerCondition.SupportsOffset)) ?? true;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.SupportsHiddenColumns))
                 {
                     isMet &= TestEnvironment.GetFlag(nameof(SqlServerCondition.SupportsHiddenColumns)) ?? false;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.SupportsMemoryOptimized))
                 {
                     isMet &= TestEnvironment.GetFlag(nameof(SqlServerCondition.SupportsMemoryOptimized)) ?? false;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.IsSqlAzure))
                 {
                     isMet &= TestEnvironment.IsSqlAzure;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.IsNotSqlAzure))
                 {
                     isMet &= !TestEnvironment.IsSqlAzure;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.SupportsAttach))
                 {
                     var defaultConnection = new SqlConnectionStringBuilder(TestEnvironment.DefaultConnection);
                     isMet &= defaultConnection.DataSource.Contains("(localdb)")
                              || defaultConnection.UserInstance;
                 }
+
                 if (Conditions.HasFlag(SqlServerCondition.IsNotTeamCity))
                 {
                     isMet &= !TestEnvironment.IsTeamCity;
                 }
+
+                if (Conditions.HasFlag(SqlServerCondition.SupportsFullTextSearch))
+                {
+                    isMet &= TestEnvironment.IsFullTestSearchSupported;
+                }
+
                 return isMet;
             }
         }
@@ -84,6 +97,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         SupportsMemoryOptimized = 1 << 4,
         SupportsAttach = 1 << 5,
         SupportsHiddenColumns = 1 << 6,
-        IsNotTeamCity = 1 << 7
+        IsNotTeamCity = 1 << 7,
+        SupportsFullTextSearch = 1 << 8
     }
 }

@@ -24,8 +24,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             Check.NotNull(propertyBuilder, nameof(propertyBuilder));
 
-            var memberInfo = propertyBuilder.Metadata.MemberInfo;
-            var attributes = memberInfo?.GetCustomAttributes<TAttribute>(true);
+            var memberInfo = propertyBuilder.Metadata.GetIdentifyingMemberInfo();
+            if (memberInfo == null)
+            {
+                return propertyBuilder;
+            }
+
+            if (!Attribute.IsDefined(memberInfo, typeof(TAttribute), inherit: true))
+            {
+                return propertyBuilder;
+            }
+
+            var attributes = memberInfo.GetCustomAttributes<TAttribute>(inherit: true);
             if (attributes != null)
             {
                 foreach (var attribute in attributes)
@@ -37,6 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     }
                 }
             }
+
             return propertyBuilder;
         }
 

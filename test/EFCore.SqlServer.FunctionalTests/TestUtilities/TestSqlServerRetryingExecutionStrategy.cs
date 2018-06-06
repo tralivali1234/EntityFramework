@@ -9,6 +9,8 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 {
     public class TestSqlServerRetryingExecutionStrategy : SqlServerRetryingExecutionStrategy
     {
+        private const bool ErrorNumberDebugMode = false;
+
         private static readonly int[] _additionalErrorNumbers =
         {
             -1, // Physical connection is not usable
@@ -46,13 +48,16 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                 return true;
             }
 
-            if (exception is SqlException sqlException)
+            if (ErrorNumberDebugMode
+                && exception is SqlException sqlException)
             {
                 var message = "Didn't retry on";
                 foreach (SqlError err in sqlException.Errors)
                 {
                     message += " " + err.Number;
                 }
+
+                message += Environment.NewLine;
                 throw new InvalidOperationException(message + exception, exception);
             }
 
@@ -71,7 +76,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             return base.GetNextDelay(lastException);
         }
 
-        public new static bool Suspended
+        public static new bool Suspended
         {
             get => ExecutionStrategy.Suspended;
             set => ExecutionStrategy.Suspended = value;

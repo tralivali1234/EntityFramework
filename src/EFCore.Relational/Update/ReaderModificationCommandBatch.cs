@@ -206,36 +206,37 @@ namespace Microsoft.EntityFrameworkCore.Update
 
             var parameterValues = new Dictionary<string, object>(GetParameterCount());
 
-            foreach (var columnModification in ModificationCommands.SelectMany(t => t.ColumnModifications))
+            // ReSharper disable once ForCanBeConvertedToForeach
+            for (var commandIndex = 0; commandIndex < ModificationCommands.Count; commandIndex++)
             {
-                if (columnModification.UseCurrentValueParameter)
+                var command = ModificationCommands[commandIndex];
+                // ReSharper disable once ForCanBeConvertedToForeach
+                for (var columnIndex = 0; columnIndex < command.ColumnModifications.Count; columnIndex++)
                 {
-                    commandBuilder.AddParameter(
-                        columnModification.ParameterName,
-                        SqlGenerationHelper.GenerateParameterName(columnModification.ParameterName),
-                        columnModification.Property);
+                    var columnModification = command.ColumnModifications[columnIndex];
+                    if (columnModification.UseCurrentValueParameter)
+                    {
+                        commandBuilder.AddParameter(
+                            columnModification.ParameterName,
+                            SqlGenerationHelper.GenerateParameterName(columnModification.ParameterName),
+                            columnModification.Property);
 
-                    parameterValues.Add(
-                        columnModification.ParameterName,
-                        columnModification.Value);
-                }
+                        parameterValues.Add(columnModification.ParameterName, columnModification.Value);
+                    }
 
-                if (columnModification.UseOriginalValueParameter)
-                {
-                    commandBuilder.AddParameter(
-                        columnModification.OriginalParameterName,
-                        SqlGenerationHelper.GenerateParameterName(columnModification.OriginalParameterName),
-                        columnModification.Property);
+                    if (columnModification.UseOriginalValueParameter)
+                    {
+                        commandBuilder.AddParameter(
+                            columnModification.OriginalParameterName,
+                            SqlGenerationHelper.GenerateParameterName(columnModification.OriginalParameterName),
+                            columnModification.Property);
 
-                    parameterValues.Add(
-                        columnModification.OriginalParameterName,
-                        columnModification.OriginalValue);
+                        parameterValues.Add(columnModification.OriginalParameterName, columnModification.OriginalValue);
+                    }
                 }
             }
 
-            return new RawSqlCommand(
-                commandBuilder.Build(),
-                parameterValues);
+            return new RawSqlCommand(commandBuilder.Build(), parameterValues);
         }
 
         /// <summary>
@@ -252,8 +253,7 @@ namespace Microsoft.EntityFrameworkCore.Update
             try
             {
                 using (var dataReader = storeCommand.RelationalCommand.ExecuteReader(
-                    connection,
-                    parameterValues: storeCommand.ParameterValues))
+                    connection, storeCommand.ParameterValues))
                 {
                     Consume(dataReader);
                 }

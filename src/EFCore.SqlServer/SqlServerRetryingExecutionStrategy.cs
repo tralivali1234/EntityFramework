@@ -5,8 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 
 namespace Microsoft.EntityFrameworkCore
 {
@@ -149,7 +149,7 @@ namespace Microsoft.EntityFrameworkCore
             return baseDelay;
         }
 
-        private bool IsMemoryOptimizedError(Exception exception)
+        private static bool IsMemoryOptimizedError(Exception exception)
         {
             if (exception is SqlException sqlException)
             {

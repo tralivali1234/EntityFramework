@@ -8,9 +8,14 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
+#if Test20
+using Microsoft.EntityFrameworkCore.Storage.Internal;
+#else
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+#endif
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
@@ -23,12 +28,13 @@ namespace Microsoft.EntityFrameworkCore
         {
         }
 
+#if !Test20
         public override void Can_generate_migration_from_initial_database_to_initial()
         {
             base.Can_generate_migration_from_initial_database_to_initial();
 
             Assert.Equal(
-                @"IF OBJECT_ID(N'__EFMigrationsHistory') IS NULL
+                @"IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
         [MigrationId] nvarchar(150) NOT NULL,
@@ -49,7 +55,7 @@ GO
             base.Can_generate_no_migration_script();
 
             Assert.Equal(
-                @"IF OBJECT_ID(N'__EFMigrationsHistory') IS NULL
+                @"IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
         [MigrationId] nvarchar(150) NOT NULL,
@@ -70,7 +76,7 @@ GO
             base.Can_generate_up_scripts();
 
             Assert.Equal(
-                @"IF OBJECT_ID(N'__EFMigrationsHistory') IS NULL
+                @"IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
         [MigrationId] nvarchar(150) NOT NULL,
@@ -93,7 +99,7 @@ VALUES (N'00000000000001_Migration1', N'7.0.0-test');
 
 GO
 
-EXEC sp_rename N'Table1', N'Table2';
+EXEC sp_rename N'[Table1]', N'Table2';
 
 GO
 
@@ -125,7 +131,7 @@ GO
             base.Can_generate_one_up_script();
 
             Assert.Equal(
-                @"EXEC sp_rename N'Table1', N'Table2';
+                @"EXEC sp_rename N'[Table1]', N'Table2';
 
 GO
 
@@ -144,7 +150,7 @@ GO
             base.Can_generate_up_script_using_names();
 
             Assert.Equal(
-                @"EXEC sp_rename N'Table1', N'Table2';
+                @"EXEC sp_rename N'[Table1]', N'Table2';
 
 GO
 
@@ -163,7 +169,7 @@ GO
             base.Can_generate_idempotent_up_scripts();
 
             Assert.Equal(
-                @"IF OBJECT_ID(N'__EFMigrationsHistory') IS NULL
+                @"IF OBJECT_ID(N'[__EFMigrationsHistory]') IS NULL
 BEGIN
     CREATE TABLE [__EFMigrationsHistory] (
         [MigrationId] nvarchar(150) NOT NULL,
@@ -194,7 +200,7 @@ GO
 
 IF NOT EXISTS(SELECT * FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'00000000000002_Migration2')
 BEGIN
-    EXEC sp_rename N'Table1', N'Table2';
+    EXEC sp_rename N'[Table1]', N'Table2';
 END;
 
 GO
@@ -239,7 +245,7 @@ GO
             base.Can_generate_down_scripts();
 
             Assert.Equal(
-                @"EXEC sp_rename N'Table2', N'Table1';
+                @"EXEC sp_rename N'[Table2]', N'Table1';
 
 GO
 
@@ -269,7 +275,7 @@ GO
             Assert.Equal(
                 @"IF EXISTS(SELECT * FROM [__EFMigrationsHistory] WHERE [MigrationId] = N'00000000000002_Migration2')
 BEGIN
-    EXEC sp_rename N'Table2', N'Table1';
+    EXEC sp_rename N'[Table2]', N'Table1';
 END;
 
 GO
@@ -307,7 +313,7 @@ GO
             base.Can_generate_one_down_script();
 
             Assert.Equal(
-                @"EXEC sp_rename N'Table2', N'Table1';
+                @"EXEC sp_rename N'[Table2]', N'Table1';
 
 GO
 
@@ -326,7 +332,7 @@ GO
             base.Can_generate_down_script_using_names();
 
             Assert.Equal(
-                @"EXEC sp_rename N'Table2', N'Table1';
+                @"EXEC sp_rename N'[Table2]', N'Table1';
 
 GO
 
@@ -339,6 +345,7 @@ GO
                 Sql,
                 ignoreLineEndingDifferences: true);
         }
+#endif
 
         public override void Can_get_active_provider()
         {
@@ -439,7 +446,7 @@ CreatedTable
             return builder.ToString();
         }
 
-        [Fact]
+        [ConditionalFact]
         public async Task Empty_Migration_Creates_Database()
         {
             using (var context = new BloggingContext(Fixture.TestStore.AddProviderOptions(new DbContextOptionsBuilder()).Options))

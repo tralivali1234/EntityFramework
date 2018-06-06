@@ -4,7 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -17,6 +19,7 @@ using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,10 +65,14 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(IDbSetFinder), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IDbSetInitializer), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IDbSetSource), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IDbQuerySource), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IEntityFinderSource), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IEntityMaterializerSource), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ICoreConventionSetBuilder), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+#pragma warning disable 618
                 { typeof(ITypeMapper), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+#pragma warning restore 618
+                { typeof(ITypeMappingSource), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IModelCustomizer), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IModelCacheKeyFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ILoggerFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
@@ -77,6 +84,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(INodeTypeProviderFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ISingletonOptionsInitializer), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ILoggingOptions), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(ICoreSingletonOptions), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IModelValidator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ICompiledQueryCache), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IQueryAnnotationExtractor), new ServiceCharacteristics(ServiceLifetime.Singleton) },
@@ -87,6 +95,12 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(IQuerySourceTracingExpressionVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IProjectionExpressionVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IDiagnosticsLogger<>), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IValueConverterSelector), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IConstructorBindingFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IRegisteredServices), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IPropertyParameterBindingFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IParameterBindingFactories), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IMemberClassifier), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IEntityGraphAttacher), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IKeyPropagator), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(INavigationFixer), new ServiceCharacteristics(ServiceLifetime.Scoped) },
@@ -100,11 +114,11 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(IChangeDetector), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IDbContextServices), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IValueGeneratorSelector), new ServiceCharacteristics(ServiceLifetime.Scoped) },
-                { typeof(IConventionSetBuilder), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IExpressionPrinter), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IExecutionStrategyFactory), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IAsyncQueryProvider), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IQueryCompiler), new ServiceCharacteristics(ServiceLifetime.Scoped) },
+                { typeof(IQueryModelGenerator), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IQueryOptimizer), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IEntityResultFindingExpressionVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IRequiresMaterializationExpressionVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Scoped) },
@@ -121,6 +135,9 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(IQueryContextFactory), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IEntityQueryableExpressionVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Scoped) },
                 { typeof(IEntityQueryModelVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Scoped) },
+                { typeof(ILazyLoader), new ServiceCharacteristics(ServiceLifetime.Scoped) },
+                { typeof(IParameterBindingFactory), new ServiceCharacteristics(ServiceLifetime.Singleton, multipleRegistrations: true) },
+                { typeof(IConventionSetBuilder), new ServiceCharacteristics(ServiceLifetime.Scoped, multipleRegistrations: true) },
                 { typeof(IEntityStateListener), new ServiceCharacteristics(ServiceLifetime.Scoped, multipleRegistrations: true) },
                 { typeof(INavigationListener), new ServiceCharacteristics(ServiceLifetime.Scoped, multipleRegistrations: true) },
                 { typeof(IKeyListener), new ServiceCharacteristics(ServiceLifetime.Scoped, multipleRegistrations: true) },
@@ -191,10 +208,14 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             TryAdd<IDbSetFinder, DbSetFinder>();
             TryAdd<IDbSetInitializer, DbSetInitializer>();
             TryAdd<IDbSetSource, DbSetSource>();
+            TryAdd<IDbQuerySource, DbSetSource>();
             TryAdd<IEntityFinderSource, EntityFinderSource>();
             TryAdd<IEntityMaterializerSource, EntityMaterializerSource>();
             TryAdd<ICoreConventionSetBuilder, CoreConventionSetBuilder>();
+#pragma warning disable 618
             TryAdd<ITypeMapper, CoreTypeMapper>();
+#pragma warning restore 618
+            TryAdd<ITypeMappingSource, FallbackTypeMappingSource>();
             TryAdd<IModelCustomizer, ModelCustomizer>();
             TryAdd<IModelCacheKeyFactory, ModelCacheKeyFactory>();
             TryAdd<ILoggerFactory, LoggerFactory>();
@@ -223,6 +244,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             TryAdd<ICompiledQueryCache, CompiledQueryCache>();
             TryAdd<IAsyncQueryProvider, EntityQueryProvider>();
             TryAdd<IQueryCompiler, QueryCompiler>();
+            TryAdd<IQueryModelGenerator, QueryModelGenerator>();
             TryAdd<IQueryAnnotationExtractor, QueryAnnotationExtractor>();
             TryAdd<IQueryOptimizer, QueryOptimizer>();
             TryAdd<IEntityTrackingInfoFactory, EntityTrackingInfoFactory>();
@@ -240,7 +262,9 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             TryAdd<ISingletonOptionsInitializer, SingletonOptionsInitializer>();
             TryAdd(typeof(IDiagnosticsLogger<>), typeof(DiagnosticsLogger<>));
             TryAdd<ILoggingOptions, LoggingOptions>();
+            TryAdd<ICoreSingletonOptions, CoreSingletonOptions>();
             TryAdd<ISingletonOptions, ILoggingOptions>(p => p.GetService<ILoggingOptions>());
+            TryAdd<ISingletonOptions, ICoreSingletonOptions>(p => p.GetService<ICoreSingletonOptions>());
             TryAdd(p => GetContextServices(p).Model);
             TryAdd(p => GetContextServices(p).CurrentContext);
             TryAdd(p => GetContextServices(p).ContextOptions);
@@ -254,6 +278,15 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             TryAdd<IResettableService, IDbContextTransactionManager>(p => p.GetService<IDbContextTransactionManager>());
             TryAdd<Func<IStateManager>>(p => p.GetService<IStateManager>);
             TryAdd<IEvaluatableExpressionFilter, EvaluatableExpressionFilter>();
+            TryAdd<IValueConverterSelector, ValueConverterSelector>();
+            TryAdd<IConstructorBindingFactory, ConstructorBindingFactory>();
+            TryAdd<ILazyLoader, LazyLoader>();
+            TryAdd<IParameterBindingFactories, ParameterBindingFactories>();
+            TryAdd<IMemberClassifier, MemberClassifier>();
+            TryAdd<IPropertyParameterBindingFactory, PropertyParameterBindingFactory>();
+            TryAdd<IParameterBindingFactory, LazyLoaderParameterBindingFactory>();
+            TryAdd<IParameterBindingFactory, ContextParameterBindingFactory>();
+            TryAdd<IParameterBindingFactory, EntityTypeParameterBindingFactory>();
 
             ServiceCollectionMap
                 .TryAddSingleton<DiagnosticSource>(new DiagnosticListener(DbLoggerCategory.Name));
@@ -265,9 +298,13 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 .AddDependencySingleton<ValueGeneratorCacheDependencies>()
                 .AddDependencySingleton<ModelValidatorDependencies>()
                 .AddDependencySingleton<CoreConventionSetBuilderDependencies>()
+#pragma warning disable 618
                 .AddDependencySingleton<CoreTypeMapperDependencies>()
+#pragma warning restore 618
+                .AddDependencySingleton<TypeMappingSourceDependencies>()
                 .AddDependencySingleton<ModelCustomizerDependencies>()
                 .AddDependencySingleton<ModelCacheKeyFactoryDependencies>()
+                .AddDependencySingleton<ValueConverterSelectorDependencies>()
                 .AddDependencyScoped<StateManagerDependencies>()
                 .AddDependencyScoped<ExecutionStrategyDependencies>()
                 .AddDependencyScoped<CompiledQueryCacheKeyGeneratorDependencies>()
@@ -277,6 +314,9 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 .AddDependencyScoped<DatabaseDependencies>()
                 .AddDependencyScoped<QueryCompilationContextDependencies>()
                 .ServiceCollection.AddMemoryCache();
+
+            ServiceCollectionMap.TryAddSingleton<IRegisteredServices>(
+                new RegisteredServices(ServiceCollectionMap.ServiceCollection.Select(s => s.ServiceType)));
 
             return this;
         }
@@ -436,7 +476,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public struct ServiceCharacteristics
+        public readonly struct ServiceCharacteristics
         {
             /// <summary>
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

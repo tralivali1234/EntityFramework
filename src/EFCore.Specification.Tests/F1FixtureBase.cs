@@ -9,6 +9,7 @@ namespace Microsoft.EntityFrameworkCore
     {
         protected override string StoreName { get; } = "F1Test";
 
+        // #12126
         protected override bool UsePooling => false;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder, DbContext context)
@@ -17,18 +18,16 @@ namespace Microsoft.EntityFrameworkCore
 
             modelBuilder.Entity<Engine>(
                 b =>
-                    {
-                        b.Property(e => e.EngineSupplierId).IsConcurrencyToken();
-                        b.Property(e => e.Name).IsConcurrencyToken();
-                        b.OwnsOne(
-                            e => e.StorageLocation, lb =>
-                                {
-                                    lb.Property(l => l.Latitude).IsConcurrencyToken();
-                                    lb.Property(l => l.Longitude).IsConcurrencyToken();
-                                });
-                    });
-
-            modelBuilder.Ignore<Location>();
+                {
+                    b.Property(e => e.EngineSupplierId).IsConcurrencyToken();
+                    b.Property(e => e.Name).IsConcurrencyToken();
+                    b.OwnsOne(
+                        e => e.StorageLocation, lb =>
+                        {
+                            lb.Property(l => l.Latitude).IsConcurrencyToken();
+                            lb.Property(l => l.Longitude).IsConcurrencyToken();
+                        });
+                });
 
             modelBuilder.Entity<EngineSupplier>();
 
@@ -36,23 +35,21 @@ namespace Microsoft.EntityFrameworkCore
 
             modelBuilder.Entity<Sponsor>(
                 b =>
-                    {
-                        b.Property<int?>(Sponsor.ClientTokenPropertyName)
-                            .IsConcurrencyToken();
-                    });
+                {
+                    b.Property<int?>(Sponsor.ClientTokenPropertyName)
+                        .IsConcurrencyToken();
+                });
 
             modelBuilder.Entity<Team>(
                 b =>
-                    {
-                        b.HasOne(e => e.Gearbox).WithOne().HasForeignKey<Team>(e => e.GearboxId);
-                        b.HasOne(e => e.Chassis).WithOne(e => e.Team).HasForeignKey<Chassis>(e => e.TeamId);
-                    });
+                {
+                    b.HasOne(e => e.Gearbox).WithOne().HasForeignKey<Team>(e => e.GearboxId);
+                    b.HasOne(e => e.Chassis).WithOne(e => e.Team).HasForeignKey<Chassis>(e => e.TeamId);
+                });
 
             modelBuilder.Entity<TestDriver>();
             modelBuilder.Entity<TitleSponsor>()
-                .Ignore(s => s.Details);
-            // #8973
-            //.OwnsOne(s => s.Details);
+                .OwnsOne(s => s.Details);
 
             // TODO: Sponsor * <-> * Team. Many-to-many relationships are not supported without CLR class for join table. See issue #1368
         }

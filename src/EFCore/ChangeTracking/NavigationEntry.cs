@@ -57,6 +57,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                             name, internalEntry.EntityType.DisplayName(),
                             nameof(ChangeTracking.EntityEntry.Reference), nameof(ChangeTracking.EntityEntry.Collection), nameof(ChangeTracking.EntityEntry.Property)));
                 }
+
                 throw new InvalidOperationException(CoreStrings.PropertyNotFound(name, internalEntry.EntityType.DisplayName()));
             }
 
@@ -115,7 +116,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
         /// </param>
         /// <returns>
-        ///     A task that represents the asynchronous save operation.
+        ///     A task that represents the asynchronous operation.
         /// </returns>
         public virtual Task LoadAsync(CancellationToken cancellationToken = default)
             => IsLoaded
@@ -190,7 +191,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                 return navigationValue != null
                        && (Metadata.IsCollection()
-                           ? ((IEnumerable)navigationValue).OfType<object>().Any(AnyFkPropertiesModified)
+                           ? ((IEnumerable)navigationValue).OfType<object>().Any(CollectionContainsNewOrChangedRelationships)
                            : AnyFkPropertiesModified(navigationValue));
             }
             set
@@ -220,6 +221,16 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             }
         }
 
+        private bool CollectionContainsNewOrChangedRelationships(object relatedEntity)
+        {
+            var relatedEntry = InternalEntry.StateManager.TryGetEntry(relatedEntity, Metadata.GetTargetType());
+
+            return relatedEntry != null
+                   && (relatedEntry.EntityState == EntityState.Added
+                       || relatedEntry.EntityState == EntityState.Deleted
+                       || Metadata.ForeignKey.Properties.Any(relatedEntry.IsModified));
+        }
+
         private bool AnyFkPropertiesModified(object relatedEntity)
         {
             var relatedEntry = InternalEntry.StateManager.TryGetEntry(relatedEntity, Metadata.GetTargetType());
@@ -239,9 +250,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
         private void SetFkPropertiesModified(InternalEntityEntry internalEntityEntry, bool modified)
         {
+            var anyNonPk = Metadata.ForeignKey.Properties.Any(p => !p.IsPrimaryKey());
             foreach (var property in Metadata.ForeignKey.Properties)
             {
-                internalEntityEntry.SetPropertyModified(property, isModified: modified);
+                if (anyNonPk
+                    && !property.IsPrimaryKey())
+                {
+                    internalEntityEntry.SetPropertyModified(property, isModified: modified);
+                }
             }
         }
 

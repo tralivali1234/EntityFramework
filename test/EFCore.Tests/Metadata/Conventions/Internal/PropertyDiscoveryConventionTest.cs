@@ -5,13 +5,121 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable UnassignedGetOnlyAutoProperty
+// ReSharper disable InconsistentNaming
+// ReSharper disable UnusedMember.Local
+// ReSharper disable ClassNeverInstantiated.Local
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class PropertyDiscoveryConventionTest
     {
+        private class BaseWithPrivates
+        {
+            public int Id { get; private set; }
+
+            private string _code;
+
+            // ReSharper disable once ConvertToAutoProperty
+            public string Code
+            {
+                get => _code;
+                private set => _code = value;
+            }
+
+            public string Description { get; private set; }
+
+            public void SetInformation(string code, string description)
+            {
+                Code = code;
+                Description = description;
+            }
+        }
+
+        private class DerivedWithoutPrivates : BaseWithPrivates
+        {
+        }
+
+        private class WithPrivatesContext : DbContext
+        {
+            public DbSet<DerivedWithoutPrivates> Entities { get; set; }
+
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                => optionsBuilder.UseInMemoryDatabase(nameof(WithPrivatesContext));
+        }
+
+        [Fact]
+        public void Properties_with_private_setters_on_unmapped_base_types_are_discovered()
+        {
+            using (var context = new WithPrivatesContext())
+            {
+                var model = context.Model;
+
+                Assert.Equal(1, model.GetEntityTypes().Count());
+
+                var entityType = model.FindEntityType(typeof(DerivedWithoutPrivates));
+
+                Assert.Equal(3, entityType.PropertyCount());
+
+                var idProperty = entityType.FindProperty(nameof(BaseWithPrivates.Id));
+                Assert.NotNull(idProperty.PropertyInfo);
+                Assert.NotNull(idProperty.FieldInfo);
+
+                var codeProperty = entityType.FindProperty(nameof(BaseWithPrivates.Code));
+                Assert.NotNull(codeProperty.PropertyInfo);
+                Assert.NotNull(codeProperty.FieldInfo);
+
+                var descriptionProperty = entityType.FindProperty(nameof(BaseWithPrivates.Description));
+                Assert.NotNull(descriptionProperty.PropertyInfo);
+                Assert.NotNull(descriptionProperty.FieldInfo);
+
+                var entity = new DerivedWithoutPrivates();
+                entity.SetInformation("Foo!", "Bar!");
+                context.Add(entity);
+
+                context.SaveChanges();
+            }
+        }
+
+        [Fact]
+        public void Can_save_and_query_using_entities_with_private_setters_on_base_types()
+        {
+            int id;
+            using (var context = new WithPrivatesContext())
+            {
+                var entity = new DerivedWithoutPrivates();
+                entity.SetInformation("Foo!", "Bar!");
+                context.Add(entity);
+
+                context.SaveChanges();
+
+                id = entity.Id;
+            }
+
+            using (var context = new WithPrivatesContext())
+            {
+                var entity = context.Entities.Single(e => e.Id == id);
+
+                Assert.Equal("Foo!", entity.Code);
+                Assert.Equal("Bar!", entity.Description);
+
+                Assert.Equal(id, context.Entry(entity).Property(e => e.Id).CurrentValue);
+                Assert.Equal("Foo!", context.Entry(entity).Property(e => e.Code).CurrentValue);
+                Assert.Equal("Bar!", context.Entry(entity).Property(e => e.Description).CurrentValue);
+
+                context.Entry(entity).Property(e => e.Code).CurrentValue = "Foooo!";
+                context.Entry(entity).Property(e => e.Description).CurrentValue = "Barrr!";
+
+                Assert.Equal("Foo!", context.Entry(entity).Property(e => e.Code).OriginalValue);
+                Assert.Equal("Bar!", context.Entry(entity).Property(e => e.Description).OriginalValue);
+                Assert.Equal("Foooo!", context.Entry(entity).Property(e => e.Code).CurrentValue);
+                Assert.Equal("Barrr!", context.Entry(entity).Property(e => e.Description).CurrentValue);
+            }
+        }
+
         private class EntityWithInvalidProperties
         {
             public static int Static { get; set; }
@@ -28,7 +136,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             public int this[int index]
             {
-                get { return 0; }
+                get => 0;
                 // ReSharper disable once ValueParameterNotUsed
                 set { }
             }
@@ -39,7 +147,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityBuilder = CreateInternalEntityBuilder<EntityWithInvalidProperties>();
 
-            Assert.Same(entityBuilder, new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())).Apply(entityBuilder));
+            Assert.Same(
+                entityBuilder, new PropertyDiscoveryConvention(
+                    TestServiceFactory.Instance.Create<FallbackTypeMappingSource>()).Apply(entityBuilder));
 
             Assert.Empty(entityBuilder.Metadata.GetProperties());
         }
@@ -97,7 +207,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityBuilder = CreateInternalEntityBuilder<EntityWithEveryPrimitive>();
 
-            Assert.Same(entityBuilder, new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())).Apply(entityBuilder));
+            Assert.Same(
+                entityBuilder, new PropertyDiscoveryConvention(
+                        TestServiceFactory.Instance.Create<FallbackTypeMappingSource>())
+                    .Apply(entityBuilder));
 
             Assert.Equal(
                 typeof(EntityWithEveryPrimitive)
@@ -116,7 +229,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityBuilder = CreateInternalEntityBuilder<EntityWithNoPrimitives>();
 
-            Assert.Same(entityBuilder, new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())).Apply(entityBuilder));
+            Assert.Same(
+                entityBuilder, new PropertyDiscoveryConvention(
+                        TestServiceFactory.Instance.Create<FallbackTypeMappingSource>())
+                    .Apply(entityBuilder));
 
             Assert.Empty(entityBuilder.Metadata.GetProperties());
         }

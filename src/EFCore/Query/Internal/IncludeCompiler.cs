@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
@@ -233,23 +234,32 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             WalkNavigations(entityType, includeResultOperator.NavigationPropertyPaths, includeLoadTree);
         }
 
-        private static void WalkNavigations(IEntityType entityType, IReadOnlyList<string> navigationPropertyPaths, IncludeLoadTree includeLoadTree)
+        private static void WalkNavigations(
+            IEntityType entityType, IReadOnlyList<string> navigationPropertyPaths, IncludeLoadTree includeLoadTree)
         {
-            var longestMatchFound = WalkNavigationsInternal(entityType, navigationPropertyPaths, includeLoadTree, new Stack<INavigation>(), new KeyValuePair<int, IEntityType>(0, null));
+            var longestMatchFound
+                = WalkNavigationsInternal(
+                    entityType,
+                    navigationPropertyPaths,
+                    includeLoadTree,
+                    new Stack<INavigation>(),
+                    (0, entityType));
 
-            if (longestMatchFound.Key < navigationPropertyPaths.Count)
+            if (longestMatchFound.Depth < navigationPropertyPaths.Count)
             {
                 throw new InvalidOperationException(
-                    CoreStrings.IncludeBadNavigation(navigationPropertyPaths[longestMatchFound.Key], longestMatchFound.Value.DisplayName()));
+                    CoreStrings.IncludeBadNavigation(
+                        navigationPropertyPaths[longestMatchFound.Depth],
+                        longestMatchFound.EntityType.DisplayName()));
             }
         }
 
-        private static KeyValuePair<int, IEntityType> WalkNavigationsInternal(
-            IEntityType entityType, 
-            IReadOnlyList<string> navigationPropertyPaths, 
-            IncludeLoadTree includeLoadTree, 
-            Stack<INavigation> stack, 
-            KeyValuePair<int, IEntityType> longestMatchFound)
+        private static (int Depth, IEntityType EntityType) WalkNavigationsInternal(
+            IEntityType entityType,
+            IReadOnlyList<string> navigationPropertyPaths,
+            IncludeLoadTree includeLoadTree,
+            Stack<INavigation> stack,
+            (int Depth, IEntityType EntityType) longestMatchFound)
         {
             var outboundNavigations
                 = entityType.GetNavigations()
@@ -261,9 +271,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 && stack.Count > 0)
             {
                 includeLoadTree.AddLoadPath(stack.Reverse().ToArray());
-                if (stack.Count > longestMatchFound.Key)
+
+                if (stack.Count > longestMatchFound.Depth)
                 {
-                    longestMatchFound = new KeyValuePair<int, IEntityType>(stack.Count, entityType);
+                    longestMatchFound = (stack.Count, entityType);
                 }
             }
             else
@@ -272,7 +283,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 {
                     stack.Push(navigation);
 
-                    longestMatchFound = WalkNavigationsInternal(navigation.GetTargetType(), navigationPropertyPaths, includeLoadTree, stack, longestMatchFound);
+                    longestMatchFound
+                        = WalkNavigationsInternal(
+                            navigation.GetTargetType(),
+                            navigationPropertyPaths,
+                            includeLoadTree,
+                            stack,
+                            longestMatchFound);
 
                     stack.Pop();
                 }
@@ -318,6 +335,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 .GetDeclaredMethod(nameof(_Include));
 
         // ReSharper disable once InconsistentNaming
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static TEntity _Include<TEntity>(
             QueryContext queryContext,
             TEntity entity,
@@ -337,6 +355,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 .GetDeclaredMethod(nameof(_IncludeAsync));
 
         // ReSharper disable once InconsistentNaming
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static async Task<TEntity> _IncludeAsync<TEntity>(
             QueryContext queryContext,
             TEntity entity,

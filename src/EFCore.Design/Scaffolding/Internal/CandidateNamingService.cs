@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
@@ -21,37 +22,18 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string GenerateCandidateIdentifier(string originalIdentifier)
+        public virtual string GenerateCandidateIdentifier(DatabaseTable originalTable)
         {
-            Check.NotEmpty(originalIdentifier, nameof(originalIdentifier));
+            return GenerateCandidateIdentifier(originalTable.Name);
+        }
 
-            var candidateStringBuilder = new StringBuilder();
-            var previousLetterCharInWordIsLowerCase = false;
-            var isFirstCharacterInWord = true;
-            foreach (var c in originalIdentifier)
-            {
-                var isNotLetterOrDigit = !char.IsLetterOrDigit(c);
-                if (isNotLetterOrDigit
-                    || (previousLetterCharInWordIsLowerCase && char.IsUpper(c)))
-                {
-                    isFirstCharacterInWord = true;
-                    previousLetterCharInWordIsLowerCase = false;
-                    if (isNotLetterOrDigit)
-                    {
-                        continue;
-                    }
-                }
-
-                candidateStringBuilder.Append(
-                    isFirstCharacterInWord ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
-                isFirstCharacterInWord = false;
-                if (char.IsLower(c))
-                {
-                    previousLetterCharInWordIsLowerCase = true;
-                }
-            }
-
-            return candidateStringBuilder.ToString();
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual string GenerateCandidateIdentifier(DatabaseColumn originalColumn)
+        {
+            return GenerateCandidateIdentifier(originalColumn.Name);
         }
 
         /// <summary>
@@ -98,7 +80,40 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             return foreignKey.DeclaringEntityType.ShortName();
         }
 
-        private string FindCandidateNavigationName(IEnumerable<IProperty> properties)
+        private static string GenerateCandidateIdentifier(string originalIdentifier)
+        {
+            Check.NotEmpty(originalIdentifier, nameof(originalIdentifier));
+
+            var candidateStringBuilder = new StringBuilder();
+            var previousLetterCharInWordIsLowerCase = false;
+            var isFirstCharacterInWord = true;
+            foreach (var c in originalIdentifier)
+            {
+                var isNotLetterOrDigit = !char.IsLetterOrDigit(c);
+                if (isNotLetterOrDigit
+                    || (previousLetterCharInWordIsLowerCase && char.IsUpper(c)))
+                {
+                    isFirstCharacterInWord = true;
+                    previousLetterCharInWordIsLowerCase = false;
+                    if (isNotLetterOrDigit)
+                    {
+                        continue;
+                    }
+                }
+
+                candidateStringBuilder.Append(
+                    isFirstCharacterInWord ? char.ToUpperInvariant(c) : char.ToLowerInvariant(c));
+                isFirstCharacterInWord = false;
+                if (char.IsLower(c))
+                {
+                    previousLetterCharInWordIsLowerCase = true;
+                }
+            }
+
+            return candidateStringBuilder.ToString();
+        }
+
+        private static string FindCandidateNavigationName(IEnumerable<IProperty> properties)
         {
             if (!properties.Any())
             {
@@ -119,7 +134,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             return StripId(candidateName);
         }
 
-        private string FindCommonPrefix(string firstName, IEnumerable<string> propertyNames)
+        private static string FindCommonPrefix(string firstName, IEnumerable<string> propertyNames)
         {
             var prefixLength = 0;
             foreach (var c in firstName)
@@ -139,7 +154,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             return firstName.Substring(0, prefixLength);
         }
 
-        private string StripId(string commonPrefix)
+        private static string StripId(string commonPrefix)
         {
             if (commonPrefix.Length > 2
                 && commonPrefix.EndsWith("id", StringComparison.OrdinalIgnoreCase))

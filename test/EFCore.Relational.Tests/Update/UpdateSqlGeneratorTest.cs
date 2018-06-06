@@ -14,9 +14,9 @@ namespace Microsoft.EntityFrameworkCore.Update
                 new UpdateSqlGeneratorDependencies(
                     new RelationalSqlGenerationHelper(
                         new RelationalSqlGenerationHelperDependencies()),
-                    new FakeRelationalTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())));
+                    new TestRelationalTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())));
 
         protected override TestHelpers TestHelpers => RelationalTestHelpers.Instance;
 

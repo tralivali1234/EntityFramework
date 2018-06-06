@@ -10,9 +10,7 @@ using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
 // ReSharper disable MergeConditionalExpression
-
 // ReSharper disable ConstantNullCoalescingCondition
-
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Query
 {
@@ -306,7 +304,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                select new { One = 1, Coalesce = eRootJoined ?? eVersion };
+                                select new
+                                {
+                                    One = 1,
+                                    Coalesce = eRootJoined ?? eVersion
+                                };
 
                     var result = query.ToList();
                     Assert.True(result.All(e => e.Coalesce.Children.Count > 0));
@@ -326,7 +328,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                select new { Root = eRootJoined, Coalesce = eRootJoined ?? eVersion };
+                                select new
+                                {
+                                    Root = eRootJoined,
+                                    Coalesce = eRootJoined ?? eVersion
+                                };
 
                     var result = query.ToList();
                     Assert.Equal(2, result.Count(e => e.Coalesce.Children.Count > 0));
@@ -346,7 +352,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                select new { One = 1, Coalesce = eRootJoined ?? (eVersion ?? eRootJoined) };
+                                select new
+                                {
+                                    One = 1,
+                                    Coalesce = eRootJoined ?? (eVersion ?? eRootJoined)
+                                };
 
                     var result = query.ToList();
                     Assert.Equal(2, result.Count(e => e.Coalesce.Children.Count > 0));
@@ -366,7 +376,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                select new { One = eRootJoined, Two = 2, Coalesce = eRootJoined ?? (eVersion ?? eRootJoined) };
+                                select new
+                                {
+                                    One = eRootJoined,
+                                    Two = 2,
+                                    Coalesce = eRootJoined ?? (eVersion ?? eRootJoined)
+                                };
 
                     var result = query.ToList();
                     Assert.True(result.All(e => e.Coalesce.Children.Count > 0));
@@ -408,7 +423,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                select new { eRootJoined, eVersion, foo = eRootJoined ?? eVersion };
+                                select new
+                                {
+                                    eRootJoined,
+                                    eVersion,
+                                    foo = eRootJoined ?? eVersion
+                                };
 
                     Assert.Equal(3, query.ToList().Count);
 
@@ -419,19 +439,52 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         private static void Seed3101(MyContext3101 context)
         {
-            var c11 = new Child3101 { Name = "c11" };
-            var c12 = new Child3101 { Name = "c12" };
-            var c13 = new Child3101 { Name = "c13" };
-            var c21 = new Child3101 { Name = "c21" };
-            var c22 = new Child3101 { Name = "c22" };
-            var c31 = new Child3101 { Name = "c31" };
-            var c32 = new Child3101 { Name = "c32" };
+            var c11 = new Child3101
+            {
+                Name = "c11"
+            };
+            var c12 = new Child3101
+            {
+                Name = "c12"
+            };
+            var c13 = new Child3101
+            {
+                Name = "c13"
+            };
+            var c21 = new Child3101
+            {
+                Name = "c21"
+            };
+            var c22 = new Child3101
+            {
+                Name = "c22"
+            };
+            var c31 = new Child3101
+            {
+                Name = "c31"
+            };
+            var c32 = new Child3101
+            {
+                Name = "c32"
+            };
 
             context.Children.AddRange(c11, c12, c13, c21, c22, c31, c32);
 
-            var e1 = new Entity3101 { Id = 1, Children = new[] { c11, c12, c13 } };
-            var e2 = new Entity3101 { Id = 2, Children = new[] { c21, c22 } };
-            var e3 = new Entity3101 { Id = 3, Children = new[] { c31, c32 } };
+            var e1 = new Entity3101
+            {
+                Id = 1,
+                Children = new[] { c11, c12, c13 }
+            };
+            var e2 = new Entity3101
+            {
+                Id = 2,
+                Children = new[] { c21, c22 }
+            };
+            var e3 = new Entity3101
+            {
+                Id = 3,
+                Children = new[] { c31, c32 }
+            };
 
             e2.RootEntity = e1;
 
@@ -489,14 +542,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Parallel.For(
                     0, 10, i =>
+                    {
+                        using (var ctx = new MyContext5456())
                         {
-                            using (var ctx = new MyContext5456())
-                            {
-                                var result = ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ToList();
+                            var result = ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ToList();
 
-                                Assert.Equal(198, result.Count);
-                            }
-                        });
+                            Assert.Equal(198, result.Count);
+                        }
+                    });
             }
         }
 
@@ -507,14 +560,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Parallel.For(
                     0, 10, async i =>
+                    {
+                        using (var ctx = new MyContext5456())
                         {
-                            using (var ctx = new MyContext5456())
-                            {
-                                var result = await ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ToListAsync();
+                            var result = await ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ToListAsync();
 
-                                Assert.Equal(198, result.Count);
-                            }
-                        });
+                            Assert.Equal(198, result.Count);
+                        }
+                    });
             }
         }
 
@@ -525,14 +578,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Parallel.For(
                     0, 10, i =>
+                    {
+                        using (var ctx = new MyContext5456())
                         {
-                            using (var ctx = new MyContext5456())
-                            {
-                                var result = ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).Include(x => x.Comments).ToList();
+                            var result = ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).Include(x => x.Comments).ToList();
 
-                                Assert.Equal(198, result.Count);
-                            }
-                        });
+                            Assert.Equal(198, result.Count);
+                        }
+                    });
             }
         }
 
@@ -543,14 +596,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Parallel.For(
                     0, 10, async i =>
+                    {
+                        using (var ctx = new MyContext5456())
                         {
-                            using (var ctx = new MyContext5456())
-                            {
-                                var result = await ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).Include(x => x.Comments).ToListAsync();
+                            var result = await ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).Include(x => x.Comments).ToListAsync();
 
-                                Assert.Equal(198, result.Count);
-                            }
-                        });
+                            Assert.Equal(198, result.Count);
+                        }
+                    });
             }
         }
 
@@ -561,14 +614,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Parallel.For(
                     0, 10, i =>
+                    {
+                        using (var ctx = new MyContext5456())
                         {
-                            using (var ctx = new MyContext5456())
-                            {
-                                var result = ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ThenInclude(b => b.Author).ToList();
+                            var result = ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ThenInclude(b => b.Author).ToList();
 
-                                Assert.Equal(198, result.Count);
-                            }
-                        });
+                            Assert.Equal(198, result.Count);
+                        }
+                    });
             }
         }
 
@@ -579,14 +632,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Parallel.For(
                     0, 10, async i =>
+                    {
+                        using (var ctx = new MyContext5456())
                         {
-                            using (var ctx = new MyContext5456())
-                            {
-                                var result = await ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ThenInclude(b => b.Author).ToListAsync();
+                            var result = await ctx.Posts.Where(x => x.Blog.Id > 1).Include(x => x.Blog).ThenInclude(b => b.Author).ToListAsync();
 
-                                Assert.Equal(198, result.Count);
-                            }
-                        });
+                            Assert.Equal(198, result.Count);
+                        }
+                    });
             }
         }
 
@@ -613,6 +666,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         Author = new Author5456()
                     });
             }
+
             context.SaveChanges();
         }
 

@@ -37,32 +37,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 return accessor;
             }
 
-            var property = navigation.PropertyInfo;
-            var elementType = property.PropertyType.TryGetElementType(typeof(IEnumerable<>));
+            var property = navigation.GetIdentifyingMemberInfo();
+            var propertyType = property.GetMemberType();
+            var elementType = propertyType.TryGetElementType(typeof(IEnumerable<>));
 
-            // TODO: Only ICollections supported; add support for enumerables with add/remove methods
-            // Issue #752
             if (elementType == null)
             {
                 throw new InvalidOperationException(
                     CoreStrings.NavigationBadType(
                         navigation.Name,
                         navigation.DeclaringEntityType.DisplayName(),
-                        property.PropertyType.ShortDisplayName(),
+                        propertyType.ShortDisplayName(),
                         navigation.GetTargetType().DisplayName()));
             }
 
-            if (property.PropertyType.IsArray)
+            if (propertyType.IsArray)
             {
                 throw new InvalidOperationException(
                     CoreStrings.NavigationArray(
                         navigation.Name,
                         navigation.DeclaringEntityType.DisplayName(),
-                        property.PropertyType.ShortDisplayName()));
+                        propertyType.ShortDisplayName()));
             }
 
             var boundMethod = _genericCreate.MakeGenericMethod(
-                property.DeclaringType, property.PropertyType, elementType);
+                property.DeclaringType, propertyType, elementType);
 
             var memberInfo = navigation.GetMemberInfo(forConstruction: false, forSet: false);
 
@@ -102,20 +101,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     valueParameter).Compile();
             }
 
-            if (setterDelegate != null)
+            var concreteType = new CollectionTypeFactory().TryFindTypeToInstantiate(typeof(TEntity), typeof(TCollection));
+            if (concreteType != null)
             {
-                var concreteType = new CollectionTypeFactory().TryFindTypeToInstantiate(typeof(TEntity), typeof(TCollection));
-
-                if (concreteType != null)
+                if (setterDelegate != null)
                 {
                     createAndSetDelegate = (Func<TEntity, Action<TEntity, TCollection>, TCollection>)_createAndSet
                         .MakeGenericMethod(typeof(TEntity), typeof(TCollection), concreteType)
                         .CreateDelegate(typeof(Func<TEntity, Action<TEntity, TCollection>, TCollection>));
-
-                    createDelegate = (Func<TCollection>)_create
-                        .MakeGenericMethod(typeof(TCollection), concreteType)
-                        .CreateDelegate(typeof(Func<TCollection>));
                 }
+
+                createDelegate = (Func<TCollection>)_create
+                    .MakeGenericMethod(typeof(TCollection), concreteType)
+                    .CreateDelegate(typeof(Func<TCollection>));
             }
 
             return new ClrICollectionAccessor<TEntity, TCollection, TElement>(

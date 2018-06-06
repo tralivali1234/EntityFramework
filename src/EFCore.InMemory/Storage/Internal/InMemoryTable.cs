@@ -1,18 +1,20 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.InMemory.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.InMemory.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -64,7 +66,8 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
                 for (var index = 0; index < properties.Count; index++)
                 {
-                    if (properties[index].IsConcurrencyToken && !Equals(_rows[key][index], entry.GetOriginalValue(properties[index])))
+                    if (properties[index].IsConcurrencyToken
+                        && !Equals(_rows[key][index], entry.GetOriginalValue(properties[index])))
                     {
                         concurrencyConflicts.Add(properties[index], _rows[key][index]);
                     }
@@ -99,11 +102,13 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
                 for (var index = 0; index < valueBuffer.Length; index++)
                 {
-                    if (properties[index].IsConcurrencyToken && !Equals(_rows[key][index], entry.GetOriginalValue(properties[index])))
+                    if (properties[index].IsConcurrencyToken
+                        && !Equals(_rows[key][index], entry.GetOriginalValue(properties[index])))
                     {
                         concurrencyConflicts.Add(properties[index], _rows[key][index]);
                         continue;
                     }
+
                     valueBuffer[index] = entry.IsModified(properties[index])
                         ? entry.GetCurrentValue(properties[index])
                         : _rows[key][index];
@@ -145,7 +150,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                         entry.EntityType.DisplayName(),
                         entry.BuildCurrentValuesString(entry.EntityType.FindPrimaryKey().Properties),
                         entry.BuildOriginalValuesString(concurrencyConflicts.Keys),
-                        string.Join(", ", concurrencyConflicts.Select(c => c.Key.Name + ":" + c.Value))),
+                        "{" + string.Join(", ", concurrencyConflicts.Select(c => c.Key.Name + ": " + Convert.ToString(c.Value, CultureInfo.InvariantCulture))) + "}"),
                     new[] { entry });
             }
 

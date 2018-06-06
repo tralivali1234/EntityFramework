@@ -30,7 +30,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Projection_when_arithmetic_expression_precendence()
         {
             AssertQuery<Order>(
-                os => os.Select(o => new { A = o.OrderID / (o.OrderID / 2), B = o.OrderID / o.OrderID / 2 }),
+                os => os.Select(
+                    o => new
+                    {
+                        A = o.OrderID / (o.OrderID / 2),
+                        B = o.OrderID / o.OrderID / 2
+                    }),
                 e => e.A + " " + e.B);
         }
 
@@ -45,9 +50,9 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Projection_when_client_evald_subquery()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => string.Join(", ", c.Orders.Select(o => o.CustomerID))));
+                cs => cs.Select(c => string.Join(", ", c.Orders.Select(o => o.CustomerID).ToList())));
         }
-        
+
         [ConditionalFact]
         public virtual void Project_to_object_array()
         {
@@ -63,7 +68,11 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID == 1)
                     .Select(e => new[] { e.EmployeeID, e.ReportsTo }),
+#if Test20
+                elementAsserter: (e, a) => AssertArrays<int?>(e, a, 2));
+#else
                 elementAsserter: (e, a) => AssertArrays<uint?>(e, a, 2));
+#endif
         }
 
         private static void AssertArrays<T>(object e, object a, int count)
@@ -87,13 +96,21 @@ namespace Microsoft.EntityFrameworkCore.Query
             var boolean = false;
 
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { f = boolean }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        f = boolean
+                    }),
                 e => e.f);
 
             boolean = true;
 
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { f = boolean }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        f = boolean
+                    }),
                 e => e.f);
         }
 
@@ -108,7 +125,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_one()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.City }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.City
+                    }),
                 e => e.City);
         }
 
@@ -116,7 +137,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_two()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.City, c.Phone }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.City,
+                        c.Phone
+                    }),
                 e => e.Phone);
         }
 
@@ -124,7 +150,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_three()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.City, c.Phone, c.Country }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.City,
+                        c.Phone,
+                        c.Country
+                    }),
                 e => e.Phone);
         }
 
@@ -132,7 +164,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_bool_constant_true()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.CustomerID, ConstantTrue = true }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.CustomerID,
+                        ConstantTrue = true
+                    }),
                 e => e.CustomerID);
         }
 
@@ -140,7 +177,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_constant_in_expression()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.CustomerID, Expression = c.CustomerID.Length + 5 }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.CustomerID,
+                        Expression = c.CustomerID.Length + 5
+                    }),
                 e => e.CustomerID);
         }
 
@@ -148,7 +190,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_conditional_expression()
         {
             AssertQuery<Product>(
-                ps => ps.Select(p => new { p.ProductID, IsAvailable = p.UnitsInStock > 0 }),
+                ps => ps.Select(
+                    p => new
+                    {
+                        p.ProductID,
+                        IsAvailable = p.UnitsInStock > 0
+                    }),
                 e => e.ProductID);
         }
 
@@ -172,7 +219,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_with_object()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.City, c }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.City,
+                        c
+                    }),
                 e => e.c.CustomerID,
                 entryCount: 91);
         }
@@ -181,7 +233,15 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_nested()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.City, Country = new { c.Country } }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.City,
+                        Country = new
+                        {
+                            c.Country
+                        }
+                    }),
                 e => e.City);
         }
 
@@ -189,7 +249,10 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_empty()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { }),
+                cs => cs.Select(
+                    c => new
+                    {
+                    }),
                 e => 1);
         }
 
@@ -197,7 +260,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_anonymous_literal()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { X = 10 }),
+                cs => cs.Select(
+                    c => new
+                    {
+                        X = 10
+                    }),
                 e => e.X);
         }
 
@@ -287,7 +354,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                             OrderDates = c.Orders
                                 .Where(o => o.OrderID < 10500)
                                 .Take(3)
-                                .Select(o => new { Date = o.OrderDate })
+                                .Select(
+                                    o => new
+                                    {
+                                        Date = o.OrderDate
+                                    })
                         })
                     .ToList();
 
@@ -424,7 +495,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.StartsWith("A"))
-                    .Select(c => new { c.Orders.Count }),
+                    .Select(
+                        c => new
+                        {
+                            c.Orders.Count
+                        }),
                 e => e.Count);
         }
 
@@ -446,12 +521,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                                     select o1.OrderID)),
                 assertOrder: true,
                 elementAsserter: (e, a) =>
-                    {
-                        var expected = ((IEnumerable<IEnumerable<int>>)e).SelectMany(i => i).ToList();
-                        var actual = ((IEnumerable<IEnumerable<int>>)e).SelectMany(i => i).ToList();
+                {
+                    var expected = ((IEnumerable<IEnumerable<int>>)e).SelectMany(i => i).ToList();
+                    var actual = ((IEnumerable<IEnumerable<int>>)e).SelectMany(i => i).ToList();
 
-                        Assert.Equal(expected, actual);
-                    });
+                    Assert.Equal(expected, actual);
+                });
         }
 
         [ConditionalFact]
@@ -460,7 +535,10 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Customer>(
                 cs => from c in cs
                       where c.CustomerID.StartsWith("A")
-                      select new { A = new DateTime() },
+                      select new
+                      {
+                          A = new DateTime()
+                      },
                 e => e.A);
         }
 
@@ -487,13 +565,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
-        public virtual void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduces_explicit_cast()
+        public virtual void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduce_explicit_cast()
         {
             AssertQueryScalar<Order>(
                 os => os
                     .Where(o => o.CustomerID == "ALFKI")
                     .OrderBy(o => o.OrderID)
+#if Test20
+                    .Select(o => (int)o.EmployeeID),
+#else
                     .Select(o => (uint)o.EmployeeID),
+#endif
                 assertOrder: true);
         }
 
@@ -581,7 +663,13 @@ namespace Microsoft.EntityFrameworkCore.Query
                 os => os
                     .Where(o => o.CustomerID == "ALFKI")
                     .OrderBy(o => o.OrderID)
-                    .Select(o => new { LongOrder = (long)o.OrderID, ShortOrder = (short)o.OrderID, Order = o.OrderID }),
+                    .Select(
+                        o => new
+                        {
+                            LongOrder = (long)o.OrderID,
+                            ShortOrder = (short)o.OrderID,
+                            Order = o.OrderID
+                        }),
                 assertOrder: true);
         }
 
@@ -601,6 +689,212 @@ namespace Microsoft.EntityFrameworkCore.Query
                 es => es.OrderBy(e => e.EmployeeID)
                     .Select(e => string.Format("{0}", e.EmployeeID))
                     .Skip(1));
+        }
+
+#if !Test20
+        [ConditionalFact]
+        public virtual void Projection_containing_DateTime_subtraction()
+        {
+            AssertQueryScalar<Order>(
+                os => os.Where(o => o.OrderID < 10300)
+                    .Select(o => o.OrderDate.Value - new DateTime(1997, 1, 1)));
+        }
+#endif
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_Take_and_FirstOrDefault()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Select(
+                    c => c.Orders.OrderBy(o => o.OrderID).Select(o => o.CustomerID).Take(1).FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_Skip_and_FirstOrDefault()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Select(
+                    c => c.Orders.OrderBy(o => o.OrderID).Select(o => o.CustomerID).Skip(1).FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_Distinct_and_FirstOrDefault()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Select(
+                    c => c.Orders.OrderBy(o => o.OrderID).Select(o => o.CustomerID).Distinct().FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_Take_and_SingleOrDefault()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI")
+                    .Select(c => c.Orders.OrderBy(o => o.OrderID).Select(o => o.CustomerID).Take(1).SingleOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_Take_and_FirstOrDefault_with_parameter()
+        {
+            var i = 1;
+            AssertQuery<Customer>(
+                cs => cs.Select(
+                    c => c.Orders.OrderBy(o => o.OrderID).Select(o => o.CustomerID).Take(i).FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_multiple_OrderBys_Take_and_FirstOrDefault()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Select(
+                    c => c.Orders.OrderBy(o => o.OrderID)
+                        .ThenByDescending(o => o.OrderDate)
+                        .Select(o => o.CustomerID)
+                        .Take(2)
+                        .FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_multiple_OrderBys_Take_and_FirstOrDefault_2()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Select(
+                    c => c.Orders.OrderBy(o => o.CustomerID)
+                        .ThenByDescending(o => o.OrderDate)
+                        .Select(o => o.CustomerID)
+                        .Take(2)
+                        .FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_over_navigation_Take_and_FirstOrDefault()
+        {
+            AssertQueryScalar<Order>(
+                os => os.Where(o => o.OrderID < 10300)
+                    .Select(
+                        o => o.OrderDetails.OrderBy(od => od.Product.ProductName).Select(od => od.OrderID).Take(1).FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Project_single_element_from_collection_with_OrderBy_over_navigation_Take_and_FirstOrDefault_2()
+        {
+            AssertQuery<Order>(
+                os => os.Where(o => o.OrderID < 10250)
+                    .Select(
+                        o => o.OrderDetails.OrderBy(od => od.Product.ProductName).Take(1).FirstOrDefault()));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_year_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Year));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_month_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Month));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_day_of_year_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.DayOfYear));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_day_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Day));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_hour_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Hour));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_minute_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Minute));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_second_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Second));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_millisecond_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Millisecond));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_DayOfWeek_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => (int)o.OrderDate.Value.DayOfWeek));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_Ticks_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.Ticks));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_datetime_TimeOfDay_component()
+        {
+            AssertQueryScalar<Order>(os => os.Select(o => o.OrderDate.Value.TimeOfDay));
+        }
+
+#if !Test20
+        [ConditionalFact]
+        public virtual void Select_byte_constant()
+        {
+            AssertQueryScalar<Customer, byte>(cs => cs.Select(c => c.CustomerID == "ALFKI" ? (byte)1 : (byte)2));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_short_constant()
+        {
+            AssertQueryScalar<Customer, short>(cs => cs.Select(c => c.CustomerID == "ALFKI" ? (short)1 : (short)2));
+        }
+
+        [ConditionalFact]
+        public virtual void Select_bool_constant()
+        {
+            AssertQueryScalar<Customer, bool>(cs => cs.Select(c => c.CustomerID == "ALFKI" ? true : false));
+        }
+#endif
+
+        [ConditionalFact]
+        public virtual void Anonymous_projection_AsNoTracking_Selector()
+        {
+            AssertQueryScalar<Order>(
+                os => os.Select(
+                        o => new
+                        {
+                            A = o.CustomerID,
+                            B = o.OrderDate
+                        })
+                    .AsNoTracking() // Just to cause a subquery
+                    .Select(e => e.B));
+        }
+
+        [ConditionalFact]
+        public virtual void Anonymous_projection_with_repeated_property_being_ordered()
+        {
+            AssertQuery<Customer>(
+                cs => from c in cs
+                      orderby c.CustomerID
+                      select new
+                      {
+                          A = c.CustomerID,
+                          B = c.CustomerID
+                      });
         }
     }
 }

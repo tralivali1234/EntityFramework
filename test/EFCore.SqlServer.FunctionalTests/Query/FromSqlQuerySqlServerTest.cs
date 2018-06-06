@@ -15,8 +15,6 @@ namespace Microsoft.EntityFrameworkCore.Query
         public FromSqlQuerySqlServerTest(NorthwindQuerySqlServerFixture<NoopModelCustomizer> fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
-            // #9182
-            Fixture.TestStore.CloseConnection();
             //Fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
         }
 
@@ -284,7 +282,7 @@ WHERE [c].[CustomerID] = [o].[CustomerID]");
             base.From_sql_queryable_with_null_parameter();
 
             AssertSql(
-                @"@p0='' (Nullable = false) (DbType = String)
+                @"@p0='' (Nullable = false)
 
 SELECT * FROM ""Employees"" WHERE ""ReportsTo"" = @p0 OR (""ReportsTo"" IS NULL AND @p0 IS NULL)");
         }
@@ -560,7 +558,10 @@ WHERE [o].[CustomerID] IN (
                                 .FromSql(
                                     @"SELECT * FROM ""Customers"" WHERE ""City"" = {0}",
                                     // ReSharper disable once FormatStringProblem
-                                    new SqlParameter { Value = "London" })
+                                    new SqlParameter
+                                    {
+                                        Value = "London"
+                                    })
                                 .Select(c => c.CustomerID)
                                 .Contains(o.CustomerID))
                     .ToArray();

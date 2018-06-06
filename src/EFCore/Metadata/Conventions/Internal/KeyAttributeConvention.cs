@@ -36,7 +36,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             var entityTypeBuilder = entityType.Builder;
             var currentKey = entityTypeBuilder.Metadata.FindPrimaryKey();
-            var properties = new List<string> { propertyBuilder.Metadata.Name };
+            var properties = new List<string>
+            {
+                propertyBuilder.Metadata.Name
+            };
 
             if (currentKey != null
                 && entityType.GetPrimaryKeyConfigurationSource() == ConfigurationSource.DataAnnotation)
@@ -45,8 +48,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     currentKey.Properties
                         .Where(p => !p.Name.Equals(propertyBuilder.Metadata.Name, StringComparison.OrdinalIgnoreCase))
                         .Select(p => p.Name));
-                properties.Sort(StringComparer.OrdinalIgnoreCase);
-                entityTypeBuilder.RemoveKey(currentKey, ConfigurationSource.DataAnnotation);
+                if (properties.Count > 1)
+                {
+                    properties.Sort(StringComparer.OrdinalIgnoreCase);
+                    entityTypeBuilder.RemoveKey(currentKey, ConfigurationSource.DataAnnotation);
+                }
             }
 
             entityTypeBuilder.PrimaryKey(properties, ConfigurationSource.DataAnnotation);
@@ -77,9 +83,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 {
                     foreach (var declaredProperty in entityType.GetDeclaredProperties())
                     {
-                        var memberInfo = declaredProperty.MemberInfo;
-                        var attributes = memberInfo?.GetCustomAttributes<KeyAttribute>(true);
-                        if (attributes?.Any() == true)
+                        var memberInfo = declaredProperty.GetIdentifyingMemberInfo();
+
+                        if (memberInfo != null
+                            && Attribute.IsDefined(memberInfo, typeof(KeyAttribute), inherit: true))
                         {
                             throw new InvalidOperationException(
                                 CoreStrings.KeyAttributeOnDerivedEntity(entityType.DisplayName(), declaredProperty.Name));

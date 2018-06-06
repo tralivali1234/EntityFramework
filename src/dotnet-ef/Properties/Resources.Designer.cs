@@ -197,7 +197,7 @@ namespace Microsoft.EntityFrameworkCore.Tools.Properties
             => GetString("MigrationsRemoveDescription");
 
         /// <summary>
-        ///     Don't check to see if the migration has been applied to the database.
+        ///     Revert the migration if it has been applied to the database.
         /// </summary>
         public static string MigrationsRemoveForceDescription
             => GetString("MigrationsRemoveForceDescription");
@@ -233,6 +233,14 @@ namespace Microsoft.EntityFrameworkCore.Tools.Properties
         /// </summary>
         public static string MultipleStartupProjects
             => GetString("MultipleStartupProjects");
+
+        /// <summary>
+        ///     Startup project '{startupProject}' targets framework '.NETCoreApp' version '{targetFrameworkVersion}'. This version of the Entity Framework Core .NET Command-line Tools only supports version 2.0 or higher. For information on using older versions of the tools, see https://go.microsoft.com/fwlink/?linkid=871254
+        /// </summary>
+        public static string NETCoreApp1StartupProject([CanBeNull] object startupProject, [CanBeNull] object targetFrameworkVersion)
+            => string.Format(
+                GetString("NETCoreApp1StartupProject", nameof(startupProject), nameof(targetFrameworkVersion)),
+                startupProject, targetFrameworkVersion);
 
         /// <summary>
         ///     Startup project '{startupProject}' targets framework '.NETStandard'. There is no runtime associated with this framework, and projects targeting it cannot be executed directly. To use the Entity Framework Core .NET Command-line Tools with this project, add an executable project targeting .NET Core or .NET Framework that references this project, and set it as the startup project using --startup-project; or, update this project to cross-target .NET Core or .NET Framework.
@@ -379,10 +387,16 @@ namespace Microsoft.EntityFrameworkCore.Tools.Properties
             => GetString("NoBuildDescription");
 
         /// <summary>
-        ///     Revert the migration if it has been applied to the database.
+        ///     The directory to put DbContext file in. Paths are relative to the project directory.
         /// </summary>
-        public static string MigrationsRemoveRevertDescription
-            => GetString("MigrationsRemoveRevertDescription");
+        public static string ContextDirDescription
+            => GetString("ContextDirDescription");
+
+        /// <summary>
+        ///     The working directory of the tool invoking this command.
+        /// </summary>
+        public static string WorkingDirDescription
+            => GetString("WorkingDirDescription");
 
         private static string GetString(string name, params string[] formatterNames)
         {

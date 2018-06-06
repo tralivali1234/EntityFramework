@@ -2,11 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Update.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Update
@@ -18,9 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                 new UpdateSqlGeneratorDependencies(
                     new SqliteSqlGenerationHelper(
                         new RelationalSqlGenerationHelperDependencies()),
-                    new SqliteTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())));
+                    TestServiceFactory.Instance.Create<SqliteTypeMappingSource>()));
 
         protected override TestHelpers TestHelpers => SqliteTestHelpers.Instance;
 

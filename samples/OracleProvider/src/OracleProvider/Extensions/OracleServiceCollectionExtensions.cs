@@ -3,25 +3,26 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Infrastructure.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Query.ExpressionTranslators.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Query.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Query.Sql.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Update.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.ValueGeneration.Internal;
 using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
-using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal;
-using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Query.Sql;
-using Microsoft.EntityFrameworkCore.Query.Sql.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
-using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 
 // ReSharper disable once CheckNamespace
 namespace Microsoft.Extensions.DependencyInjection
@@ -49,7 +50,7 @@ namespace Microsoft.Extensions.DependencyInjection
         ///           public void ConfigureServices(IServiceCollection services)
         ///           {
         ///               var connectionString = "connection string to database";
-        /// 
+        ///
         ///               services
         ///                   .AddEntityFrameworkOracle()
         ///                   .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
@@ -69,12 +70,13 @@ namespace Microsoft.Extensions.DependencyInjection
             var builder = new EntityFrameworkRelationalServicesBuilder(serviceCollection)
                 .TryAdd<IDatabaseProvider, DatabaseProvider<OracleOptionsExtension>>()
                 .TryAdd<IValueGeneratorCache>(p => p.GetService<IOracleValueGeneratorCache>())
-                .TryAdd<IRelationalTypeMapper, OracleTypeMapper>()
+                .TryAdd<IRelationalTypeMappingSource, OracleTypeMappingSource>()
                 .TryAdd<ISqlGenerationHelper, OracleSqlGenerationHelper>()
                 .TryAdd<IMigrationsAnnotationProvider, OracleMigrationsAnnotationProvider>()
                 .TryAdd<IModelValidator, OracleModelValidator>()
                 .TryAdd<IConventionSetBuilder, OracleConventionSetBuilder>()
                 .TryAdd<IUpdateSqlGenerator, OracleUpdateSqlGenerator>()
+                .TryAdd<ISingletonUpdateSqlGenerator, OracleUpdateSqlGenerator>()
                 .TryAdd<IModificationCommandBatchFactory, OracleModificationCommandBatchFactory>()
                 .TryAdd<IValueGeneratorSelector, OracleValueGeneratorSelector>()
                 .TryAdd<IRelationalConnection>(p => p.GetService<IOracleConnection>())

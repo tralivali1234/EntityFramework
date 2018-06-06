@@ -34,6 +34,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         public CollectionNavigationBuilder(
             [NotNull] EntityType declaringEntityType,
             [NotNull] EntityType relatedEntityType,
+            [CanBeNull] string navigationName,
+            [NotNull] InternalRelationshipBuilder builder)
+            : base(declaringEntityType, relatedEntityType, navigationName, builder)
+        {
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public CollectionNavigationBuilder(
+            [NotNull] EntityType declaringEntityType,
+            [NotNull] EntityType relatedEntityType,
             [CanBeNull] PropertyInfo navigationProperty,
             [NotNull] InternalRelationshipBuilder builder)
             : base(declaringEntityType, relatedEntityType, navigationProperty, builder)
@@ -41,7 +54,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         }
 
         /// <summary>
-        ///     Configures this as a one-to-many relationship.
+        ///     <para>
+        ///         Configures this as a one-to-many relationship.
+        ///     </para>
+        ///     <para>
+        ///         Note that calling this method with no parameters will explicitly configure this side
+        ///         of the relationship to use no navigation property, even if such a property exists on the
+        ///         entity type. If the navigation property is to be used, then it must be specified.
+        ///     </para>
         /// </summary>
         /// <param name="navigationExpression">
         ///     A lambda expression representing the reference navigation property on the other end of this

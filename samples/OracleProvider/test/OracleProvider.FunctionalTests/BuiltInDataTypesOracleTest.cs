@@ -73,16 +73,7 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [Fact]
-        public virtual void Can_perform_query_with_ansi_strings()
-        {
-            Can_perform_query_with_ansi_strings_test(
-                supportsAnsi: true,
-                supportsUnicodeToAnsiConversion: false,
-                supportsLargeStringComparisons: false);
-        }
-
-        [Fact]
-        public void Sql_translation_uses_type_mapper_when_constant()
+        public void Sql_translation_uses_type_mapping_when_constant()
         {
             using (var context = CreateContext())
             {
@@ -103,7 +94,7 @@ WHERE ""e"".""Time"" = INTERVAL '0 0:1:2.000' DAY TO SECOND",
         }
 
         [Fact]
-        public void Sql_translation_uses_type_mapper_when_parameter()
+        public void Sql_translation_uses_type_mapping_when_parameter()
         {
             using (var context = CreateContext())
             {
@@ -363,12 +354,6 @@ WHERE ""e"".""Time"" = :timeSpan_0",
         }
 
         [Fact]
-        public virtual void Can_query_using_any_nullable_data_type_as_literal()
-        {
-            Can_query_using_any_nullable_data_type_as_literal_helper(strictEquality: false);
-        }
-
-        [Fact]
         public virtual void Can_insert_and_read_back_all_mapped_data_types()
         {
             var entity = CreateMappedDataTypes(77);
@@ -383,7 +368,7 @@ WHERE ""e"".""Time"" = :timeSpan_0",
             Assert.Equal(
                 @":p0='77'
 :p1='78'
-:p2='1'
+:p2='1' (Size = 1)
 :p3='Your' (Nullable = false) (Size = 2000)
 :p4='strong' (Nullable = false) (Size = 2000)
 :p5='2015-01-02T10:11:12' (DbType = Date)
@@ -417,7 +402,7 @@ WHERE ""e"".""Time"" = :timeSpan_0",
         }
 
         private string DumpParameters()
-            => Fixture.TestSqlLoggerFactory.Parameters.Single().Replace(", ", EOL);
+            => Fixture.TestSqlLoggerFactory.Parameters.Single().Replace(", ", _eol);
 
         private static void AssertMappedDataTypes(MappedDataTypes entity, int id)
         {
@@ -503,7 +488,7 @@ WHERE ""e"".""Time"" = :timeSpan_0",
             Assert.Equal(
                 @":p0='77'
 :p1='78' (Nullable = true)
-:p2='1' (Nullable = true)
+:p2='1' (Nullable = true) (Size = 1)
 :p3='Your' (Size = 2000)
 :p4='strong' (Size = 2000)
 :p5='2019-01-02T14:11:12' (Nullable = true) (DbType = DateTime)
@@ -518,14 +503,14 @@ WHERE ""e"".""Time"" = :timeSpan_0",
 :p14='anyone!' (Size = 2000)
 :p15='Gumball Rules OK!' (Size = 2000)
 :p16='103.3' (Nullable = true)
-:p17='' (Size = 2000) (DbType = String)
+:p17='' (Size = 2000)
 :p18='84.4' (Nullable = true)
 :p19='79' (Nullable = true)
 :p20='Gumball Rules!' (Size = 2000)
 :p21='11:15:12' (Nullable = true) (DbType = Object)
 :p22='80' (Nullable = true)
 :p23='0x595A5B5C' (Size = 2000)
-:p24='' (Size = 2000)",
+:p24='' (Size = 2000) (DbType = AnsiString)",
                 parameters,
                 ignoreLineEndingDifferences: true);
 
@@ -618,29 +603,29 @@ WHERE ""e"".""Time"" = :timeSpan_0",
             Assert.Equal(
                 @":p0='78'
 :p1='' (DbType = Int64)
-:p2='' (DbType = Int32)
-:p3='' (Size = 2000) (DbType = String)
-:p4='' (Size = 2000) (DbType = String)
+:p2='' (Size = 1) (DbType = Int32)
+:p3='' (Size = 2000)
+:p4='' (Size = 2000)
 :p5='' (DbType = DateTime)
 :p6='' (DbType = DateTime)
-:p7='' (DbType = String)
-:p8='' (DbType = String)
-:p9='' (DbType = String)
-:p10='' (DbType = String)
+:p7=''
+:p8=''
+:p9=''
+:p10=''
 :p11='' (Size = 8000) (DbType = Binary)
-:p12='' (DbType = String)
-:p13='' (Size = 2000) (DbType = String)
-:p14='' (Size = 2000) (DbType = String)
-:p15='' (Size = 2000) (DbType = String)
-:p16='' (DbType = String)
-:p17='' (Size = 2000) (DbType = String)
-:p18='' (DbType = String)
+:p12=''
+:p13='' (Size = 2000)
+:p14='' (Size = 2000)
+:p15='' (Size = 2000)
+:p16=''
+:p17='' (Size = 2000)
+:p18=''
 :p19='' (DbType = Int16)
-:p20='' (Size = 2000) (DbType = String)
-:p21='' (DbType = String)
+:p20='' (Size = 2000)
+:p21=''
 :p22='' (DbType = Byte)
 :p23='' (Size = 2000) (DbType = Binary)
-:p24='' (Size = 2000)",
+:p24='' (Size = 2000) (DbType = AnsiString)",
                 parameters,
                 ignoreLineEndingDifferences: true);
 
@@ -699,12 +684,12 @@ WHERE ""e"".""Time"" = :timeSpan_0",
                 @":p0='77'
 :p1='0x0A0B0C' (Size = 3)
 :p2='Wor' (Size = 3) (DbType = AnsiString)
-:p3='Thr' (Size = 2000)
-:p4='Lon' (Size = 2000)
-:p5='Let' (Size = 2000)
-:p6='The' (Size = 2000)
-:p7='Squ' (Size = 2000)
-:p8='Col' (Size = 2000)
+:p3='Thr' (Size = 3)
+:p4='Lon' (Size = 3)
+:p5='Let' (Size = 3)
+:p6='The' (Size = 3)
+:p7='Squ' (Size = 3)
+:p8='Col' (Size = 3)
 :p9='Won' (Size = 3)
 :p10='Int' (Size = 3)
 :p11='0x0B0C0D' (Size = 3)
@@ -769,17 +754,17 @@ WHERE ""e"".""Time"" = :timeSpan_0",
             Assert.Equal(
                 @":p0='78'
 :p1='' (Size = 3) (DbType = Binary)
-:p2='' (Size = 3)
-:p3='' (Size = 2000) (DbType = String)
-:p4='' (Size = 2000) (DbType = String)
-:p5='' (Size = 2000) (DbType = String)
-:p6='' (Size = 2000) (DbType = String)
-:p7='' (Size = 2000) (DbType = String)
-:p8='' (Size = 2000) (DbType = String)
-:p9='' (Size = 3) (DbType = String)
-:p10='' (Size = 3) (DbType = String)
+:p2='' (Size = 3) (DbType = AnsiString)
+:p3='' (Size = 3)
+:p4='' (Size = 3)
+:p5='' (Size = 3)
+:p6='' (Size = 3)
+:p7='' (Size = 3)
+:p8='' (Size = 3)
+:p9='' (Size = 3)
+:p10='' (Size = 3)
 :p11='' (Size = 3) (DbType = Binary)
-:p12='' (Size = 3)",
+:p12='' (Size = 3) (DbType = AnsiString)",
                 parameters,
                 ignoreLineEndingDifferences: true);
 
@@ -822,10 +807,10 @@ WHERE ""e"".""Time"" = :timeSpan_0",
                 @":p0='77'
 :p1='2017-01-02T12:11:12' (DbType = DateTime)
 :p2='01/02/2016 11:11:12 +00:00' (DbType = DateTime)
-:p3='102.2'
-:p4='101.1'
-:p5='83.3'
-:p6='103.3'",
+:p3='102.2' (Size = 3)
+:p4='101.1' (Size = 3)
+:p5='83.3' (Size = 10)
+:p6='103.3' (Size = 3)",
                 parameters,
                 ignoreLineEndingDifferences: true);
 
@@ -915,7 +900,7 @@ WHERE ""e"".""Time"" = :timeSpan_0",
             var parameters = DumpParameters();
             Assert.Equal(
                 @":p0='78'
-:p1='1'
+:p1='1' (Size = 1)
 :p2='Your' (Size = 2000)
 :p3='strong' (Size = 2000)
 :p4='2015-01-02T10:11:12' (DbType = Date)
@@ -1032,7 +1017,7 @@ cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
             var parameters = DumpParameters();
             Assert.Equal(
                 @":p0='78' (Nullable = true)
-:p1='1' (Nullable = true)
+:p1='1' (Nullable = true) (Size = 1)
 :p2='Your' (Size = 2000)
 :p3='strong' (Size = 2000)
 :p4='2019-01-02T14:11:12' (Nullable = true) (DbType = DateTime)
@@ -1148,30 +1133,30 @@ cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
             var parameters = DumpParameters();
             Assert.Equal(
                 @":p0='' (DbType = Int64)
-:p1='' (DbType = Int32)
-:p2='' (Size = 2000) (DbType = String)
-:p3='' (Size = 2000) (DbType = String)
+:p1='' (Size = 1) (DbType = Int32)
+:p2='' (Size = 2000)
+:p3='' (Size = 2000)
 :p4='' (DbType = DateTime)
 :p5='' (DbType = DateTime)
-:p6='' (DbType = String)
-:p7='' (DbType = String)
-:p8='' (DbType = String)
-:p9='' (DbType = String)
+:p6=''
+:p7=''
+:p8=''
+:p9=''
 :p10='' (Size = 8000) (DbType = Binary)
 :p11='78' (Nullable = true)
-:p12='' (DbType = String)
-:p13='' (Size = 2000) (DbType = String)
-:p14='' (Size = 2000) (DbType = String)
-:p15='' (Size = 2000) (DbType = String)
-:p16='' (DbType = String)
-:p17='' (Size = 2000) (DbType = String)
-:p18='' (DbType = String)
+:p12=''
+:p13='' (Size = 2000)
+:p14='' (Size = 2000)
+:p15='' (Size = 2000)
+:p16=''
+:p17='' (Size = 2000)
+:p18=''
 :p19='' (DbType = Int16)
-:p20='' (Size = 2000) (DbType = String)
-:p21='' (DbType = String)
+:p20='' (Size = 2000)
+:p21=''
 :p22='' (DbType = Byte)
 :p23='' (Size = 2000) (DbType = Binary)
-:p24='' (Size = 2000)
+:p24='' (Size = 2000) (DbType = AnsiString)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
                 parameters,
                 ignoreLineEndingDifferences: true);
@@ -1231,13 +1216,13 @@ cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
             Assert.Equal(
                 @":p0='0x0A0B0C' (Size = 3)
 :p1='Wor' (Size = 3) (DbType = AnsiString)
-:p2='Thr' (Size = 2000)
-:p3='Lon' (Size = 2000)
-:p4='Let' (Size = 2000)
+:p2='Thr' (Size = 3)
+:p3='Lon' (Size = 3)
+:p4='Let' (Size = 3)
 :p5='77'
-:p6='The' (Size = 2000)
-:p7='Squ' (Size = 2000)
-:p8='Col' (Size = 2000)
+:p6='The' (Size = 3)
+:p7='Squ' (Size = 3)
+:p8='Col' (Size = 3)
 :p9='Won' (Size = 3)
 :p10='Int' (Size = 3)
 :p11='0x0B0C0D' (Size = 3)
@@ -1302,18 +1287,18 @@ cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
             var parameters = DumpParameters();
             Assert.Equal(
                 @":p0='' (Size = 3) (DbType = Binary)
-:p1='' (Size = 3)
-:p2='' (Size = 2000) (DbType = String)
-:p3='' (Size = 2000) (DbType = String)
-:p4='' (Size = 2000) (DbType = String)
+:p1='' (Size = 3) (DbType = AnsiString)
+:p2='' (Size = 3)
+:p3='' (Size = 3)
+:p4='' (Size = 3)
 :p5='78'
-:p6='' (Size = 2000) (DbType = String)
-:p7='' (Size = 2000) (DbType = String)
-:p8='' (Size = 2000) (DbType = String)
-:p9='' (Size = 3) (DbType = String)
-:p10='' (Size = 3) (DbType = String)
+:p6='' (Size = 3)
+:p7='' (Size = 3)
+:p8='' (Size = 3)
+:p9='' (Size = 3)
+:p10='' (Size = 3)
 :p11='' (Size = 3) (DbType = Binary)
-:p12='' (Size = 3)
+:p12='' (Size = 3) (DbType = AnsiString)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
                 parameters,
                 ignoreLineEndingDifferences: true);
@@ -1354,13 +1339,13 @@ cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
 
             var parameters = DumpParameters();
             Assert.Equal(
-                @":p0='2017-01-02T12:11:12' (DbType = DateTime)
+                @":p0='2017-01-02T12:11:12' (Size = 3) (DbType = DateTime)
 :p1='01/02/2016 11:11:12 +00:00' (DbType = DateTime)
-:p2='102.2'
-:p3='101.1'
-:p4='83.3'
+:p2='102.2' (Size = 3)
+:p3='101.1' (Size = 3)
+:p4='83.3' (Size = 10)
 :p5='77'
-:p6='103.3'
+:p6='103.3' (Size = 3)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)",
                 parameters,
                 ignoreLineEndingDifferences: true);
@@ -1829,13 +1814,13 @@ BuiltInDataTypes.Enum16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision
 BuiltInDataTypes.Enum32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInDataTypes.Enum64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 BuiltInDataTypes.Enum8 ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
-BuiltInDataTypes.EnumS8 ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
-BuiltInDataTypes.EnumU16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
-BuiltInDataTypes.EnumU32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypes.EnumS8 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInDataTypes.EnumU16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypes.EnumU32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 BuiltInDataTypes.EnumU64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
 BuiltInDataTypes.Id ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInDataTypes.PartitionId ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
-BuiltInDataTypes.TestBoolean ---> [NUMBER] [MaxLength = 22] [Precision = 1 [Precision = 1 Scale = 0]
+BuiltInDataTypes.TestBoolean ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInDataTypes.TestByte ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
 BuiltInDataTypes.TestDateTime ---> [TIMESTAMP(6)] [MaxLength = 11] Scale = 6]
 BuiltInDataTypes.TestDateTimeOffset ---> [TIMESTAMP(6) WITH TIME ZONE] [MaxLength = 13] Scale = 6]
@@ -1844,24 +1829,50 @@ BuiltInDataTypes.TestDouble ---> [FLOAT] [MaxLength = 22] [Precision = 49 [Preci
 BuiltInDataTypes.TestInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
 BuiltInDataTypes.TestInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInDataTypes.TestInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
-BuiltInDataTypes.TestSignedByte ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
+BuiltInDataTypes.TestSignedByte ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
 BuiltInDataTypes.TestSingle ---> [FLOAT] [MaxLength = 22] [Precision = 63 [Precision = 63]
 BuiltInDataTypes.TestTimeSpan ---> [INTERVAL DAY(2) TO SECOND(6)] [MaxLength = 11] [Precision = 2 [Precision = 2 Scale = 6]
-BuiltInDataTypes.TestUnsignedInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
-BuiltInDataTypes.TestUnsignedInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypes.TestUnsignedInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypes.TestUnsignedInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 BuiltInDataTypes.TestUnsignedInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
+BuiltInDataTypesShadow.Enum16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInDataTypesShadow.Enum32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.Enum64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInDataTypesShadow.Enum8 ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
+BuiltInDataTypesShadow.EnumS8 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInDataTypesShadow.EnumU16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.EnumU32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInDataTypesShadow.EnumU64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
+BuiltInDataTypesShadow.Id ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.PartitionId ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.TestBoolean ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.TestByte ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
+BuiltInDataTypesShadow.TestCharacter ---> [NVARCHAR2] [MaxLength = 2]
+BuiltInDataTypesShadow.TestDateTime ---> [TIMESTAMP(6)] [MaxLength = 11] Scale = 6]
+BuiltInDataTypesShadow.TestDateTimeOffset ---> [TIMESTAMP(6) WITH TIME ZONE] [MaxLength = 13] Scale = 6]
+BuiltInDataTypesShadow.TestDecimal ---> [NUMBER] [MaxLength = 22] [Precision = 29 [Precision = 29 Scale = 4]
+BuiltInDataTypesShadow.TestDouble ---> [FLOAT] [MaxLength = 22] [Precision = 49 [Precision = 49]
+BuiltInDataTypesShadow.TestInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInDataTypesShadow.TestInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.TestInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInDataTypesShadow.TestSignedByte ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInDataTypesShadow.TestSingle ---> [FLOAT] [MaxLength = 22] [Precision = 63 [Precision = 63]
+BuiltInDataTypesShadow.TestTimeSpan ---> [INTERVAL DAY(2) TO SECOND(6)] [MaxLength = 11] [Precision = 2 [Precision = 2 Scale = 6]
+BuiltInDataTypesShadow.TestUnsignedInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInDataTypesShadow.TestUnsignedInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInDataTypesShadow.TestUnsignedInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
 BuiltInNullableDataTypes.Enum16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
 BuiltInNullableDataTypes.Enum32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInNullableDataTypes.Enum64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 BuiltInNullableDataTypes.Enum8 ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
-BuiltInNullableDataTypes.EnumS8 ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
-BuiltInNullableDataTypes.EnumU16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
-BuiltInNullableDataTypes.EnumU32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypes.EnumS8 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInNullableDataTypes.EnumU16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypes.EnumU32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 BuiltInNullableDataTypes.EnumU64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
 BuiltInNullableDataTypes.Id ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInNullableDataTypes.PartitionId ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInNullableDataTypes.TestByteArray ---> [BLOB] [MaxLength = 4000]
-BuiltInNullableDataTypes.TestNullableBoolean ---> [NUMBER] [MaxLength = 22] [Precision = 1 [Precision = 1 Scale = 0]
+BuiltInNullableDataTypes.TestNullableBoolean ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInNullableDataTypes.TestNullableByte ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
 BuiltInNullableDataTypes.TestNullableDateTime ---> [TIMESTAMP(6)] [MaxLength = 11] Scale = 6]
 BuiltInNullableDataTypes.TestNullableDateTimeOffset ---> [TIMESTAMP(6) WITH TIME ZONE] [MaxLength = 13] Scale = 6]
@@ -1870,13 +1881,41 @@ BuiltInNullableDataTypes.TestNullableDouble ---> [FLOAT] [MaxLength = 22] [Preci
 BuiltInNullableDataTypes.TestNullableInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
 BuiltInNullableDataTypes.TestNullableInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
 BuiltInNullableDataTypes.TestNullableInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
-BuiltInNullableDataTypes.TestNullableSignedByte ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
+BuiltInNullableDataTypes.TestNullableSignedByte ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
 BuiltInNullableDataTypes.TestNullableSingle ---> [FLOAT] [MaxLength = 22] [Precision = 63 [Precision = 63]
 BuiltInNullableDataTypes.TestNullableTimeSpan ---> [INTERVAL DAY(2) TO SECOND(6)] [MaxLength = 11] [Precision = 2 [Precision = 2 Scale = 6]
-BuiltInNullableDataTypes.TestNullableUnsignedInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
-BuiltInNullableDataTypes.TestNullableUnsignedInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypes.TestNullableUnsignedInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypes.TestNullableUnsignedInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 BuiltInNullableDataTypes.TestNullableUnsignedInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
 BuiltInNullableDataTypes.TestString ---> [NVARCHAR2] [MaxLength = 4000]
+BuiltInNullableDataTypesShadow.Enum16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInNullableDataTypesShadow.Enum32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.Enum64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInNullableDataTypesShadow.Enum8 ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
+BuiltInNullableDataTypesShadow.EnumS8 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInNullableDataTypesShadow.EnumU16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.EnumU32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInNullableDataTypesShadow.EnumU64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
+BuiltInNullableDataTypesShadow.Id ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.PartitionId ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.TestByteArray ---> [BLOB] [MaxLength = 4000]
+BuiltInNullableDataTypesShadow.TestNullableBoolean ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableByte ---> [NUMBER] [MaxLength = 22] [Precision = 3 [Precision = 3 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableCharacter ---> [NVARCHAR2] [MaxLength = 2]
+BuiltInNullableDataTypesShadow.TestNullableDateTime ---> [TIMESTAMP(6)] [MaxLength = 11] Scale = 6]
+BuiltInNullableDataTypesShadow.TestNullableDateTimeOffset ---> [TIMESTAMP(6) WITH TIME ZONE] [MaxLength = 13] Scale = 6]
+BuiltInNullableDataTypesShadow.TestNullableDecimal ---> [NUMBER] [MaxLength = 22] [Precision = 29 [Precision = 29 Scale = 4]
+BuiltInNullableDataTypesShadow.TestNullableDouble ---> [FLOAT] [MaxLength = 22] [Precision = 49 [Precision = 49]
+BuiltInNullableDataTypesShadow.TestNullableInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableSignedByte ---> [NUMBER] [MaxLength = 22] [Precision = 6 [Precision = 6 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableSingle ---> [FLOAT] [MaxLength = 22] [Precision = 63 [Precision = 63]
+BuiltInNullableDataTypesShadow.TestNullableTimeSpan ---> [INTERVAL DAY(2) TO SECOND(6)] [MaxLength = 11] [Precision = 2 [Precision = 2 Scale = 6]
+BuiltInNullableDataTypesShadow.TestNullableUnsignedInt16 ---> [NUMBER] [MaxLength = 22] [Precision = 10 [Precision = 10 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableUnsignedInt32 ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
+BuiltInNullableDataTypesShadow.TestNullableUnsignedInt64 ---> [NUMBER] [MaxLength = 22] [Precision = 20 [Precision = 20 Scale = 0]
+BuiltInNullableDataTypesShadow.TestString ---> [NVARCHAR2] [MaxLength = 4000]
 MappedDataTypes.Bigint ---> [NUMBER] [MaxLength = 22] [Precision = 19 [Precision = 19 Scale = 0]
 MappedDataTypes.Bit ---> [NUMBER] [MaxLength = 22] [Precision = 1 [Precision = 1 Scale = 0]
 MappedDataTypes.Char_varyingMax ---> [VARCHAR2] [MaxLength = 2000]
@@ -2051,14 +2090,14 @@ UnicodeDataTypes.StringUnicode ---> [NVARCHAR2] [MaxLength = 4000]
             Assert.Equal(expected, actual, ignoreLineEndingDifferences: true);
         }
 
-        private static readonly string EOL = Environment.NewLine;
+        private static readonly string _eol = Environment.NewLine;
 
         [Fact]
         public void Can_get_column_types_from_built_model()
         {
             using (var context = CreateContext())
             {
-                var typeMapper = context.GetService<IRelationalTypeMapper>();
+                var mappingSource = context.GetService<IRelationalTypeMappingSource>();
 
                 foreach (var property in context.Model.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties()))
                 {
@@ -2069,7 +2108,7 @@ UnicodeDataTypes.StringUnicode ---> [NVARCHAR2] [MaxLength = 4000]
                     {
                         Assert.Equal(
                             columnType.ToLowerInvariant(),
-                            typeMapper.FindMapping(property).StoreType.ToLowerInvariant());
+                            mappingSource.FindMapping(property).StoreType.ToLowerInvariant());
                     }
                 }
             }
@@ -2079,6 +2118,14 @@ UnicodeDataTypes.StringUnicode ---> [NVARCHAR2] [MaxLength = 4000]
 
         public class BuiltInDataTypesOracleFixture : BuiltInDataTypesFixtureBase
         {
+            public override bool StrictEquality => false;
+
+            public override bool SupportsAnsi => true;
+
+            public override bool SupportsUnicodeToAnsiConversion => false;
+
+            public override bool SupportsLargeStringComparisons => false;
+
             protected override ITestStoreFactory TestStoreFactory => OracleTestStoreFactory.Instance;
             public TestSqlLoggerFactory TestSqlLoggerFactory => (TestSqlLoggerFactory)ServiceProvider.GetRequiredService<ILoggerFactory>();
 

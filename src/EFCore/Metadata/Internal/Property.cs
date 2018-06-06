@@ -17,6 +17,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class Property : PropertyBase, IMutableProperty
     {
         private bool? _isConcurrencyToken;
@@ -74,7 +75,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public new virtual EntityType DeclaringType
+        public override TypeBase DeclaringType
         {
             [DebuggerStepThrough] get => DeclaringEntityType;
         }
@@ -89,7 +90,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual InternalPropertyBuilder Builder { [DebuggerStepThrough] get; [DebuggerStepThrough] [param: CanBeNull] set; }
+        public virtual InternalPropertyBuilder Builder
+        {
+            [DebuggerStepThrough] get;
+            [DebuggerStepThrough]
+            [param: CanBeNull]
+            set;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -199,23 +206,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual void SetValueGenerated(ValueGenerated? valueGenerated, ConfigurationSource configurationSource)
         {
-            if (valueGenerated != null
-                && valueGenerated != ValueGenerated.Never
-                && this.IsKey())
-            {
-                var inheritedFk = GetContainingForeignKeys().FirstOrDefault(fk => fk.DeclaringEntityType.BaseType != null);
-                if (inheritedFk != null)
-                {
-                    var key = GetContainingKeys().First();
-                    throw new InvalidOperationException(
-                        CoreStrings.ForeignKeyPropertyInKey(
-                            Name,
-                            inheritedFk.DeclaringEntityType.DisplayName(),
-                            Format(key.Properties),
-                            key.DeclaringEntityType.DisplayName()));
-                }
-            }
-
             _valueGenerated = valueGenerated;
 
             if (valueGenerated == null)
@@ -389,6 +379,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
                 PropertyMetadataChanged();
             }
+
             UpdateIsConcurrencyTokenConfigurationSource(configurationSource);
         }
 
@@ -461,17 +452,27 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static string Format([NotNull] IEnumerable<IProperty> properties, bool includeTypes = false)
+        public static string Format([NotNull] IEnumerable<IPropertyBase> properties, bool includeTypes = false)
             => "{"
                + string.Join(
                    ", ",
-                   properties.Select(p => "'" + p.Name + "'" + (includeTypes ? " : " + p.ClrType.DisplayName(fullName: false) : "")))
+                   properties.Select(
+                       p => "'" + p.Name + "'" + (includeTypes ? " : " + p.ClrType.DisplayName(fullName: false) : "")))
+               + "}";
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static string Format([NotNull] IEnumerable<string> properties)
+            => "{"
+               + string.Join(
+                   ", ",
+                   properties.Select(p => string.IsNullOrEmpty(p) ? "" : "'" + p + "'"))
                + "}";
 
         IEntityType IProperty.DeclaringEntityType => DeclaringEntityType;
-        ITypeBase IPropertyBase.DeclaringType => DeclaringType;
         IMutableEntityType IMutableProperty.DeclaringEntityType => DeclaringEntityType;
-        IMutableTypeBase IMutablePropertyBase.DeclaringType => DeclaringType;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -487,9 +488,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     property.IsShadowProperty
                     || (entityType.HasClrType()
                         && ((property.PropertyInfo != null
-                             && entityType.ClrType.GetRuntimeProperties().FirstOrDefault(p => p.Name == property.Name) != null)
+                             && entityType.GetRuntimeProperties().ContainsKey(property.Name))
                             || (property.FieldInfo != null
-                                && entityType.ClrType.GetFieldInfo(property.Name) != null))));
+                                && entityType.GetRuntimeFields().ContainsKey(property.Name)))));
         }
 
         /// <summary>

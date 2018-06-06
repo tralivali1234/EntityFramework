@@ -96,6 +96,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                 {
                     targetEntityType.SetPrimaryKey(clonedKey.Properties);
                 }
+
                 key.GetAnnotations().ForEach(annotation => clonedKey[annotation.Name] = annotation.Value);
             }
         }
@@ -139,11 +140,11 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                             p => targetPrincipalEntityType.FindProperty(p.Name)).ToList()),
                     targetPrincipalEntityType);
                 var clonedNavigation = navigation.IsDependentToPrincipal()
-                    ? (navigation.PropertyInfo != null
-                        ? targetForeignKey.HasDependentToPrincipal(navigation.PropertyInfo)
+                    ? (navigation.GetIdentifyingMemberInfo() != null
+                        ? targetForeignKey.HasDependentToPrincipal(navigation.GetIdentifyingMemberInfo())
                         : targetForeignKey.HasDependentToPrincipal(navigation.Name))
-                    : (navigation.PropertyInfo != null
-                        ? targetForeignKey.HasPrincipalToDependent(navigation.PropertyInfo)
+                    : (navigation.GetIdentifyingMemberInfo() != null
+                        ? targetForeignKey.HasPrincipalToDependent(navigation.GetIdentifyingMemberInfo())
                         : targetForeignKey.HasPrincipalToDependent(navigation.Name));
                 navigation.GetAnnotations().ForEach(annotation => clonedNavigation[annotation.Name] = annotation.Value);
             }

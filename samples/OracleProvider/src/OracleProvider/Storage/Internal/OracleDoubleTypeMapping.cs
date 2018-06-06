@@ -3,38 +3,37 @@
 
 using System.Data;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Storage.Internal
 {
     public class OracleDoubleTypeMapping : DoubleTypeMapping
     {
         public OracleDoubleTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] DbType? dbType = null)
-            : this(storeType, null, dbType)
+             [NotNull] string storeType,
+             DbType? dbType = null)
+             : base(storeType, dbType)
         {
         }
 
-        public OracleDoubleTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            [CanBeNull] DbType? dbType = null)
-            : base(storeType, converter, dbType)
+        protected OracleDoubleTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new OracleDoubleTypeMapping(storeType, Converter, DbType);
-
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new OracleDoubleTypeMapping(StoreType, ComposeConverter(converter), DbType);
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new OracleDoubleTypeMapping(parameters);
 
         protected override string GenerateNonNullSqlLiteral(object value)
         {
             var literal = base.GenerateNonNullSqlLiteral(value);
 
+            var doubleValue = (double)value;
             if (!literal.Contains("E")
-                && !literal.Contains("e"))
+                && !literal.Contains("e")
+                && !double.IsNaN(doubleValue)
+                && !double.IsInfinity(doubleValue))
             {
                 return literal + "E0";
             }

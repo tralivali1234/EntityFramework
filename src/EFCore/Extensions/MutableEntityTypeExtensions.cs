@@ -391,11 +391,11 @@ namespace Microsoft.EntityFrameworkCore
 
         /// <summary>
         ///     <para>
-        ///         Sets the <see cref="PropertyAccessMode" /> to use for properties of this entity type.
+        ///         Sets the <see cref="PropertyAccessMode" /> to use for properties and navigations of this entity type.
         ///     </para>
         ///     <para>
-        ///         Note that individual properties can override this access mode. The value set here will
-        ///         be used for any property for which no override has been specified.
+        ///         Note that individual properties and navigations can override this access mode. The value set here will
+        ///         be used for any property or navigation for which no override has been specified.
         ///     </para>
         /// </summary>
         /// <param name="entityType"> The entity type for which to set the access mode. </param>
@@ -407,5 +407,35 @@ namespace Microsoft.EntityFrameworkCore
 
             entityType[CoreAnnotationNames.PropertyAccessModeAnnotation] = propertyAccessMode;
         }
+
+        /// <summary>
+        ///     <para>
+        ///         Sets the <see cref="PropertyAccessMode" /> to use for navigations of this entity type.
+        ///     </para>
+        ///     <para>
+        ///         Note that individual navigations can override this access mode. The value set here will
+        ///         be used for any navigation for which no override has been specified.
+        ///     </para>
+        /// </summary>
+        /// <param name="entityType"> The entity type for which to set the access mode. </param>
+        /// <param name="propertyAccessMode"> The <see cref="PropertyAccessMode" />, or null to clear the mode set.</param>
+        public static void SetNavigationAccessMode(
+            [NotNull] this IMutableEntityType entityType, PropertyAccessMode? propertyAccessMode)
+        {
+            Check.NotNull(entityType, nameof(entityType));
+
+            entityType[CoreAnnotationNames.NavigationAccessModeAnnotation] = propertyAccessMode;
+        }
+
+        /// <summary>
+        ///     Sets the change tracking strategy to use for this entity type. This strategy indicates how the
+        ///     context detects changes to properties for an instance of the entity type.
+        /// </summary>
+        /// <param name="entityType"> The entity type to set the change tracking strategy for. </param>
+        /// <param name="changeTrackingStrategy"> The strategy to use. </param>
+        public static void SetChangeTrackingStrategy(
+            [NotNull] this IMutableEntityType entityType,
+            ChangeTrackingStrategy changeTrackingStrategy)
+            => Check.NotNull(entityType, nameof(entityType)).AsEntityType().ChangeTrackingStrategy = changeTrackingStrategy;
     }
 }

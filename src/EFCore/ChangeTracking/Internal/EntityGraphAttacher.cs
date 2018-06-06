@@ -16,6 +16,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
     {
         private readonly IEntityEntryGraphIterator _graphIterator;
 
+        // Stored for perf
+        private static readonly object[] _boxedEntityStates =
+            { EntityState.Detached, EntityState.Unchanged, EntityState.Deleted, EntityState.Modified, EntityState.Added };
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -31,8 +35,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             => _graphIterator.TraverseGraph(
                 new EntityEntryGraphNode(rootEntry, null, null)
                 {
-                    NodeState = ( entityState, forceStateWhenUnknownKey )
+                    NodeState = _boxedEntityStates[(int)entityState]
                 },
+                forceStateWhenUnknownKey,
                 PaintAction);
 
         /// <summary>
@@ -47,12 +52,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             => _graphIterator.TraverseGraphAsync(
                 new EntityEntryGraphNode(rootEntry, null, null)
                 {
-                    NodeState = (entityState, forceStateWhenUnknownKey)
+                    NodeState = _boxedEntityStates[(int)entityState]
                 },
+                forceStateWhenUnknownKey,
                 PaintActionAsync,
                 cancellationToken);
 
-        private bool PaintAction(EntityEntryGraphNode node)
+        private static bool PaintAction(EntityEntryGraphNode node, bool force)
         {
             var internalEntityEntry = node.GetInfrastructure();
             if (internalEntityEntry.EntityState != EntityState.Detached)
@@ -60,19 +66,19 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 return false;
             }
 
-            var (State, Force) = ((EntityState State, bool Force))node.NodeState;
+            var entityState = (EntityState)node.NodeState;
 
             internalEntityEntry.SetEntityState(
                 internalEntityEntry.IsKeySet
-                    ? State
+                    ? entityState
                     : EntityState.Added,
                 acceptChanges: true,
-                forceStateWhenUnknownKey: Force);
+                forceStateWhenUnknownKey: force ? (EntityState?)entityState : null);
 
             return true;
         }
 
-        private static async Task<bool> PaintActionAsync(EntityEntryGraphNode node, CancellationToken cancellationToken)
+        private static async Task<bool> PaintActionAsync(EntityEntryGraphNode node, bool force, CancellationToken cancellationToken)
         {
             var internalEntityEntry = node.GetInfrastructure();
             if (internalEntityEntry.EntityState != EntityState.Detached)
@@ -80,14 +86,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 return false;
             }
 
-            var (State, Force) = ((EntityState State, bool Force))node.NodeState;
+            var entityState = (EntityState)node.NodeState;
 
             await internalEntityEntry.SetEntityStateAsync(
                 internalEntityEntry.IsKeySet || internalEntityEntry.EntityType.IsOwned()
-                    ? State
+                    ? entityState
                     : EntityState.Added,
                 acceptChanges: true,
-                forceStateWhenUnknownKey: Force,
+                forceStateWhenUnknownKey: force ? (EntityState?)entityState : null,
                 cancellationToken: cancellationToken);
 
             return true;

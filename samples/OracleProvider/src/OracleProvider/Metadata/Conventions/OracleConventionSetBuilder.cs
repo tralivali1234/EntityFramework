@@ -3,9 +3,9 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 {
@@ -43,16 +43,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 
         public static ConventionSet Build()
         {
-            var oracleTypeMapper = new OracleTypeMapper(
-                new CoreTypeMapperDependencies(),
-                new RelationalTypeMapperDependencies());
+            var serviceProvider = new ServiceCollection()
+                .AddEntityFrameworkOracle()
+                .AddDbContext<DbContext>(o => o.UseOracle("Data Source=."))
+                .BuildServiceProvider();
 
-            return new OracleConventionSetBuilder(
-                new RelationalConventionSetBuilderDependencies(oracleTypeMapper, currentContext: null, setFinder: null))
-                .AddConventions(
-                    new CoreConventionSetBuilder(
-                        new CoreConventionSetBuilderDependencies(oracleTypeMapper))
-                        .CreateConventionSet());
+            using (var serviceScope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+            {
+                using (var context = serviceScope.ServiceProvider.GetService<DbContext>())
+                {
+                    return ConventionSet.CreateConventionSet(context);
+                }
+            }
         }
     }
 }

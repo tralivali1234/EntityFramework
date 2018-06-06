@@ -4,9 +4,12 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
+// ReSharper disable UnusedMember.Local
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 {
     public class ValueGeneratorConventionTest
@@ -38,7 +41,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var modelBuilder = CreateInternalModelBuilder();
             var entityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "Id", "Name" };
+            var properties = new List<string>
+            {
+                "Id",
+                "Name"
+            };
 
             entityBuilder.Property(properties[0], ConfigurationSource.Convention)
                 .ValueGenerated(ValueGenerated.OnAdd, ConfigurationSource.Explicit);
@@ -64,7 +71,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "SampleEntityId" };
+            var properties = new List<string>
+            {
+                "SampleEntityId"
+            };
 
             referencedEntityBuilder.Property(properties[0], ConfigurationSource.Convention);
 
@@ -91,7 +101,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "Id", "SampleEntityId" };
+            var properties = new List<string>
+            {
+                "Id",
+                "SampleEntityId"
+            };
             referencedEntityBuilder.Property(properties[0], ConfigurationSource.Convention)
                 .ValueGenerated(ValueGenerated.OnAdd, ConfigurationSource.Explicit);
             referencedEntityBuilder.Property(properties[1], ConfigurationSource.Convention)
@@ -120,7 +134,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "Id", "SampleEntityId" };
+            var properties = new List<string>
+            {
+                "Id",
+                "SampleEntityId"
+            };
 
             referencedEntityBuilder.Property(properties[0], ConfigurationSource.Convention)
                 .ValueGenerated(ValueGenerated.OnAdd, ConfigurationSource.Explicit);
@@ -146,7 +164,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var modelBuilder = CreateInternalModelBuilder();
             var entityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "Id" };
+            var properties = new List<string>
+            {
+                "Id"
+            };
 
             entityBuilder.Property(properties[0], ConfigurationSource.Convention)
                 .ValueGenerated(ValueGenerated.OnAdd, ConfigurationSource.Explicit);
@@ -168,7 +189,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "SampleEntityId" };
+            var properties = new List<string>
+            {
+                "SampleEntityId"
+            };
 
             referencedEntityBuilder.Property(properties[0], ConfigurationSource.Convention);
 
@@ -199,7 +223,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "SampleEntityId" };
+            var properties = new List<string>
+            {
+                "SampleEntityId"
+            };
 
             referencedEntityBuilder.Property(properties[0], ConfigurationSource.Convention);
 
@@ -239,7 +266,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var modelBuilder = CreateInternalModelBuilder();
             var entityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
 
-            var keyBuilder = entityBuilder.PrimaryKey(new List<string> { "Id" }, ConfigurationSource.Convention);
+            var keyBuilder = entityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Id"
+                }, ConfigurationSource.Convention);
 
             Assert.True(new ValueGeneratorConvention().Apply(entityBuilder, (Key)null));
 
@@ -254,7 +285,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var modelBuilder = CreateInternalModelBuilder();
             var entityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
 
-            var keyBuilder = entityBuilder.HasKey(new List<string> { "Number" }, ConfigurationSource.Convention);
+            var keyBuilder = entityBuilder.HasKey(
+                new List<string>
+                {
+                    "Number"
+                }, ConfigurationSource.Convention);
 
             Assert.True(new ValueGeneratorConvention().Apply(entityBuilder, (Key)null));
 
@@ -269,7 +304,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var modelBuilder = CreateInternalModelBuilder();
             var entityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
 
-            var keyBuilder = entityBuilder.PrimaryKey(new List<string> { "Id", "Number" }, ConfigurationSource.Convention);
+            var keyBuilder = entityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Id",
+                    "Number"
+                }, ConfigurationSource.Convention);
 
             Assert.True(new ValueGeneratorConvention().Apply(entityBuilder, (Key)null));
 
@@ -285,7 +325,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var modelBuilder = CreateInternalModelBuilder();
             var entityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
 
-            var keyBuilder = entityBuilder.PrimaryKey(new List<string> { "Name" }, ConfigurationSource.Convention);
+            var keyBuilder = entityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Name"
+                }, ConfigurationSource.Convention);
 
             var property = keyBuilder.Metadata.Properties.First();
 
@@ -338,7 +382,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             Assert.Equal(ValueGenerated.OnAdd, idProperty.ValueGenerated);
             Assert.Equal(ValueGenerated.Never, numberProperty.ValueGenerated);
 
-            var keyBuilder = entityBuilder.PrimaryKey(new List<string> { "Number" }, ConfigurationSource.Convention);
+            var keyBuilder = entityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Number"
+                }, ConfigurationSource.Convention);
+            Assert.NotNull(keyBuilder);
 
             Assert.Same(idProperty, entityBuilder.Metadata.FindProperty("Id"));
             Assert.Same(numberProperty, entityBuilder.Metadata.FindProperty("Number"));
@@ -361,7 +410,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             entityBuilder.Property("Id", typeof(int), ConfigurationSource.Convention)
                 .ValueGenerated(ValueGenerated.Never, ConfigurationSource.Explicit);
 
-            var keyBuilder = entityBuilder.PrimaryKey(new List<string> { "Id" }, ConfigurationSource.Convention);
+            var keyBuilder = entityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Id"
+                }, ConfigurationSource.Convention);
 
             Assert.True(new ValueGeneratorConvention().Apply(entityBuilder, (Key)null));
 
@@ -378,7 +431,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "Id" };
+            var properties = new List<string>
+            {
+                "Id"
+            };
             var keyBuilder = referencedEntityBuilder.PrimaryKey(properties, ConfigurationSource.Convention);
 
             Assert.True(new ValueGeneratorConvention().Apply(referencedEntityBuilder, (Key)null));
@@ -405,7 +461,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             var principalEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             var referencedEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
 
-            var properties = new List<string> { "Id" };
+            var properties = new List<string>
+            {
+                "Id"
+            };
             var keyBuilder = referencedEntityBuilder.PrimaryKey(properties, ConfigurationSource.Convention);
 
             Assert.True(new ValueGeneratorConvention().Apply(referencedEntityBuilder, (Key)null));
@@ -436,8 +495,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var conventions = new ConventionSet();
 
-            conventions.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())));
-            conventions.EntityTypeAddedConventions.Add(new KeyDiscoveryConvention());
+            conventions.EntityTypeAddedConventions.Add(
+                new PropertyDiscoveryConvention(
+                    TestServiceFactory.Instance.Create<FallbackTypeMappingSource>()));
+            conventions.EntityTypeAddedConventions.Add(new KeyDiscoveryConvention(new TestLogger<DbLoggerCategory.Model>()));
 
             var keyConvention = new ValueGeneratorConvention();
 

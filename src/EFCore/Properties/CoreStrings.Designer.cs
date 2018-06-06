@@ -43,7 +43,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 argumentName, enumType);
 
         /// <summary>
-        ///     The properties expression '{expression}' is not valid. The expression should represent a property access: 't =&gt; t.MyProperty'. When specifying multiple properties use an anonymous type: 't =&gt; new {{ t.MyProperty1, t.MyProperty2 }}'.
+        ///     The application or database provider is using an Obsolete TypeMapper API even after the provider has implemented a TypeMappingSource. The code must be updated to use the non-obsolete replacement APIs, as indicated by the Obsolete compiler warnings.
+        /// </summary>
+        public static string StillUsingTypeMapper
+            => GetString("StillUsingTypeMapper");
+
+        /// <summary>
+        ///     The properties expression '{expression}' is not valid. The expression should represent a simple property access: 't =&gt; t.MyProperty'. When specifying multiple properties use an anonymous type: 't =&gt; new {{ t.MyProperty1, t.MyProperty2 }}'.
         /// </summary>
         public static string InvalidPropertiesExpression([CanBeNull] object expression)
             => string.Format(
@@ -51,7 +57,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 expression);
 
         /// <summary>
-        ///     The expression '{expression}' is not a valid property expression. The expression should represent a property access: 't =&gt; t.MyProperty'.
+        ///     The expression '{expression}' is not a valid property expression. The expression should represent a simple property access: 't =&gt; t.MyProperty'.
         /// </summary>
         public static string InvalidPropertyExpression([CanBeNull] object expression)
             => string.Format(
@@ -271,12 +277,20 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 field, fieldType, entityType, property, propertyType);
 
         /// <summary>
-        ///     No field was found backing property '{property}' of entity type '{entity}'. Either configure a backing field or use a different '{pam}'.
+        ///     No field was found backing property '{property}' of entity type '{entity}'. Either name the backing field so that it is picked up by convention, configure the backing field to use, or use a different '{pam}'.
         /// </summary>
         public static string NoBackingField([CanBeNull] object property, [CanBeNull] object entity, [CanBeNull] object pam)
             => string.Format(
                 GetString("NoBackingField", nameof(property), nameof(entity), nameof(pam)),
                 property, entity, pam);
+
+        /// <summary>
+        ///     No field was found backing property '{property}' of entity type '{entity}'. Lazy-loaded navigation properties must have backing fields. Either name the backing field so that it is picked up by convention or configure the backing field to use.
+        /// </summary>
+        public static string NoBackingFieldLazyLoading([CanBeNull] object property, [CanBeNull] object entity)
+            => string.Format(
+                GetString("NoBackingFieldLazyLoading", nameof(property), nameof(entity)),
+                property, entity);
 
         /// <summary>
         ///     No backing field could be found for property '{property}' of entity type '{entity}' and the property does not have a setter.
@@ -393,18 +407,20 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 CoreEventId.ServiceProviderCreated,
                 LogLevel.Debug,
+                "CoreEventId.ServiceProviderCreated",
                 LoggerMessage.Define(
                     LogLevel.Debug,
                     CoreEventId.ServiceProviderCreated,
                     _resourceManager.GetString("LogServiceProviderCreated")));
 
         /// <summary>
-        ///     More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. Consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built.
+        ///     More than twenty 'IServiceProvider' instances have been created for internal use by Entity Framework. This is commonly caused by injection of a new singleton service instance into every DbContext instance. For example, calling UseLoggerFactory passing in a new instance each time--see https://go.microsoft.com/fwlink/?linkid=869049 for more details. Consider reviewing calls on 'DbContextOptionsBuilder' that may require new service providers to be built.
         /// </summary>
         public static readonly EventDefinition LogManyServiceProvidersCreated
             = new EventDefinition(
                 CoreEventId.ManyServiceProvidersCreatedWarning,
                 LogLevel.Warning,
+                "CoreEventId.ManyServiceProvidersCreatedWarning",
                 LoggerMessage.Define(
                     LogLevel.Warning,
                     CoreEventId.ManyServiceProvidersCreatedWarning,
@@ -417,6 +433,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, string, string>(
                 CoreEventId.ContextInitialized,
                 LogLevel.Information,
+                "CoreEventId.ContextInitialized",
                 LoggerMessage.Define<string, string, string, string>(
                     LogLevel.Information,
                     CoreEventId.ContextInitialized,
@@ -455,7 +472,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 property, entityType, propertyType);
 
         /// <summary>
-        ///     The service dependencies type '{dependenciesType}' has been registered innapropriately in the service collection. Service dependencies types must only be registered by Entity Framework, or in rare cases by database providers and then only to change the service lifetime.
+        ///     The service dependencies type '{dependenciesType}' has been registered inappropriately in the service collection. Service dependencies types must only be registered by Entity Framework, or in rare cases by database providers and then only to change the service lifetime.
         /// </summary>
         public static string BadDependencyRegistration([CanBeNull] object dependenciesType)
             => string.Format(
@@ -493,6 +510,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<Type, string, Exception>(
                 CoreEventId.QueryIterationFailed,
                 LogLevel.Error,
+                "CoreEventId.QueryIterationFailed",
                 LoggerMessage.Define<Type, string, Exception>(
                     LogLevel.Error,
                     CoreEventId.QueryIterationFailed,
@@ -505,24 +523,342 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<Type, string, Exception>(
                 CoreEventId.SaveChangesFailed,
                 LogLevel.Error,
+                "CoreEventId.SaveChangesFailed",
                 LoggerMessage.Define<Type, string, Exception>(
                     LogLevel.Error,
                     CoreEventId.SaveChangesFailed,
                     _resourceManager.GetString("LogExceptionDuringSaveChanges")));
 
         /// <summary>
+        ///     DetectChanges starting for '{contextType}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogDetectChangesStarting
+            = new EventDefinition<string>(
+                CoreEventId.DetectChangesStarting,
+                LogLevel.Debug,
+                "CoreEventId.DetectChangesStarting",
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    CoreEventId.DetectChangesStarting,
+                    _resourceManager.GetString("LogDetectChangesStarting")));
+
+        /// <summary>
+        ///     DetectChanges completed for '{contextType}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogDetectChangesCompleted
+            = new EventDefinition<string>(
+                CoreEventId.DetectChangesCompleted,
+                LogLevel.Debug,
+                "CoreEventId.DetectChangesCompleted",
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    CoreEventId.DetectChangesCompleted,
+                    _resourceManager.GetString("LogDetectChangesCompleted")));
+
+        /// <summary>
+        ///     Unchanged '{entityType}.{property}' detected as changed and will be marked as modified. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see property values.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogPropertyChangeDetected
+            = new EventDefinition<string, string>(
+                CoreEventId.PropertyChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.PropertyChangeDetected",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.PropertyChangeDetected,
+                    _resourceManager.GetString("LogPropertyChangeDetected")));
+
+        /// <summary>
+        ///     Unchanged '{entityType}.{property}' detected as changed from '{oldValue}' to '{newValue}' and will be marked as modified for entity with key '{keyValues}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string, object, object, string> LogPropertyChangeDetectedSensitive
+            = new EventDefinition<string, string, object, object, string>(
+                CoreEventId.PropertyChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.PropertyChangeDetected",
+                LoggerMessage.Define<string, string, object, object, string>(
+                    LogLevel.Debug,
+                    CoreEventId.PropertyChangeDetected,
+                    _resourceManager.GetString("LogPropertyChangeDetectedSensitive")));
+
+        /// <summary>
+        ///     Foreign key property '{entityType}.{property}' detected as changed. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see property values.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogForeignKeyChangeDetected
+            = new EventDefinition<string, string>(
+                CoreEventId.ForeignKeyChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.ForeignKeyChangeDetected",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ForeignKeyChangeDetected,
+                    _resourceManager.GetString("LogForeignKeyChangeDetected")));
+
+        /// <summary>
+        ///     Foreign key property '{entityType}.{property}' detected as changed from '{oldValue}' to '{newValue}' for entity with key '{keyValues}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string, object, object, string> LogForeignKeyChangeDetectedSensitive
+            = new EventDefinition<string, string, object, object, string>(
+                CoreEventId.ForeignKeyChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.ForeignKeyChangeDetected",
+                LoggerMessage.Define<string, string, object, object, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ForeignKeyChangeDetected,
+                    _resourceManager.GetString("LogForeignKeyChangeDetectedSensitive")));
+
+        /// <summary>
+        ///     Detected {addedCount} entities added and {removedCount} entities removed from navigation property '{entityType}.{property}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<int, int, string, string> LogCollectionChangeDetected
+            = new EventDefinition<int, int, string, string>(
+                CoreEventId.CollectionChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.CollectionChangeDetected",
+                LoggerMessage.Define<int, int, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.CollectionChangeDetected,
+                    _resourceManager.GetString("LogCollectionChangeDetected")));
+
+        /// <summary>
+        ///     Detected {addedCount} entities added and {removedCount} entities removed from navigation property '{entityType}.{property}' on entity with key '{keyValues}'.
+        /// </summary>
+        public static readonly EventDefinition<int, int, string, string, string> LogCollectionChangeDetectedSensitive
+            = new EventDefinition<int, int, string, string, string>(
+                CoreEventId.CollectionChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.CollectionChangeDetected",
+                LoggerMessage.Define<int, int, string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.CollectionChangeDetected,
+                    _resourceManager.GetString("LogCollectionChangeDetectedSensitive")));
+
+        /// <summary>
+        ///     Navigation property '{entityType}.{property}' detected as changed. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogReferenceChangeDetected
+            = new EventDefinition<string, string>(
+                CoreEventId.ReferenceChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.ReferenceChangeDetected",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ReferenceChangeDetected,
+                    _resourceManager.GetString("LogReferenceChangeDetected")));
+
+        /// <summary>
+        ///     Navigation property '{entityType}.{property}' for entity with key '{keyValues}' detected as changed.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string> LogReferenceChangeDetectedSensitive
+            = new EventDefinition<string, string, string>(
+                CoreEventId.ReferenceChangeDetected,
+                LogLevel.Debug,
+                "CoreEventId.ReferenceChangeDetected",
+                LoggerMessage.Define<string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ReferenceChangeDetected,
+                    _resourceManager.GetString("LogReferenceChangeDetectedSensitive")));
+
+        /// <summary>
+        ///     Cascade state change of '{entityType}' entity to '{state}' due to deletion of parent '{parentType}' entity. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, EntityState, string> LogCascadeDelete
+            = new EventDefinition<string, EntityState, string>(
+                CoreEventId.CascadeDelete,
+                LogLevel.Debug,
+                "CoreEventId.CascadeDelete",
+                LoggerMessage.Define<string, EntityState, string>(
+                    LogLevel.Debug,
+                    CoreEventId.CascadeDelete,
+                    _resourceManager.GetString("LogCascadeDelete")));
+
+        /// <summary>
+        ///     Cascade state change of '{entityType}' entity with key '{keyValues}' to '{state}' due to deletion of parent '{parentType}' entity with key '{parentKeyValues}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string, EntityState, string, string> LogCascadeDeleteSensitive
+            = new EventDefinition<string, string, EntityState, string, string>(
+                CoreEventId.CascadeDelete,
+                LogLevel.Debug,
+                "CoreEventId.CascadeDelete",
+                LoggerMessage.Define<string, string, EntityState, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.CascadeDelete,
+                    _resourceManager.GetString("LogCascadeDeleteSensitive")));
+
+        /// <summary>
+        ///     '{entityType}' entity changed to '{state}' state due to severed required relationship to parent '{parentType}' entity. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, EntityState, string> LogCascadeDeleteOrphan
+            = new EventDefinition<string, EntityState, string>(
+                CoreEventId.CascadeDeleteOrphan,
+                LogLevel.Debug,
+                "CoreEventId.CascadeDeleteOrphan",
+                LoggerMessage.Define<string, EntityState, string>(
+                    LogLevel.Debug,
+                    CoreEventId.CascadeDeleteOrphan,
+                    _resourceManager.GetString("LogCascadeDeleteOrphan")));
+
+        /// <summary>
+        ///     '{entityType}' entity with key '{keyValues}' changed to '{state}' state due to severed required relationship to parent '{parentType}' entity.
+        /// </summary>
+        public static readonly EventDefinition<string, string, EntityState, string> LogCascadeDeleteOrphanSensitive
+            = new EventDefinition<string, string, EntityState, string>(
+                CoreEventId.CascadeDeleteOrphan,
+                LogLevel.Debug,
+                "CoreEventId.CascadeDeleteOrphan",
+                LoggerMessage.Define<string, string, EntityState, string>(
+                    LogLevel.Debug,
+                    CoreEventId.CascadeDeleteOrphan,
+                    _resourceManager.GetString("LogCascadeDeleteOrphanSensitive")));
+
+        /// <summary>
+        ///     Context '{contextType}' started tracking '{entityType}' entity. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogStartedTracking
+            = new EventDefinition<string, string>(
+                CoreEventId.StartedTracking,
+                LogLevel.Debug,
+                "CoreEventId.StartedTracking",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.StartedTracking,
+                    _resourceManager.GetString("LogStartedTracking")));
+
+        /// <summary>
+        ///     Context '{contextType}' started tracking '{entityType}' entity with key '{keyValues}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string> LogStartedTrackingSensitive
+            = new EventDefinition<string, string, string>(
+                CoreEventId.StartedTracking,
+                LogLevel.Debug,
+                "CoreEventId.StartedTracking",
+                LoggerMessage.Define<string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.StartedTracking,
+                    _resourceManager.GetString("LogStartedTrackingSensitive")));
+
+        /// <summary>
+        ///     An '{entityType}' entity tracked by '{contextType}' changed from '{oldState}' to '{newState}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, string, EntityState, EntityState> LogStateChanged
+            = new EventDefinition<string, string, EntityState, EntityState>(
+                CoreEventId.StateChanged,
+                LogLevel.Debug,
+                "CoreEventId.StateChanged",
+                LoggerMessage.Define<string, string, EntityState, EntityState>(
+                    LogLevel.Debug,
+                    CoreEventId.StateChanged,
+                    _resourceManager.GetString("LogStateChanged")));
+
+        /// <summary>
+        ///     The '{entityType}' entity with key '{keyValues}' tracked by '{contextType}' changed from '{oldState}' to '{newState}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, EntityState, EntityState> LogStateChangedSensitive
+            = new EventDefinition<string, string, string, EntityState, EntityState>(
+                CoreEventId.StateChanged,
+                LogLevel.Debug,
+                "CoreEventId.StateChanged",
+                LoggerMessage.Define<string, string, string, EntityState, EntityState>(
+                    LogLevel.Debug,
+                    CoreEventId.StateChanged,
+                    _resourceManager.GetString("LogStateChangedSensitive")));
+
+        /// <summary>
+        ///     '{contextType}' generated a value for the '{property}' property of new '{entityType}' entity. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string> LogValueGenerated
+            = new EventDefinition<string, string, string>(
+                CoreEventId.ValueGenerated,
+                LogLevel.Debug,
+                "CoreEventId.ValueGenerated",
+                LoggerMessage.Define<string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ValueGenerated,
+                    _resourceManager.GetString("LogValueGenerated")));
+
+        /// <summary>
+        ///     '{contextType}' generated value '{keyValue}' for the '{property}' property of new '{entityType}' entity.
+        /// </summary>
+        public static readonly EventDefinition<string, object, string, string> LogValueGeneratedSensitive
+            = new EventDefinition<string, object, string, string>(
+                CoreEventId.ValueGenerated,
+                LogLevel.Debug,
+                "CoreEventId.ValueGenerated",
+                LoggerMessage.Define<string, object, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ValueGenerated,
+                    _resourceManager.GetString("LogValueGeneratedSensitive")));
+
+        /// <summary>
+        ///     '{contextType}' generated a temporary value for the '{property}' property of new '{entityType}' entity. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see key values.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string> LogTempValueGenerated
+            = new EventDefinition<string, string, string>(
+                CoreEventId.ValueGenerated,
+                LogLevel.Debug,
+                "CoreEventId.ValueGenerated",
+                LoggerMessage.Define<string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ValueGenerated,
+                    _resourceManager.GetString("LogTempValueGenerated")));
+
+        /// <summary>
+        ///     '{contextType}' generated temporary value '{keyValue}' for the '{property}' property of new '{entityType}' entity.
+        /// </summary>
+        public static readonly EventDefinition<string, object, string, string> LogTempValueGeneratedSensitive
+            = new EventDefinition<string, object, string, string>(
+                CoreEventId.ValueGenerated,
+                LogLevel.Debug,
+                "CoreEventId.ValueGenerated",
+                LoggerMessage.Define<string, object, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ValueGenerated,
+                    _resourceManager.GetString("LogTempValueGeneratedSensitive")));
+
+        /// <summary>
+        ///     SaveChanges starting for '{contextType}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogSaveChangesStarting
+            = new EventDefinition<string>(
+                CoreEventId.SaveChangesStarting,
+                LogLevel.Debug,
+                "CoreEventId.SaveChangesStarting",
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    CoreEventId.SaveChangesStarting,
+                    _resourceManager.GetString("LogSaveChangesStarting")));
+
+        /// <summary>
+        ///     SaveChanges completed for '{contextType}' with {savedCount} entities written to the database.
+        /// </summary>
+        public static readonly EventDefinition<string, int> LogSaveChangesCompleted
+            = new EventDefinition<string, int>(
+                CoreEventId.SaveChangesCompleted,
+                LogLevel.Debug,
+                "CoreEventId.SaveChangesCompleted",
+                LoggerMessage.Define<string, int>(
+                    LogLevel.Debug,
+                    CoreEventId.SaveChangesCompleted,
+                    _resourceManager.GetString("LogSaveChangesCompleted")));
+
+        /// <summary>
+        ///     '{contextType}' disposed.
+        /// </summary>
+        public static readonly EventDefinition<string> LogContextDisposed
+            = new EventDefinition<string>(
+                CoreEventId.ContextDisposed,
+                LogLevel.Debug,
+                "CoreEventId.ContextDisposed",
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    CoreEventId.ContextDisposed,
+                    _resourceManager.GetString("LogContextDisposed")));
+
+        /// <summary>
         ///     The EF.Property&lt;T&gt; method may only be used within LINQ queries.
         /// </summary>
         public static string PropertyMethodInvoked
             => GetString("PropertyMethodInvoked");
-
-        /// <summary>
-        ///     The property '{property}' cannot be added to the entity type '{entityType}' because a property with the same name already exists on entity type '{duplicateEntityType}'.
-        /// </summary>
-        public static string DuplicateProperty([CanBeNull] object property, [CanBeNull] object entityType, [CanBeNull] object duplicateEntityType)
-            => string.Format(
-                GetString("DuplicateProperty", nameof(property), nameof(entityType), nameof(duplicateEntityType)),
-                property, entityType, duplicateEntityType);
 
         /// <summary>
         ///     The property '{property}' cannot be added to type '{entityType}' because the type of the corresponding CLR property or field '{clrType}' does not match the specified type '{propertyType}'.
@@ -557,12 +893,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 key, entityType, dependentType);
 
         /// <summary>
-        ///     The navigation property '{navigation}' cannot be added to the entity type '{entityType}' because a navigation property with the same name already exists on entity type '{duplicateEntityType}'.
+        ///     The service property '{property}' of type '{serviceType}' cannot be added to the entity type '{entityType}' because service property '{duplicateName}' of the same type already exists on entity type '{duplicateEntityType}'.
         /// </summary>
-        public static string DuplicateNavigation([CanBeNull] object navigation, [CanBeNull] object entityType, [CanBeNull] object duplicateEntityType)
+        public static string DuplicateServicePropertyType([CanBeNull] object property, [CanBeNull] object serviceType, [CanBeNull] object entityType, [CanBeNull] object duplicateName, [CanBeNull] object duplicateEntityType)
             => string.Format(
-                GetString("DuplicateNavigation", nameof(navigation), nameof(entityType), nameof(duplicateEntityType)),
-                navigation, entityType, duplicateEntityType);
+                GetString("DuplicateServicePropertyType", nameof(property), nameof(serviceType), nameof(entityType), nameof(duplicateName), nameof(duplicateEntityType)),
+                property, serviceType, entityType, duplicateName, duplicateEntityType);
 
         /// <summary>
         ///     The navigation property '{navigation}' cannot be added to the entity type '{entityType}' because there is no corresponding CLR property on the underlying type and navigations properties cannot be added to shadow state.
@@ -669,7 +1005,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 property, entityType);
 
         /// <summary>
-        ///     The association between entity types '{firstType}' and '{secondType}' has been severed but the foreign key for this relationship cannot be set to null. If the dependent entity should be deleted, then setup the relationship to use cascade deletes.
+        ///     The association between entity types '{firstType}' and '{secondType}' has been severed but the relationship is either marked as 'Required' or is implicitly required because the foreign key is not nullable. If the dependent/child entity should be deleted when a required relationship is severed, then setup the relationship to use cascade deletes.  Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
         /// </summary>
         public static string RelationshipConceptualNull([CanBeNull] object firstType, [CanBeNull] object secondType)
             => string.Format(
@@ -677,7 +1013,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 firstType, secondType);
 
         /// <summary>
-        ///     The property '{property}' on entity type '{entityType}' is marked as null, but this cannot be saved because the property is marked as required.
+        ///     The property '{property}' on entity type '{entityType}' is marked as null, but this cannot be saved because the property is marked as required.  Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
         /// </summary>
         public static string PropertyConceptualNull([CanBeNull] object property, [CanBeNull] object entityType)
             => string.Format(
@@ -763,6 +1099,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 CoreEventId.QueryModelCompiling,
                 LogLevel.Debug,
+                "CoreEventId.QueryModelCompiling",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     CoreEventId.QueryModelCompiling,
@@ -775,6 +1112,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 CoreEventId.QueryModelOptimized,
                 LogLevel.Debug,
+                "CoreEventId.QueryModelOptimized",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     CoreEventId.QueryModelOptimized,
@@ -787,6 +1125,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 CoreEventId.NavigationIncluded,
                 LogLevel.Debug,
+                "CoreEventId.NavigationIncluded",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     CoreEventId.NavigationIncluded,
@@ -799,6 +1138,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 CoreEventId.QueryExecutionPlanned,
                 LogLevel.Debug,
+                "CoreEventId.QueryExecutionPlanned",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     CoreEventId.QueryExecutionPlanned,
@@ -901,7 +1241,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 derivedType, rootType);
 
         /// <summary>
-        ///     The entity type '{entityType}' cannot inherit from '{baseEntityType}' because '{baseEntityType}' is a descendent of '{entityType}'.
+        ///     The entity type '{entityType}' cannot inherit from '{baseEntityType}' because '{baseEntityType}' is a descendant of '{entityType}'.
         /// </summary>
         public static string CircularInheritance([CanBeNull] object entityType, [CanBeNull] object baseEntityType)
             => string.Format(
@@ -1051,6 +1391,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("HiLoBadBlockSize");
 
         /// <summary>
+        ///     Value generation is not supported for property '{entityType}.{property}' because it has a '{converter}' converter configured. Configure the property to not use value generation using 'ValueGenerated.Never' or 'DatabaseGeneratedOption.None' and specify explict values instead.
+        /// </summary>
+        public static string ValueGenWithConversion([CanBeNull] object entityType, [CanBeNull] object property, [CanBeNull] object converter)
+            => string.Format(
+                GetString("ValueGenWithConversion", nameof(entityType), nameof(property), nameof(converter)),
+                entityType, property, converter);
+
+        /// <summary>
         ///     The entity type related to '{entityType}' cannot be determined because the specified foreign key {foreignKey} references entity type '{principalEntityType}' that it is in the same hierarchy as the entity type that it is declared on '{dependentEntityType}'.
         /// </summary>
         public static string IntraHierarchicalAmbiguousTargetEntityType([CanBeNull] object entityType, [CanBeNull] object foreignKey, [CanBeNull] object principalEntityType, [CanBeNull] object dependentEntityType)
@@ -1075,7 +1423,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType, baseEntityType);
 
         /// <summary>
-        ///     The entity type '{entityType}' cannot inherit from '{baseEntityType}' because '{clrType}' is not a descendent of '{baseClrType}'.
+        ///     The entity type '{entityType}' cannot inherit from '{baseEntityType}' because '{clrType}' is not a descendant of '{baseClrType}'.
         /// </summary>
         public static string NotAssignableClrBaseType([CanBeNull] object entityType, [CanBeNull] object baseEntityType, [CanBeNull] object clrType, [CanBeNull] object baseClrType)
             => string.Format(
@@ -1153,7 +1501,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 navigation, entityType);
 
         /// <summary>
-        ///     Invalid relationship has been specified using InverseProperty and ForeignKey. The navigation '{navigation}' in entity type '{entityType}' and the navigation '{referencedNavigation}' in entity type '{referencedEntityType}' are related by InversePropertyAttribute but the ForeignKeyAttribute specified for both navigations have different values.
+        ///     Invalid relationship has been specified using InversePropertyAttribute and ForeignKeyAttribute. The navigation '{navigation}' in entity type '{entityType}' and the navigation '{referencedNavigation}' in entity type '{referencedEntityType}' are related by InversePropertyAttribute but the ForeignKeyAttribute specified for both navigations have different values.
         /// </summary>
         public static string InvalidRelationshipUsingDataAnnotations([CanBeNull] object navigation, [CanBeNull] object entityType, [CanBeNull] object referencedNavigation, [CanBeNull] object referencedEntityType)
             => string.Format(
@@ -1161,20 +1509,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 navigation, entityType, referencedNavigation, referencedEntityType);
 
         /// <summary>
-        ///     The property '{property}' cannot be added to the entity type '{entityType}' because a navigation property with the same name already exists on entity type '{duplicateEntityType}'.
+        ///     The property or navigation '{member}' cannot be added to the entity type '{entityType}' because a property or navigation with the same name already exists on entity type '{conflictingEntityType}'.
         /// </summary>
-        public static string ConflictingNavigation([CanBeNull] object property, [CanBeNull] object entityType, [CanBeNull] object duplicateEntityType)
+        public static string ConflictingPropertyOrNavigation([CanBeNull] object member, [CanBeNull] object entityType, [CanBeNull] object conflictingEntityType)
             => string.Format(
-                GetString("ConflictingNavigation", nameof(property), nameof(entityType), nameof(duplicateEntityType)),
-                property, entityType, duplicateEntityType);
-
-        /// <summary>
-        ///     The navigation property '{navigation}' cannot be added to the entity type '{entityType}' because a property with the same name already exists on entity type '{duplicateEntityType}'.
-        /// </summary>
-        public static string ConflictingProperty([CanBeNull] object navigation, [CanBeNull] object entityType, [CanBeNull] object duplicateEntityType)
-            => string.Format(
-                GetString("ConflictingProperty", nameof(navigation), nameof(entityType), nameof(duplicateEntityType)),
-                navigation, entityType, duplicateEntityType);
+                GetString("ConflictingPropertyOrNavigation", nameof(member), nameof(entityType), nameof(conflictingEntityType)),
+                member, entityType, conflictingEntityType);
 
         /// <summary>
         ///     The specified entity type '{entityType}' is invalid. It should be either the dependent entity type '{dependentType}' or the principal entity type '{principalType}'.
@@ -1217,7 +1557,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType, property, propertyType);
 
         /// <summary>
-        ///     The property '{entityType}.{navigation}' is of an interface type ('{propertyType}'). If it is a navigation property manually configure the relationship for this property by casting it to a mapped entity type, otherwise ignore the property using the '[NotMapped]' attribute or by using 'EntityTypeBuilder.Ignore' in 'OnModelCreating'.
+        ///     The property '{entityType}.{navigation}' is of an interface type ('{propertyType}'). If it is a navigation property manually configure the relationship for this property by casting it to a mapped entity type, otherwise ignore the property using the NotMappedAttribute or 'EntityTypeBuilder.Ignore' in 'OnModelCreating'.
         /// </summary>
         public static string InterfacePropertyNotAdded([CanBeNull] object entityType, [CanBeNull] object navigation, [CanBeNull] object propertyType)
             => string.Format(
@@ -1277,6 +1617,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 CoreEventId.SensitiveDataLoggingEnabledWarning,
                 LogLevel.Warning,
+                "CoreEventId.SensitiveDataLoggingEnabledWarning",
                 LoggerMessage.Define(
                     LogLevel.Warning,
                     CoreEventId.SensitiveDataLoggingEnabledWarning,
@@ -1369,7 +1710,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 typeName);
 
         /// <summary>
-        ///     The child/dependent side could not be determined for the one-to-one relationship that was detected between '{dependentToPrincipalNavigationSpecification}' and '{principalToDependentNavigationSpecification}'. To identify the child/dependent side of the relationship, configure the foreign key property. If these navigations should not be part of the same relationship configure them without specifying the inverse. See http://go.microsoft.com/fwlink/?LinkId=724062 for more details.
+        ///     The child/dependent side could not be determined for the one-to-one relationship between '{dependentToPrincipalNavigationSpecification}' and '{principalToDependentNavigationSpecification}'. To identify the child/dependent side of the relationship, configure the foreign key property. If these navigations should not be part of the same relationship configure them without specifying the inverse. See http://go.microsoft.com/fwlink/?LinkId=724062 for more details.
         /// </summary>
         public static string AmbiguousOneToOneRelationship([CanBeNull] object dependentToPrincipalNavigationSpecification, [CanBeNull] object principalToDependentNavigationSpecification)
             => string.Format(
@@ -1385,7 +1726,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 firstDependentToPrincipalNavigationSpecification, firstPrincipalToDependentNavigationSpecification, secondDependentToPrincipalNavigationSpecification, secondPrincipalToDependentNavigationSpecification, foreignKeyProperties);
 
         /// <summary>
-        ///     The {methodName} property lambda expression '{includeLambdaExpression}' is invalid.The expression should represent a property access: 't =&gt; t.MyProperty'. To target navigations declared on derived types, specify an explicitly typed lambda parameter of the target type, E.g. '(Derived d) =&gt; d.MyProperty'. For more information on including related data, see http://go.microsoft.com/fwlink/?LinkID=746393.
+        ///     The {methodName} property lambda expression '{includeLambdaExpression}' is invalid. The expression should represent a property access: 't =&gt; t.MyProperty'. To target navigations declared on derived types, specify an explicitly typed lambda parameter of the target type, E.g. '(Derived d) =&gt; d.MyProperty'. For more information on including related data, see http://go.microsoft.com/fwlink/?LinkID=746393.
         /// </summary>
         public static string InvalidIncludeLambdaExpression([CanBeNull] object methodName, [CanBeNull] object includeLambdaExpression)
             => string.Format(
@@ -1439,6 +1780,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 CoreEventId.IncludeIgnoredWarning,
                 LogLevel.Warning,
+                "CoreEventId.IncludeIgnoredWarning",
                 LoggerMessage.Define<string>(
                     LogLevel.Warning,
                     CoreEventId.IncludeIgnoredWarning,
@@ -1453,12 +1795,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 newPrincipalEntityType, newPrincipalNavigation, newDependentEntityType, newDependentNavigation, existingPrincipalEntityType, existingPrincipalNavigation, existingDependentEntityType, existingDependentNavigation);
 
         /// <summary>
-        ///     Warning as error exception for warning '{eventId}': {message} To suppress this Exception use the DbContextOptionsBuilder.ConfigureWarnings API. ConfigureWarnings can be used when overriding the DbContext.OnConfiguring method or using AddDbContext on the application service provider.
+        ///     Error generated for warning '{eventName}: {message}'. This exception can be suppressed or logged by passing event ID '{eventId}' to the 'ConfigureWarnings' method in 'DbContext.OnConfiguring' or 'AddDbContext'.
         /// </summary>
-        public static string WarningAsErrorTemplate([CanBeNull] object eventId, [CanBeNull] object message)
+        public static string WarningAsErrorTemplate([CanBeNull] object eventName, [CanBeNull] object message, [CanBeNull] object eventId)
             => string.Format(
-                GetString("WarningAsErrorTemplate", nameof(eventId), nameof(message)),
-                eventId, message);
+                GetString("WarningAsErrorTemplate", nameof(eventName), nameof(message), nameof(eventId)),
+                eventName, message, eventId);
 
         /// <summary>
         ///     Cannot access a disposed object. A common cause of this error is disposing a context that was resolved from dependency injection and then later trying to use the same context instance elsewhere in your application. This may occur if you are calling Dispose() on the context, or wrapping the context in a using statement. If you are using dependency injection, you should let the dependency injection container take care of disposing context instances.
@@ -1545,7 +1887,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 strategy, getExecutionStrategyMethod);
 
         /// <summary>
-        ///     Cannot call Property for the property '{property}' on entity type '{entityType}' because it is configured as a navigation property. Property can only be used to configure scalar properties.
+        ///     '{property}' cannot be used as a property on entity type '{entityType}' because it is configured as a navigation.
         /// </summary>
         public static string PropertyCalledOnNavigation([CanBeNull] object property, [CanBeNull] object entityType)
             => string.Format(
@@ -1559,6 +1901,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 CoreEventId.RowLimitingOperationWithoutOrderByWarning,
                 LogLevel.Warning,
+                "CoreEventId.RowLimitingOperationWithoutOrderByWarning",
                 LoggerMessage.Define<string>(
                     LogLevel.Warning,
                     CoreEventId.RowLimitingOperationWithoutOrderByWarning,
@@ -1581,12 +1924,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 property, entityType, index, indexType);
 
         /// <summary>
-        ///     Query: '{queryModel}' uses First/FirstOrDefault operation without OrderBy and filter which may lead to unpredictable results.
+        ///     Query: '{queryModel}' uses First/FirstOrDefault/Last/LastOrDefault operation without OrderBy and filter which may lead to unpredictable results.
         /// </summary>
         public static readonly EventDefinition<string> LogFirstWithoutOrderByAndFilter
             = new EventDefinition<string>(
                 CoreEventId.FirstWithoutOrderByAndFilterWarning,
                 LogLevel.Warning,
+                "CoreEventId.FirstWithoutOrderByAndFilterWarning",
                 LoggerMessage.Define<string>(
                     LogLevel.Warning,
                     CoreEventId.FirstWithoutOrderByAndFilterWarning,
@@ -1613,7 +1957,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("PoolingOptionsModified");
 
         /// <summary>
-        ///     The foreign keys on entity type '{dependentType}' cannot target the same entity type because it is a dependent entity type.
+        ///     The foreign keys on entity type '{dependentType}' cannot target the same entity type because it is a weak entity type.
         /// </summary>
         public static string ForeignKeySelfReferencingDependentEntityType([CanBeNull] object dependentType)
             => string.Format(
@@ -1629,35 +1973,35 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType, referencedEntityType, foreignKey);
 
         /// <summary>
-        ///     The entity type '{entityType}' cannot be added to the model because a dependent entity type with the same name already exists.
+        ///     The entity type '{entityType}' cannot be added to the model because a weak entity type with the same name already exists.
         /// </summary>
-        public static string ClashingDependentEntityType([CanBeNull] object entityType)
+        public static string ClashingWeakEntityType([CanBeNull] object entityType)
             => string.Format(
-                GetString("ClashingDependentEntityType", nameof(entityType)),
+                GetString("ClashingWeakEntityType", nameof(entityType)),
                 entityType);
 
         /// <summary>
-        ///     The dependent entity type '{entityType}' cannot be added to the model because an entity type with the same name already exists.
+        ///     The weak entity type '{entityType}' cannot be added to the model because an entity type with the same name already exists.
         /// </summary>
-        public static string ClashingNonDependentEntityType([CanBeNull] object entityType)
+        public static string ClashingNonWeakEntityType([CanBeNull] object entityType)
             => string.Format(
-                GetString("ClashingNonDependentEntityType", nameof(entityType)),
+                GetString("ClashingNonWeakEntityType", nameof(entityType)),
                 entityType);
 
         /// <summary>
-        ///     The type '{entityType}' cannot have dependent entity type '{baseType}' as the base type.
+        ///     The type '{entityType}' cannot have weak entity type '{baseType}' as the base type.
         /// </summary>
-        public static string DependentBaseType([CanBeNull] object entityType, [CanBeNull] object baseType)
+        public static string WeakBaseType([CanBeNull] object entityType, [CanBeNull] object baseType)
             => string.Format(
-                GetString("DependentBaseType", nameof(entityType), nameof(baseType)),
+                GetString("WeakBaseType", nameof(entityType), nameof(baseType)),
                 entityType, baseType);
 
         /// <summary>
-        ///     The dependent entity type '{entityType}' cannot have a base type.
+        ///     The weak entity type '{entityType}' cannot have a base type.
         /// </summary>
-        public static string DependentDerivedType([CanBeNull] object entityType)
+        public static string WeakDerivedType([CanBeNull] object entityType)
             => string.Format(
-                GetString("DependentDerivedType", nameof(entityType)),
+                GetString("WeakDerivedType", nameof(entityType)),
                 entityType);
 
         /// <summary>
@@ -1691,7 +2035,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType);
 
         /// <summary>
-        ///     The ownership navigation '{ownershipNavigation}' should be the same as the defining navigation '{definingNavigation}' for entity type '{entityType}'
+        ///     The ownership by '{ownershipNavigation}' should use defining navigation '{definingNavigation}' for the owned type '{entityType}'
         /// </summary>
         public static string NonDefiningOwnership([CanBeNull] object ownershipNavigation, [CanBeNull] object definingNavigation, [CanBeNull] object entityType)
             => string.Format(
@@ -1707,15 +2051,15 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 ownedEntityType, nonOwnedEntityType);
 
         /// <summary>
-        ///     The navigation '{principalEntityType}.{navigation}' is not supported because it is pointing to an owned entity type '{ownedType}'. Only the owner entity type can declare a navigation to an owned entity type.
+        ///     The navigation '{principalEntityType}.{navigation}' is not supported because it is pointing to an owned entity type '{ownedType}'. Only the ownership navigation from the entity type '{ownerType}' can point to the owned entity type.
         /// </summary>
-        public static string InverseToOwnedType([CanBeNull] object principalEntityType, [CanBeNull] object navigation, [CanBeNull] object ownedType)
+        public static string InverseToOwnedType([CanBeNull] object principalEntityType, [CanBeNull] object navigation, [CanBeNull] object ownedType, [CanBeNull] object ownerType)
             => string.Format(
-                GetString("InverseToOwnedType", nameof(principalEntityType), nameof(navigation), nameof(ownedType)),
-                principalEntityType, navigation, ownedType);
+                GetString("InverseToOwnedType", nameof(principalEntityType), nameof(navigation), nameof(ownedType), nameof(ownerType)),
+                principalEntityType, navigation, ownedType, ownerType);
 
         /// <summary>
-        ///     The relationship from '{referencingEntityTypeOrNavigation}' to '{referencedEntityTypeOrNavigation}' is not supported because the owned entity type '{ownedType}' cannot be on the principal side.
+        ///     The relationship from '{referencingEntityTypeOrNavigation}' to '{referencedEntityTypeOrNavigation}' is not supported because the owned entity type '{ownedType}' cannot be on the principal side of a non-ownership relationship.
         /// </summary>
         public static string PrincipalOwnedType([CanBeNull] object referencingEntityTypeOrNavigation, [CanBeNull] object referencedEntityTypeOrNavigation, [CanBeNull] object ownedType)
             => string.Format(
@@ -1755,6 +2099,22 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 filter, entityType);
 
         /// <summary>
+        ///     Converter for model type '{converterType}' cannot be used for '{entityType}.{propertyName}' because its type is '{propertyType}'.
+        /// </summary>
+        public static string ConverterPropertyMismatch([CanBeNull] object converterType, [CanBeNull] object entityType, [CanBeNull] object propertyName, [CanBeNull] object propertyType)
+            => string.Format(
+                GetString("ConverterPropertyMismatch", nameof(converterType), nameof(entityType), nameof(propertyName), nameof(propertyType)),
+                converterType, entityType, propertyName, propertyType);
+
+        /// <summary>
+        ///     Comparer for type '{type}' cannot be used for '{entityType}.{propertyName}' because its type is '{propertyType}'.
+        /// </summary>
+        public static string ComparerPropertyMismatch([CanBeNull] object type, [CanBeNull] object entityType, [CanBeNull] object propertyName, [CanBeNull] object propertyType)
+            => string.Format(
+                GetString("ComparerPropertyMismatch", nameof(type), nameof(entityType), nameof(propertyName), nameof(propertyType)),
+                type, entityType, propertyName, propertyType);
+
+        /// <summary>
         ///     The Include operation '{include}' is not supported. '{invalidNavigation}' must be a navigation property defined on an entity type.
         /// </summary>
         public static string IncludeNotSpecifiedDirectlyOnEntityType([CanBeNull] object include, [CanBeNull] object invalidNavigation)
@@ -1769,6 +2129,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 CoreEventId.PossibleUnintendedCollectionNavigationNullComparisonWarning,
                 LogLevel.Warning,
+                "CoreEventId.PossibleUnintendedCollectionNavigationNullComparisonWarning",
                 LoggerMessage.Define<string>(
                     LogLevel.Warning,
                     CoreEventId.PossibleUnintendedCollectionNavigationNullComparisonWarning,
@@ -1781,18 +2142,20 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<object, object>(
                 CoreEventId.PossibleUnintendedReferenceComparisonWarning,
                 LogLevel.Warning,
+                "CoreEventId.PossibleUnintendedReferenceComparisonWarning",
                 LoggerMessage.Define<object, object>(
                     LogLevel.Warning,
                     CoreEventId.PossibleUnintendedReferenceComparisonWarning,
                     _resourceManager.GetString("LogPossibleUnintendedReferenceComparison")));
 
         /// <summary>
-        ///     The same entity is being tracked as different dependent entity types '{dependent1}' and '{dependent2}'. If a property value changes it will result in two store changes, which might not be the desired outcome.
+        ///     The same entity is being tracked as different weak entity types '{dependent1}' and '{dependent2}'. If a property value changes it will result in two store changes, which might not be the desired outcome.
         /// </summary>
         public static readonly EventDefinition<string, string> LogDuplicateDependentEntityTypeInstance
             = new EventDefinition<string, string>(
                 CoreEventId.DuplicateDependentEntityTypeInstanceWarning,
                 LogLevel.Warning,
+                "CoreEventId.DuplicateDependentEntityTypeInstanceWarning",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Warning,
                     CoreEventId.DuplicateDependentEntityTypeInstanceWarning,
@@ -1831,6 +2194,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 mapping);
 
         /// <summary>
+        ///     The value converter '{converter}' cannot be used with type '{type}'. This converter can only be used with {allowed}.
+        /// </summary>
+        public static string ConverterBadType([CanBeNull] object converter, [CanBeNull] object type, [CanBeNull] object allowed)
+            => string.Format(
+                GetString("ConverterBadType", nameof(converter), nameof(type), nameof(allowed)),
+                converter, type, allowed);
+
+        /// <summary>
         ///     The seed entity for entity type '{entityType}' cannot be added because another seed entity with the same key value for {keyProperties} has already been added. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the conflicting key values.
         /// </summary>
         public static string SeedDatumDuplicate([CanBeNull] object entityType, [CanBeNull] object keyProperties)
@@ -1863,7 +2234,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType, value, property, type);
 
         /// <summary>
-        ///     The seed entity for entity type '{entityType}' cannot be added because the was no value provided for the required property '{property}'. 
+        ///     The seed entity for entity type '{entityType}' cannot be added because there was no value provided for the required property '{property}'.
         /// </summary>
         public static string SeedDatumMissingValue([CanBeNull] object entityType, [CanBeNull] object property)
             => string.Format(
@@ -1893,6 +2264,428 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => string.Format(
                 GetString("SeedDatumDerivedType", nameof(entityType), nameof(derivedType)),
                 entityType, derivedType);
+
+        /// <summary>
+        ///     No suitable constructor found for entity type '{entityType}'. The following parameters could not be bound to properties of the entity: '{parameters}'.
+        /// </summary>
+        public static string ConstructorNotFound([CanBeNull] object entityType, [CanBeNull] object parameters)
+            => string.Format(
+                GetString("ConstructorNotFound", nameof(entityType), nameof(parameters)),
+                entityType, parameters);
+
+        /// <summary>
+        ///     Two constructors were found with the same number of parameters that could both be used by Entity Framework. The constructor to use must be configured explicitly. The two constructors are '{firstConstructor}' and '{secondConstructor}'.
+        /// </summary>
+        public static string ConstructorConflict([CanBeNull] object firstConstructor, [CanBeNull] object secondConstructor)
+            => string.Format(
+                GetString("ConstructorConflict", nameof(firstConstructor), nameof(secondConstructor)),
+                firstConstructor, secondConstructor);
+
+        /// <summary>
+        ///     The type '{entityType}' cannot be marked as owned because a non-owned entity type with the same name already exists.
+        /// </summary>
+        public static string ClashingNonOwnedEntityType([CanBeNull] object entityType)
+            => string.Format(
+                GetString("ClashingNonOwnedEntityType", nameof(entityType)),
+                entityType);
+
+        /// <summary>
+        ///     Current provider doesn't support System.Transaction.
+        /// </summary>
+        public static string TransactionsNotSupported
+            => GetString("TransactionsNotSupported");
+
+        /// <summary>
+        ///     The property '{property}' on entity type '{entityType}' was created in shadow state because there are no eligible CLR members with a matching name.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogShadowPropertyCreated
+            = new EventDefinition<string, string>(
+                CoreEventId.ShadowPropertyCreated,
+                LogLevel.Debug,
+                "CoreEventId.ShadowPropertyCreated",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.ShadowPropertyCreated,
+                    _resourceManager.GetString("LogShadowPropertyCreated")));
+
+        /// <summary>
+        ///     A transient exception has been encountered during execution and the operation will be retried after {delay}ms.{newline}{error}
+        /// </summary>
+        public static readonly EventDefinition<int, string, Exception> LogExecutionStrategyRetrying
+            = new EventDefinition<int, string, Exception>(
+                CoreEventId.ExecutionStrategyRetrying,
+                LogLevel.Information,
+                "CoreEventId.ExecutionStrategyRetrying",
+                LoggerMessage.Define<int, string, Exception>(
+                    LogLevel.Information,
+                    CoreEventId.ExecutionStrategyRetrying,
+                    _resourceManager.GetString("LogExecutionStrategyRetrying")));
+
+        /// <summary>
+        ///     Navigation property '{navigation}' of entity type '{entityType}' is being lazy-loaded.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogNavigationLazyLoading
+            = new EventDefinition<string, string>(
+                CoreEventId.NavigationLazyLoading,
+                LogLevel.Debug,
+                "CoreEventId.NavigationLazyLoading",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.NavigationLazyLoading,
+                    _resourceManager.GetString("LogNavigationLazyLoading")));
+
+        /// <summary>
+        ///     An attempt was made to lazy-load navigation property '{navigation}' on entity type '{entityType}' after the associated DbContext was disposed.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogLazyLoadOnDisposedContext
+            = new EventDefinition<string, string>(
+                CoreEventId.LazyLoadOnDisposedContextWarning,
+                LogLevel.Warning,
+                "CoreEventId.LazyLoadOnDisposedContextWarning",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.LazyLoadOnDisposedContextWarning,
+                    _resourceManager.GetString("LogLazyLoadOnDisposedContext")));
+
+        /// <summary>
+        ///     An attempt was made to lazy-load navigation property '{navigation}' on detached entity of type '{entityType}'. Lazy-loading is not supported for detached entities or entities that are loaded with 'AsNoTracking()'.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogDetachedLazyLoading
+            = new EventDefinition<string, string>(
+                CoreEventId.DetachedLazyLoadingWarning,
+                LogLevel.Warning,
+                "CoreEventId.DetachedLazyLoadingWarning",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.DetachedLazyLoadingWarning,
+                    _resourceManager.GetString("LogDetachedLazyLoading")));
+
+        /// <summary>
+        ///     Cannot create a DbSet for '{typeName}' because it is a query type. Use the DbContext.Query method to create a DbQuery instead.
+        /// </summary>
+        public static string InvalidSetTypeQuery([CanBeNull] object typeName)
+            => string.Format(
+                GetString("InvalidSetTypeQuery", nameof(typeName)),
+                typeName);
+
+        /// <summary>
+        ///     Cannot create a DbQuery for '{typeName}' because it is not a query type. Use the DbContext.Set method to create a DbSet instead.
+        /// </summary>
+        public static string InvalidSetTypeEntity([CanBeNull] object typeName)
+            => string.Format(
+                GetString("InvalidSetTypeEntity", nameof(typeName)),
+                typeName);
+
+        /// <summary>
+        ///     Unable to create a foreign key with the query type '{queryType}' as the principal type. Only entity types are allowed as foreign key principal types.
+        /// </summary>
+        public static string QueryTypeCannotBePrincipal([CanBeNull] object queryType)
+            => string.Format(
+                GetString("QueryTypeCannotBePrincipal", nameof(queryType)),
+                queryType);
+
+        /// <summary>
+        ///     Unable to track an instance of type '{type}' because it is a query type. Only entity types may be tracked.
+        /// </summary>
+        public static string QueryTypeNotValid([CanBeNull] object type)
+            => string.Format(
+                GetString("QueryTypeNotValid", nameof(type)),
+                type);
+
+        /// <summary>
+        ///     Cannot set '{baseType}' as the base type of '{derivedType}'. Inheritance hierarchies cannot contain a mix of entity types and query types.
+        /// </summary>
+        public static string ErrorMixedQueryEntityTypeInheritance([CanBeNull] object baseType, [CanBeNull] object derivedType)
+            => string.Format(
+                GetString("ErrorMixedQueryEntityTypeInheritance", nameof(baseType), nameof(derivedType)),
+                baseType, derivedType);
+
+        /// <summary>
+        ///     The query type '{queryType}' cannot be added to the model because an entity type with the same name already exists.
+        /// </summary>
+        public static string CannotAccessEntityAsQuery([CanBeNull] object queryType)
+            => string.Format(
+                GetString("CannotAccessEntityAsQuery", nameof(queryType)),
+                queryType);
+
+        /// <summary>
+        ///     The entity type '{entityType}' cannot be added to the model because a query type with the same name already exists.
+        /// </summary>
+        public static string CannotAccessQueryAsEntity([CanBeNull] object entityType)
+            => string.Format(
+                GetString("CannotAccessQueryAsEntity", nameof(entityType)),
+                entityType);
+
+        /// <summary>
+        ///     Cannot create a navigation targeting type '{type}' because it is a query type. Only entity types can be used as navigation target types.
+        /// </summary>
+        public static string ErrorNavCannotTargetQueryType([CanBeNull] object type)
+            => string.Format(
+                GetString("ErrorNavCannotTargetQueryType", nameof(type)),
+                type);
+
+        /// <summary>
+        ///     The index {redundantIndex} was not created as the properties are already covered by the index {otherIndex}.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogRedundantIndexRemoved
+            = new EventDefinition<string, string>(
+                CoreEventId.RedundantIndexRemoved,
+                LogLevel.Debug,
+                "CoreEventId.RedundantIndexRemoved",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.RedundantIndexRemoved,
+                    _resourceManager.GetString("LogRedundantIndexRemoved")));
+
+        /// <summary>
+        ///     The foreign key properties haven't been configured by convention because the best match {foreignKey} are incompatible with the current principal key {principalKey}. This message can be disregarded if explicit configuration has been specified.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogIncompatibleMatchingForeignKeyProperties
+            = new EventDefinition<string, string>(
+                CoreEventId.IncompatibleMatchingForeignKeyProperties,
+                LogLevel.Debug,
+                "CoreEventId.IncompatibleMatchingForeignKeyProperties",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.IncompatibleMatchingForeignKeyProperties,
+                    _resourceManager.GetString("LogIncompatibleMatchingForeignKeyProperties")));
+
+        /// <summary>
+        ///     The navigation property '{navigation}' has a RequiredAttribute causing the entity type '{entityType}' to be configured as the dependent side in the corresponding relationship.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogRequiredAttributeOnDependent
+            = new EventDefinition<string, string>(
+                CoreEventId.RequiredAttributeOnDependent,
+                LogLevel.Debug,
+                "CoreEventId.RequiredAttributeOnDependent",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.RequiredAttributeOnDependent,
+                    _resourceManager.GetString("LogRequiredAttributeOnDependent")));
+
+        /// <summary>
+        ///     The RequiredAttribute on '{principalEntityType}.{principalNavigation}' was ignored because there is also a RequiredAttribute on '{dependentEntityType}.{dependentNavigation}'. RequiredAttribute should only be specified on the dependent side of the relationship.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string> LogRequiredAttributeOnBothNavigations
+            = new EventDefinition<string, string, string, string>(
+                CoreEventId.RequiredAttributeOnBothNavigations,
+                LogLevel.Debug,
+                "CoreEventId.RequiredAttributeOnBothNavigations",
+                LoggerMessage.Define<string, string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.RequiredAttributeOnBothNavigations,
+                    _resourceManager.GetString("LogRequiredAttributeOnBothNavigations")));
+
+        /// <summary>
+        ///     Navigations '{dependentEntityType}.{dependentNavigation}' and '{principalEntityType}.{principalNavigation}' were separated into two relationships as ForeignKeyAttribute was specified on navigations on both sides.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string> LogForeignKeyAttributesOnBothNavigations
+            = new EventDefinition<string, string, string, string>(
+                CoreEventId.ForeignKeyAttributesOnBothNavigationsWarning,
+                LogLevel.Warning,
+                "CoreEventId.ForeignKeyAttributesOnBothNavigationsWarning",
+                LoggerMessage.Define<string, string, string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.ForeignKeyAttributesOnBothNavigationsWarning,
+                    _resourceManager.GetString("LogForeignKeyAttributesOnBothNavigations")));
+
+        /// <summary>
+        ///     Navigations '{dependentEntityType}.{dependentNavigation}' and '{principalEntityType}.{principalNavigation}' were separated into two relationships as ForeignKeyAttribute was specified on properties '{dependentProperty}' and '{principalProperty}' on both sides.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string, string, string> LogForeignKeyAttributesOnBothProperties
+            = new EventDefinition<string, string, string, string, string, string>(
+                CoreEventId.ForeignKeyAttributesOnBothPropertiesWarning,
+                LogLevel.Warning,
+                "CoreEventId.ForeignKeyAttributesOnBothPropertiesWarning",
+                LoggerMessage.Define<string, string, string, string, string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.ForeignKeyAttributesOnBothPropertiesWarning,
+                    _resourceManager.GetString("LogForeignKeyAttributesOnBothProperties")));
+
+        /// <summary>
+        ///     The relationship was separated into two relationships because ForeignKeyAttribute specified on the navigation '{navigationEntityType}.{navigation}' doesn't match the ForeignKeyAttribute specified on the property '{propertyEntityType}.{property}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string> LogConflictingForeignKeyAttributesOnNavigationAndProperty
+            = new EventDefinition<string, string, string, string>(
+                CoreEventId.ConflictingForeignKeyAttributesOnNavigationAndPropertyWarning,
+                LogLevel.Warning,
+                "CoreEventId.ConflictingForeignKeyAttributesOnNavigationAndPropertyWarning",
+                LoggerMessage.Define<string, string, string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.ConflictingForeignKeyAttributesOnNavigationAndPropertyWarning,
+                    _resourceManager.GetString("LogConflictingForeignKeyAttributesOnNavigationAndProperty")));
+
+        /// <summary>
+        ///     There are multiple navigations ({navigations}) configured with InversePropertyAttribute that point to the same inverse navigation '{inverseNavigation}'.
+        /// </summary>
+        public static readonly EventDefinition<string, string> LogMultipleInversePropertiesSameTarget
+            = new EventDefinition<string, string>(
+                CoreEventId.MultipleInversePropertiesSameTargetWarning,
+                LogLevel.Warning,
+                "CoreEventId.MultipleInversePropertiesSameTargetWarning",
+                LoggerMessage.Define<string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.MultipleInversePropertiesSameTargetWarning,
+                    _resourceManager.GetString("LogMultipleInversePropertiesSameTarget")));
+
+        /// <summary>
+        ///     There are multiple relationships between '{dependentEntityType}' and '{principalEntityType}' without configured foreign key properties causing EF to create shadow properties on '{dependentType}' with names dependent on the discovery order.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string> LogConflictingShadowForeignKeys
+            = new EventDefinition<string, string, string>(
+                CoreEventId.ConflictingShadowForeignKeysWarning,
+                LogLevel.Warning,
+                "CoreEventId.ConflictingShadowForeignKeysWarning",
+                LoggerMessage.Define<string, string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.ConflictingShadowForeignKeysWarning,
+                    _resourceManager.GetString("LogConflictingShadowForeignKeys")));
+
+        /// <summary>
+        ///     No relationship from '{firstEntityType}' to '{secondEntityType}' has been configured by convention because there are multiple properties on one entity type {navigationProperties} that could be matched with the properties on the other entity type {inverseNavigations}. This message can be disregarded if explicit configuration has been specified.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string> LogMultipleNavigationProperties
+            = new EventDefinition<string, string, string, string>(
+                CoreEventId.MultipleNavigationProperties,
+                LogLevel.Debug,
+                "CoreEventId.MultipleNavigationProperties",
+                LoggerMessage.Define<string, string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.MultipleNavigationProperties,
+                    _resourceManager.GetString("LogMultipleNavigationProperties")));
+
+        /// <summary>
+        ///     Primary key hasn't been configured by convention as both properties '{firstProperty}' and '{secondProperty}' could be used as the primary key for the entity type '{entityType}'. This message can be disregarded if explicit configuration has been specified.
+        /// </summary>
+        public static readonly EventDefinition<string, string, string> LogMultiplePrimaryKeyCandidates
+            = new EventDefinition<string, string, string>(
+                CoreEventId.MultiplePrimaryKeyCandidates,
+                LogLevel.Debug,
+                "CoreEventId.MultiplePrimaryKeyCandidates",
+                LoggerMessage.Define<string, string, string>(
+                    LogLevel.Debug,
+                    CoreEventId.MultiplePrimaryKeyCandidates,
+                    _resourceManager.GetString("LogMultiplePrimaryKeyCandidates")));
+
+        /// <summary>
+        ///     The owned entity type '{entityType}' cannot have a base type.
+        /// </summary>
+        public static string OwnedDerivedType([CanBeNull] object entityType)
+            => string.Format(
+                GetString("OwnedDerivedType", nameof(entityType)),
+                entityType);
+
+        /// <summary>
+        ///     Cannot create a DbSet for '{typeName}' because it is mapped to multiple entity types and should they should be accessed through the defining entities.
+        /// </summary>
+        public static string InvalidSetTypeWeak([CanBeNull] object typeName)
+            => string.Format(
+                GetString("InvalidSetTypeWeak", nameof(typeName)),
+                typeName);
+
+        /// <summary>
+        ///     The navigation '{targetEntityType}.{inverseNavigation}' cannot be used as the inverse of '{weakEntityType}.{navigation}' because it's not the defining navigation '{definingNavigation}'
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string, string> LogNonDefiningInverseNavigation
+            = new EventDefinition<string, string, string, string, string>(
+                CoreEventId.NonDefiningInverseNavigationWarning,
+                LogLevel.Warning,
+                "CoreEventId.NonDefiningInverseNavigationWarning",
+                LoggerMessage.Define<string, string, string, string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.NonDefiningInverseNavigationWarning,
+                    _resourceManager.GetString("LogNonDefiningInverseNavigation")));
+
+        /// <summary>
+        ///     The navigation '{targetEntityType}.{inverseNavigation}' cannot be used as the inverse of '{ownedEntityType}.{navigation}' because it's not the ownership navigation '{ownershipNavigation}'
+        /// </summary>
+        public static readonly EventDefinition<string, string, string, string, string> LogNonOwnershipInverseNavigation
+            = new EventDefinition<string, string, string, string, string>(
+                CoreEventId.NonOwnershipInverseNavigationWarning,
+                LogLevel.Warning,
+                "CoreEventId.NonOwnershipInverseNavigationWarning",
+                LoggerMessage.Define<string, string, string, string, string>(
+                    LogLevel.Warning,
+                    CoreEventId.NonOwnershipInverseNavigationWarning,
+                    _resourceManager.GetString("LogNonOwnershipInverseNavigation")));
+
+        /// <summary>
+        ///     The property '{property}'  is marked as null on entity '{entityType}' with the key value '{keyValue}', but this cannot be saved because the property is marked as required.
+        /// </summary>
+        public static string PropertyConceptualNullSensitive([CanBeNull] object property, [CanBeNull] object entityType, [CanBeNull] object keyValue)
+            => string.Format(
+                GetString("PropertyConceptualNullSensitive", nameof(property), nameof(entityType), nameof(keyValue)),
+                property, entityType, keyValue);
+
+        /// <summary>
+        ///     The association between entities '{firstType}' and '{secondType}' with the key value '{secondKeyValue}' has been severed but the relationship is either marked as 'Required' or is implicitly required because the foreign key is not nullable. If the dependent/child entity should be deleted when a required relationship is severed, then setup the relationship to use cascade deletes.
+        /// </summary>
+        public static string RelationshipConceptualNullSensitive([CanBeNull] object firstType, [CanBeNull] object secondType, [CanBeNull] object secondKeyValue)
+            => string.Format(
+                GetString("RelationshipConceptualNullSensitive", nameof(firstType), nameof(secondType), nameof(secondKeyValue)),
+                firstType, secondType, secondKeyValue);
+
+        /// <summary>
+        ///     The foreign key {foreignKey} set on '{dependentEntityType}' matches an entity of type '{foundPrincipalEntityType}', however the principal entity type should be assignable to '{principalEntityType}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
+        /// </summary>
+        public static string IncompatiblePrincipalEntry([CanBeNull] object foreignKey, [CanBeNull] object dependentEntityType, [CanBeNull] object foundPrincipalEntityType, [CanBeNull] object principalEntityType)
+            => string.Format(
+                GetString("IncompatiblePrincipalEntry", nameof(foreignKey), nameof(dependentEntityType), nameof(foundPrincipalEntityType), nameof(principalEntityType)),
+                foreignKey, dependentEntityType, foundPrincipalEntityType, principalEntityType);
+
+        /// <summary>
+        ///     The foreign key '{foreignKeyValues}' set on '{dependentEntityType}' with the key value '{keyValue}' matches an entity of type '{foundPrincipalEntityType}', however the principal entity type should be assignable to '{principalEntityType}'.
+        /// </summary>
+        public static string IncompatiblePrincipalEntrySensitive([CanBeNull] object foreignKeyValues, [CanBeNull] object dependentEntityType, [CanBeNull] object keyValue, [CanBeNull] object foundPrincipalEntityType, [CanBeNull] object principalEntityType)
+            => string.Format(
+                GetString("IncompatiblePrincipalEntrySensitive", nameof(foreignKeyValues), nameof(dependentEntityType), nameof(keyValue), nameof(foundPrincipalEntityType), nameof(principalEntityType)),
+                foreignKeyValues, dependentEntityType, keyValue, foundPrincipalEntityType, principalEntityType);
+
+        /// <summary>
+        ///     The entity type '{entityType}' is part of a relationship cycle involving its primary key.
+        /// </summary>
+        public static string IdentifyingRelationshipCycle([CanBeNull] object entityType)
+            => string.Format(
+                GetString("IdentifyingRelationshipCycle", nameof(entityType)),
+                entityType);
+
+        /// <summary>
+        ///     The service property '{property}' of type '{serviceType}' cannot be added to the entity type '{entityType}' because there is another property of the same type. Ignore one of the properties using the NotMappedAttribute or 'EntityTypeBuilder.Ignore' in 'OnModelCreating'.
+        /// </summary>
+        public static string AmbiguousServiceProperty([CanBeNull] object property, [CanBeNull] object serviceType, [CanBeNull] object entityType)
+            => string.Format(
+                GetString("AmbiguousServiceProperty", nameof(property), nameof(serviceType), nameof(entityType)),
+                property, serviceType, entityType);
+
+        /// <summary>
+        ///     Cannot use multiple DbContext instances within a single query execution. Ensure the query uses a single context instance.
+        /// </summary>
+        public static string ErrorInvalidQueryable
+            => GetString("ErrorInvalidQueryable");
+
+        /// <summary>
+        ///     The query type '{queryType}' cannot have a defining query bacause it is derived from '{baseType}'. Only base query types can have a defining query.
+        /// </summary>
+        public static string DerivedQueryTypeDefiningQuery([CanBeNull] object queryType, [CanBeNull] object baseType)
+            => string.Format(
+                GetString("DerivedQueryTypeDefiningQuery", nameof(queryType), nameof(baseType)),
+                queryType, baseType);
+
+        /// <summary>
+        ///     The owned entity type '{ownedType}' requires to be referenced from another entity type via a navigation. Add a navigation to an entity type that points at '{ownedType}'.
+        /// </summary>
+        public static string OwnerlessOwnedType([CanBeNull] object ownedType)
+            => string.Format(
+                GetString("OwnerlessOwnedType", nameof(ownedType)),
+                ownedType);
+
+        /// <summary>
+        ///     The query type '{queryType}' cannot be added to the model because a query type with the same name already exists.
+        /// </summary>
+        public static string DuplicateQueryType([CanBeNull] object queryType)
+            => string.Format(
+                GetString("DuplicateQueryType", nameof(queryType)),
+                queryType);
 
         private static string GetString(string name, params string[] formatterNames)
         {

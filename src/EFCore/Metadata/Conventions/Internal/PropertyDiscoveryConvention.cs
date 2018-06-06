@@ -1,7 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -16,17 +15,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     /// </summary>
     public class PropertyDiscoveryConvention : IEntityTypeAddedConvention, IBaseTypeChangedConvention
     {
-        private readonly ITypeMapper _typeMapper;
+        private readonly ITypeMappingSource _typeMappingSource;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public PropertyDiscoveryConvention([NotNull] ITypeMapper typeMapper)
+        public PropertyDiscoveryConvention(
+            [NotNull] ITypeMappingSource typeMappingSource)
         {
-            Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
 
-            _typeMapper = typeMapper;
+            _typeMappingSource = typeMappingSource;
         }
 
         /// <summary>
@@ -40,11 +40,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             if (entityType.HasClrType())
             {
-                var primitiveProperties = entityType.ClrType.GetRuntimeProperties().Where(IsCandidatePrimitiveProperty);
-
-                foreach (var propertyInfo in primitiveProperties)
+                foreach (var propertyInfo in entityType.GetRuntimeProperties().Values)
                 {
-                    entityTypeBuilder.Property(propertyInfo, ConfigurationSource.Convention);
+                    if (IsCandidatePrimitiveProperty(propertyInfo))
+                    {
+                        entityTypeBuilder.Property(propertyInfo, ConfigurationSource.Convention);
+                    }
                 }
             }
 
@@ -60,7 +61,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             Check.NotNull(propertyInfo, nameof(propertyInfo));
 
             return propertyInfo.IsCandidateProperty()
-                   && _typeMapper.IsTypeMapped(propertyInfo.PropertyType);
+                   && _typeMappingSource.FindMapping(propertyInfo) != null;
         }
 
         /// <summary>

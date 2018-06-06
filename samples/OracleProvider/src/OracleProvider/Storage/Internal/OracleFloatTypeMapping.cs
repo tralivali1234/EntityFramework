@@ -3,31 +3,30 @@
 
 using System.Data;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Storage.Internal
 {
     public class OracleFloatTypeMapping : FloatTypeMapping
     {
         public OracleFloatTypeMapping(
             [NotNull] string storeType,
             [CanBeNull] DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, dbType)
         {
         }
 
-        public OracleFloatTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            [CanBeNull] DbType? dbType = null)
-            : base(storeType, converter, dbType)
+        protected OracleFloatTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new OracleFloatTypeMapping(storeType, Converter, DbType);
+            => new OracleFloatTypeMapping(Parameters.WithStoreTypeAndSize(storeType, size));
 
         public override CoreTypeMapping Clone(ValueConverter converter)
-            => new OracleFloatTypeMapping(StoreType, ComposeConverter(converter), DbType);
+            => new OracleFloatTypeMapping(Parameters.WithComposedConverter(converter));
 
         protected override string GenerateNonNullSqlLiteral(object value)
         {

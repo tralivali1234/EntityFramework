@@ -22,7 +22,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [NotNull] Expression valueBuffer,
             [NotNull] Type type,
             int index,
-            [CanBeNull] IProperty property);
+            [CanBeNull] IPropertyBase property);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -37,13 +37,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         Expression CreateMaterializeExpression(
             [NotNull] IEntityType entityType,
-            [NotNull] Expression valueBufferExpression,
+            [NotNull] Expression materializationExpression,
             [CanBeNull] int[] indexMap = null);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        Func<ValueBuffer, object> GetMaterializer([NotNull] IEntityType entityType);
+        Func<MaterializationContext, object> GetMaterializer([NotNull] IEntityType entityType);
     }
 }

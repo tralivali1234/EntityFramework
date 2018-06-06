@@ -5,9 +5,10 @@ using System.Collections.Generic;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Oracle.Metadata.Internal;
 
-namespace Microsoft.EntityFrameworkCore.Migrations.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Migrations.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -23,18 +24,6 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             : base(dependencies)
         {
         }
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public override IEnumerable<IAnnotation> For(IModel model) => ForRemove(model);
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public override IEnumerable<IAnnotation> For(IEntityType entityType) => ForRemove(entityType);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

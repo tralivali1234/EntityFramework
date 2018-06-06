@@ -11,10 +11,12 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public class ModelBuilderGenericTest : ModelBuilderTest
@@ -87,6 +89,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 => new GenericTestModelBuilder(testHelpers);
         }
 
+        public class GenericQueryTypes : QueryTypesTestBase
+        {
+            protected override TestModelBuilder CreateTestModelBuilder(TestHelpers testHelpers)
+                => new GenericTestModelBuilder(testHelpers);
+        }
+
         public class GenericOneToMany : OneToManyTestBase
         {
             protected override TestModelBuilder CreateTestModelBuilder(TestHelpers testHelpers)
@@ -123,6 +131,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 return this;
             }
 
+            public override TestOwnedEntityTypeBuilder<TEntity> Owned<TEntity>()
+                => new GenericTestOwnedEntityTypeBuilder<TEntity>(ModelBuilder.Owned<TEntity>());
+
+            public override TestQueryTypeBuilder<TQuery> Query<TQuery>()
+                => new GenericTestQueryTypeBuilder<TQuery>(ModelBuilder.Query<TQuery>());
+
             public override TestModelBuilder Ignore<TEntity>()
             {
                 ModelBuilder.Ignore<TEntity>();
@@ -130,7 +144,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             }
         }
 
-        protected class GenericTestEntityTypeBuilder<TEntity> : TestEntityTypeBuilder<TEntity>
+        protected class GenericTestEntityTypeBuilder<TEntity> : TestEntityTypeBuilder<TEntity>, IInfrastructure<EntityTypeBuilder<TEntity>>
             where TEntity : class
         {
             public GenericTestEntityTypeBuilder(EntityTypeBuilder<TEntity> entityTypeBuilder)
@@ -203,11 +217,83 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 Expression<Func<TEntity, IEnumerable<TRelatedEntity>>> navigationExpression = null)
                 => new GenericTestCollectionNavigationBuilder<TEntity, TRelatedEntity>(EntityTypeBuilder.HasMany(navigationExpression));
 
+            public override TestEntityTypeBuilder<TEntity> HasQueryFilter(Expression<Func<TEntity, bool>> filter)
+                => Wrap(EntityTypeBuilder.HasQueryFilter(filter));
+
             public override TestEntityTypeBuilder<TEntity> HasChangeTrackingStrategy(ChangeTrackingStrategy changeTrackingStrategy)
                 => Wrap(EntityTypeBuilder.HasChangeTrackingStrategy(changeTrackingStrategy));
 
             public override TestEntityTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
                 => Wrap(EntityTypeBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public override DataBuilder<TEntity> HasData(params TEntity[] data)
+                => EntityTypeBuilder.HasData(data);
+
+            public EntityTypeBuilder<TEntity> Instance => EntityTypeBuilder;
+        }
+
+        protected class GenericTestOwnedEntityTypeBuilder<TEntity> : TestOwnedEntityTypeBuilder<TEntity>, IInfrastructure<OwnedEntityTypeBuilder<TEntity>>
+            where TEntity : class
+        {
+            public GenericTestOwnedEntityTypeBuilder(OwnedEntityTypeBuilder<TEntity> ownedEntityTypeBuilder)
+            {
+                OwnedEntityTypeBuilder = ownedEntityTypeBuilder;
+            }
+
+            protected OwnedEntityTypeBuilder<TEntity> OwnedEntityTypeBuilder { get; }
+
+            public OwnedEntityTypeBuilder<TEntity> Instance => OwnedEntityTypeBuilder;
+        }
+
+        protected class GenericTestQueryTypeBuilder<TQuery> : TestQueryTypeBuilder<TQuery>, IInfrastructure<QueryTypeBuilder<TQuery>>
+            where TQuery : class
+        {
+            public GenericTestQueryTypeBuilder(QueryTypeBuilder<TQuery> queryTypeBuilder)
+            {
+                QueryTypeBuilder = queryTypeBuilder;
+            }
+
+            protected QueryTypeBuilder<TQuery> QueryTypeBuilder { get; }
+            public override IMutableEntityType Metadata => QueryTypeBuilder.Metadata;
+
+            protected virtual TestQueryTypeBuilder<TQuery> Wrap(QueryTypeBuilder<TQuery> entityTypeBuilder)
+                => new GenericTestQueryTypeBuilder<TQuery>(entityTypeBuilder);
+
+            public override TestQueryTypeBuilder<TQuery> HasAnnotation(string annotation, object value)
+                => Wrap(QueryTypeBuilder.HasAnnotation(annotation, value));
+
+            public override TestQueryTypeBuilder<TQuery> HasBaseType<TBaseEntity>()
+                => Wrap(QueryTypeBuilder.HasBaseType<TBaseEntity>());
+
+            public override TestQueryTypeBuilder<TQuery> HasBaseType(string baseEntityTypeName)
+                => Wrap(QueryTypeBuilder.HasBaseType(baseEntityTypeName));
+
+            public override TestPropertyBuilder<TProperty> Property<TProperty>(Expression<Func<TQuery, TProperty>> propertyExpression)
+                => new GenericTestPropertyBuilder<TProperty>(QueryTypeBuilder.Property(propertyExpression));
+
+            public override TestPropertyBuilder<TProperty> Property<TProperty>(string propertyName)
+                => new GenericTestPropertyBuilder<TProperty>(QueryTypeBuilder.Property<TProperty>(propertyName));
+
+            public override TestQueryTypeBuilder<TQuery> Ignore(Expression<Func<TQuery, object>> propertyExpression)
+                => Wrap(QueryTypeBuilder.Ignore(propertyExpression));
+
+            public override TestQueryTypeBuilder<TQuery> Ignore(string propertyName)
+                => Wrap(QueryTypeBuilder.Ignore(propertyName));
+
+            public override TestReferenceNavigationBuilder<TQuery, TRelatedEntity> HasOne<TRelatedEntity>(
+                Expression<Func<TQuery, TRelatedEntity>> navigationExpression = null)
+                => new GenericTestReferenceNavigationBuilder<TQuery, TRelatedEntity>(QueryTypeBuilder.HasOne(navigationExpression));
+
+            public override TestQueryTypeBuilder<TQuery> HasQueryFilter(Expression<Func<TQuery, bool>> filter)
+                => Wrap(QueryTypeBuilder.HasQueryFilter(filter));
+
+            public virtual TestQueryTypeBuilder<TQuery> ToQuery(Expression<Func<IQueryable<TQuery>>> query)
+                => Wrap(QueryTypeBuilder.ToQuery(query));
+
+            public override TestQueryTypeBuilder<TQuery> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
+                => Wrap(QueryTypeBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public QueryTypeBuilder<TQuery> Instance => QueryTypeBuilder;
         }
 
         protected class GenericTestPropertyBuilder<TProperty> : TestPropertyBuilder<TProperty>, IInfrastructure<PropertyBuilder<TProperty>>
@@ -265,6 +351,26 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public override TestPropertyBuilder<TProperty> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
                 => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TProvider>()
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion<TProvider>());
+
+            public override TestPropertyBuilder<TProperty> HasConversion(Type providerClrType)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(providerClrType));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TProvider>(
+                Expression<Func<TProperty, TProvider>> convertToProviderExpression,
+                Expression<Func<TProvider, TProperty>> convertFromProviderExpression)
+                => new GenericTestPropertyBuilder<TProperty>(
+                    PropertyBuilder.HasConversion(
+                        convertToProviderExpression,
+                        convertFromProviderExpression));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TProvider>(ValueConverter<TProperty, TProvider> converter)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(converter));
+
+            public override TestPropertyBuilder<TProperty> HasConversion(ValueConverter converter)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(converter));
 
             PropertyBuilder<TProperty> IInfrastructure<PropertyBuilder<TProperty>>.Instance => PropertyBuilder;
         }

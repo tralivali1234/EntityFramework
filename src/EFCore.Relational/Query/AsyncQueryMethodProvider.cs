@@ -3,11 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
@@ -22,6 +24,165 @@ namespace Microsoft.EntityFrameworkCore.Query
     /// </summary>
     public class AsyncQueryMethodProvider : IQueryMethodProvider
     {
+        /// <summary>
+        ///     Gets the fast query method.
+        /// </summary>
+        /// <value>
+        ///     The fast query method.
+        /// </value>
+        public virtual MethodInfo FastQueryMethod => _fastQueryMethodInfo;
+
+        private static readonly MethodInfo _fastQueryMethodInfo
+            = typeof(AsyncQueryMethodProvider).GetTypeInfo()
+                .GetDeclaredMethod(nameof(_FastQuery));
+
+        // ReSharper disable once InconsistentNaming
+        private static IAsyncEnumerable<TEntity> _FastQuery<TEntity>(
+            RelationalQueryContext relationalQueryContext,
+            ShaperCommandContext shaperCommandContext,
+            Func<DbDataReader, DbContext, TEntity> materializer,
+            Type contextType,
+            IDiagnosticsLogger<DbLoggerCategory.Query> logger)
+            => new FastQueryAsyncEnumerable<TEntity>(
+                relationalQueryContext,
+                shaperCommandContext,
+                materializer,
+                contextType,
+                logger);
+
+        private class FastQueryAsyncEnumerable<TEntity> : IAsyncEnumerable<TEntity>
+        {
+            private readonly RelationalQueryContext _relationalQueryContext;
+            private readonly ShaperCommandContext _shaperCommandContext;
+            private readonly Func<DbDataReader, DbContext, TEntity> _materializer;
+            private readonly Type _contextType;
+            private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
+
+            public FastQueryAsyncEnumerable(
+                RelationalQueryContext relationalQueryContext,
+                ShaperCommandContext shaperCommandContext,
+                Func<DbDataReader, DbContext, TEntity> materializer,
+                Type contextType,
+                IDiagnosticsLogger<DbLoggerCategory.Query> logger)
+            {
+                _relationalQueryContext = relationalQueryContext;
+                _shaperCommandContext = shaperCommandContext;
+                _materializer = materializer;
+                _contextType = contextType;
+                _logger = logger;
+            }
+
+            public IAsyncEnumerator<TEntity> GetEnumerator()
+                => new FastQueryAsyncEnumerator(this);
+
+            private class FastQueryAsyncEnumerator : IAsyncEnumerator<TEntity>
+            {
+                private readonly RelationalQueryContext _relationalQueryContext;
+                private readonly ShaperCommandContext _shaperCommandContext;
+                private readonly Func<DbDataReader, DbContext, TEntity> _materializer;
+                private readonly Type _contextType;
+                private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
+
+                private RelationalDataReader _dataReader;
+                private DbDataReader _dbDataReader;
+
+                private bool _disposed;
+
+                public FastQueryAsyncEnumerator(FastQueryAsyncEnumerable<TEntity> state)
+                {
+                    _relationalQueryContext = state._relationalQueryContext;
+                    _shaperCommandContext = state._shaperCommandContext;
+                    _materializer = state._materializer;
+                    _contextType = state._contextType;
+                    _logger = state._logger;
+                }
+
+                public async Task<bool> MoveNext(CancellationToken cancellationToken)
+                {
+                    if (_dataReader == null)
+                    {
+                        await _relationalQueryContext.Connection.OpenAsync(cancellationToken);
+
+                        try
+                        {
+                            var relationalCommand
+                                = _shaperCommandContext
+                                    .GetRelationalCommand(_relationalQueryContext.ParameterValues);
+
+                            _dataReader
+                                = await relationalCommand.ExecuteReaderAsync(
+                                    _relationalQueryContext.Connection,
+                                    _relationalQueryContext.ParameterValues, cancellationToken);
+                        }
+                        catch
+                        {
+                            //  If failure happens creating the data reader, then it won't be available to
+                            //  handle closing the connection, so do it explicitly here to preserve ref counting.
+                            _relationalQueryContext.Connection.Close();
+
+                            throw;
+                        }
+
+                        _dbDataReader = _dataReader.DbDataReader;
+                    }
+
+                    using (await _relationalQueryContext.ConcurrencyDetector
+                        .EnterCriticalSectionAsync(cancellationToken))
+                    {
+                        bool hasNext;
+
+                        try
+                        {
+                            hasNext = await _dbDataReader.ReadAsync(cancellationToken);
+                        }
+                        catch (Exception exception)
+                        {
+                            _logger.QueryIterationFailed(_contextType, exception);
+
+                            throw;
+                        }
+
+                        Current
+                            = hasNext
+                                ? _materializer(_dbDataReader, _relationalQueryContext.Context)
+                                : default;
+
+                        return hasNext;
+                    }
+                }
+
+                public TEntity Current { get; private set; }
+
+                public void Dispose()
+                {
+                    if (!_disposed)
+                    {
+                        try
+                        {
+                            _relationalQueryContext.Connection.Semaphore.Wait();
+
+                            if (_dataReader != null)
+                            {
+                                _dataReader.Dispose();
+                                _dataReader = null;
+                                _dbDataReader = null;
+
+                                _relationalQueryContext.Connection?.Close();
+                            }
+
+                            _disposed = true;
+                        }
+                        finally
+                        {
+                            _relationalQueryContext.Connection.Semaphore.Release();
+                        }
+
+                        _relationalQueryContext.Dispose();
+                    }
+                }
+            }
+        }
+
         /// <summary>
         ///     The shaped query method.
         /// </summary>
@@ -224,7 +385,10 @@ namespace Microsoft.EntityFrameworkCore.Query
                     {
                         var currentKey = _groupByAsyncEnumerable._keySelector(_sourceEnumerator.Current);
                         var element = _groupByAsyncEnumerable._elementSelector(_sourceEnumerator.Current);
-                        var grouping = new Grouping<TKey, TElement>(currentKey) { element };
+                        var grouping = new Grouping<TKey, TElement>(currentKey)
+                        {
+                            element
+                        };
 
                         while (true)
                         {

@@ -6,8 +6,9 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.Sqlite.Query.ExpressionTranslators.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -17,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
     {
         // Method defined in netstandard2.0
         private static readonly MethodInfo _methodInfoWithoutArgs
-            = typeof(string).GetRuntimeMethod(nameof(string.Trim), new Type[] { });
+            = typeof(string).GetRuntimeMethod(nameof(string.Trim), Array.Empty<Type>());
 
         // Method defined in netcoreapp2.0 only
         private static readonly MethodInfo _methodInfoWithCharArg
@@ -39,7 +40,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                 || _methodInfoWithCharArg?.Equals(methodInfo) == true
                 || _methodInfoWithCharArrayArg.Equals(methodInfo))
             {
-                var sqlArguments = new List<Expression> { methodCallExpression.Object };
+                var sqlArguments = new List<Expression>
+                {
+                    methodCallExpression.Object
+                };
 
                 if (methodCallExpression.Arguments.Count == 1)
                 {

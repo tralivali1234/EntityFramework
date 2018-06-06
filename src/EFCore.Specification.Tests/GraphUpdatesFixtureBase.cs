@@ -21,118 +21,117 @@ namespace Microsoft.EntityFrameworkCore
 {
     public abstract partial class GraphUpdatesTestBase<TFixture>
     {
-        public abstract class GraphUpdatesFixtureBase : SharedStoreFixtureBase<DbContext>
+        public abstract class GraphUpdatesFixtureBase : SharedStoreFixtureBase<PoolableDbContext>
         {
             protected override string StoreName { get; } = "GraphUpdatesChangedTest";
             public readonly Guid RootAK = Guid.NewGuid();
             public virtual bool ForceRestrict => false;
-            protected override bool UsePooling => false;
 
             protected override void OnModelCreating(ModelBuilder modelBuilder, DbContext context)
             {
                 modelBuilder.Entity<Root>(
                     b =>
-                        {
-                            b.Property(e => e.AlternateId).ValueGeneratedOnAdd();
+                    {
+                        b.Property(e => e.AlternateId).ValueGeneratedOnAdd();
 
-                            b.HasMany(e => e.RequiredChildren)
-                                .WithOne(e => e.Parent)
-                                .HasForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.RequiredChildren)
+                            .WithOne(e => e.Parent)
+                            .HasForeignKey(e => e.ParentId);
 
-                            b.HasMany(e => e.OptionalChildren)
-                                .WithOne(e => e.Parent)
-                                .HasForeignKey(e => e.ParentId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                        b.HasMany(e => e.OptionalChildren)
+                            .WithOne(e => e.Parent)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasOne(e => e.RequiredSingle)
-                                .WithOne(e => e.Root)
-                                .HasForeignKey<RequiredSingle1>(e => e.Id);
+                        b.HasOne(e => e.RequiredSingle)
+                            .WithOne(e => e.Root)
+                            .HasForeignKey<RequiredSingle1>(e => e.Id);
 
-                            b.HasOne(e => e.OptionalSingle)
-                                .WithOne(e => e.Root)
-                                .HasForeignKey<OptionalSingle1>(e => e.RootId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                        b.HasOne(e => e.OptionalSingle)
+                            .WithOne(e => e.Root)
+                            .HasForeignKey<OptionalSingle1>(e => e.RootId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasOne(e => e.OptionalSingleDerived)
-                                .WithOne(e => e.DerivedRoot)
-                                .HasForeignKey<OptionalSingle1Derived>(e => e.DerivedRootId)
-                                .OnDelete(DeleteBehavior.ClientSetNull);
+                        b.HasOne(e => e.OptionalSingleDerived)
+                            .WithOne(e => e.DerivedRoot)
+                            .HasForeignKey<OptionalSingle1Derived>(e => e.DerivedRootId)
+                            .OnDelete(DeleteBehavior.ClientSetNull);
 
-                            b.HasOne(e => e.OptionalSingleMoreDerived)
-                                .WithOne(e => e.MoreDerivedRoot)
-                                .HasForeignKey<OptionalSingle1MoreDerived>(e => e.MoreDerivedRootId)
-                                .OnDelete(DeleteBehavior.ClientSetNull);
+                        b.HasOne(e => e.OptionalSingleMoreDerived)
+                            .WithOne(e => e.MoreDerivedRoot)
+                            .HasForeignKey<OptionalSingle1MoreDerived>(e => e.MoreDerivedRootId)
+                            .OnDelete(DeleteBehavior.ClientSetNull);
 
-                            b.HasOne(e => e.RequiredNonPkSingle)
-                                .WithOne(e => e.Root)
-                                .HasForeignKey<RequiredNonPkSingle1>(e => e.RootId);
+                        b.HasOne(e => e.RequiredNonPkSingle)
+                            .WithOne(e => e.Root)
+                            .HasForeignKey<RequiredNonPkSingle1>(e => e.RootId);
 
-                            b.HasOne(e => e.RequiredNonPkSingleDerived)
-                                .WithOne(e => e.DerivedRoot)
-                                .HasForeignKey<RequiredNonPkSingle1Derived>(e => e.DerivedRootId)
-                                .OnDelete(DeleteBehavior.Restrict);
+                        b.HasOne(e => e.RequiredNonPkSingleDerived)
+                            .WithOne(e => e.DerivedRoot)
+                            .HasForeignKey<RequiredNonPkSingle1Derived>(e => e.DerivedRootId)
+                            .OnDelete(DeleteBehavior.Restrict);
 
-                            b.HasOne(e => e.RequiredNonPkSingleMoreDerived)
-                                .WithOne(e => e.MoreDerivedRoot)
-                                .HasForeignKey<RequiredNonPkSingle1MoreDerived>(e => e.MoreDerivedRootId)
-                                .OnDelete(DeleteBehavior.Restrict);
+                        b.HasOne(e => e.RequiredNonPkSingleMoreDerived)
+                            .WithOne(e => e.MoreDerivedRoot)
+                            .HasForeignKey<RequiredNonPkSingle1MoreDerived>(e => e.MoreDerivedRootId)
+                            .OnDelete(DeleteBehavior.Restrict);
 
-                            b.HasMany(e => e.RequiredChildrenAk)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => e.AlternateId)
-                                .HasForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.RequiredChildrenAk)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId);
 
-                            b.HasMany(e => e.OptionalChildrenAk)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => e.AlternateId)
-                                .HasForeignKey(e => e.ParentId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                        b.HasMany(e => e.OptionalChildrenAk)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasOne(e => e.RequiredSingleAk)
-                                .WithOne(e => e.Root)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<RequiredSingleAk1>(e => e.RootId);
+                        b.HasOne(e => e.RequiredSingleAk)
+                            .WithOne(e => e.Root)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<RequiredSingleAk1>(e => e.RootId);
 
-                            b.HasOne(e => e.OptionalSingleAk)
-                                .WithOne(e => e.Root)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<OptionalSingleAk1>(e => e.RootId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                        b.HasOne(e => e.OptionalSingleAk)
+                            .WithOne(e => e.Root)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<OptionalSingleAk1>(e => e.RootId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasOne(e => e.OptionalSingleAkDerived)
-                                .WithOne(e => e.DerivedRoot)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<OptionalSingleAk1Derived>(e => e.DerivedRootId)
-                                .OnDelete(DeleteBehavior.ClientSetNull);
+                        b.HasOne(e => e.OptionalSingleAkDerived)
+                            .WithOne(e => e.DerivedRoot)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<OptionalSingleAk1Derived>(e => e.DerivedRootId)
+                            .OnDelete(DeleteBehavior.ClientSetNull);
 
-                            b.HasOne(e => e.OptionalSingleAkMoreDerived)
-                                .WithOne(e => e.MoreDerivedRoot)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<OptionalSingleAk1MoreDerived>(e => e.MoreDerivedRootId)
-                                .OnDelete(DeleteBehavior.ClientSetNull);
+                        b.HasOne(e => e.OptionalSingleAkMoreDerived)
+                            .WithOne(e => e.MoreDerivedRoot)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<OptionalSingleAk1MoreDerived>(e => e.MoreDerivedRootId)
+                            .OnDelete(DeleteBehavior.ClientSetNull);
 
-                            b.HasOne(e => e.RequiredNonPkSingleAk)
-                                .WithOne(e => e.Root)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<RequiredNonPkSingleAk1>(e => e.RootId);
+                        b.HasOne(e => e.RequiredNonPkSingleAk)
+                            .WithOne(e => e.Root)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<RequiredNonPkSingleAk1>(e => e.RootId);
 
-                            b.HasOne(e => e.RequiredNonPkSingleAkDerived)
-                                .WithOne(e => e.DerivedRoot)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<RequiredNonPkSingleAk1Derived>(e => e.DerivedRootId)
-                                .OnDelete(DeleteBehavior.Restrict);
+                        b.HasOne(e => e.RequiredNonPkSingleAkDerived)
+                            .WithOne(e => e.DerivedRoot)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<RequiredNonPkSingleAk1Derived>(e => e.DerivedRootId)
+                            .OnDelete(DeleteBehavior.Restrict);
 
-                            b.HasOne(e => e.RequiredNonPkSingleAkMoreDerived)
-                                .WithOne(e => e.MoreDerivedRoot)
-                                .HasPrincipalKey<Root>(e => e.AlternateId)
-                                .HasForeignKey<RequiredNonPkSingleAk1MoreDerived>(e => e.MoreDerivedRootId)
-                                .OnDelete(DeleteBehavior.Restrict);
+                        b.HasOne(e => e.RequiredNonPkSingleAkMoreDerived)
+                            .WithOne(e => e.MoreDerivedRoot)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<RequiredNonPkSingleAk1MoreDerived>(e => e.MoreDerivedRootId)
+                            .OnDelete(DeleteBehavior.Restrict);
 
-                            b.HasMany(e => e.RequiredCompositeChildren)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => e.AlternateId)
-                                .HasForeignKey(e => e.ParentAlternateId);
-                        });
+                        b.HasMany(e => e.RequiredCompositeChildren)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentAlternateId);
+                    });
 
                 modelBuilder.Entity<Required1>()
                     .HasMany(e => e.Children)
@@ -146,16 +145,20 @@ namespace Microsoft.EntityFrameworkCore
 
                 modelBuilder.Entity<Optional1>(
                     b =>
-                        {
-                            b.HasMany(e => e.Children)
-                                .WithOne(e => e.Parent)
-                                .HasForeignKey(e => e.ParentId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                    {
+                        b.HasMany(e => e.Children)
+                            .WithOne(e => e.Parent)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasMany(e => e.CompositeChildren)
-                                .WithOne(e => e.Parent2)
-                                .HasForeignKey(e => new { e.Parent2Id });
-                        });
+                        b.HasMany(e => e.CompositeChildren)
+                            .WithOne(e => e.Parent2)
+                            .HasForeignKey(
+                                e => new
+                                {
+                                    e.Parent2Id
+                                });
+                    });
 
                 modelBuilder.Entity<Optional1Derived>();
                 modelBuilder.Entity<Optional1MoreDerived>();
@@ -186,94 +189,134 @@ namespace Microsoft.EntityFrameworkCore
 
                 modelBuilder.Entity<RequiredAk1>(
                     b =>
-                        {
-                            b.Property(e => e.AlternateId)
-                                .ValueGeneratedOnAdd();
+                    {
+                        b.Property(e => e.AlternateId)
+                            .ValueGeneratedOnAdd();
 
-                            b.HasMany(e => e.Children)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => e.AlternateId)
-                                .HasForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.Children)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId);
 
-                            b.HasMany(e => e.CompositeChildren)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => new { e.Id, e.AlternateId })
-                                .HasForeignKey(e => new { e.ParentId, e.ParentAlternateId });
-                        });
+                        b.HasMany(e => e.CompositeChildren)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(
+                                e => new
+                                {
+                                    e.Id,
+                                    e.AlternateId
+                                })
+                            .HasForeignKey(
+                                e => new
+                                {
+                                    e.ParentId,
+                                    e.ParentAlternateId
+                                });
+                    });
 
                 modelBuilder.Entity<RequiredAk1Derived>();
                 modelBuilder.Entity<RequiredAk1MoreDerived>();
 
                 modelBuilder.Entity<OptionalAk1>(
                     b =>
-                        {
-                            b.Property(e => e.AlternateId)
-                                .ValueGeneratedOnAdd();
+                    {
+                        b.Property(e => e.AlternateId)
+                            .ValueGeneratedOnAdd();
 
-                            b.HasMany(e => e.Children)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => e.AlternateId)
-                                .HasForeignKey(e => e.ParentId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                        b.HasMany(e => e.Children)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasMany(e => e.CompositeChildren)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => new { e.Id, e.AlternateId })
-                                .HasForeignKey(e => new { e.ParentId, e.ParentAlternateId });
-                        });
+                        b.HasMany(e => e.CompositeChildren)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(
+                                e => new
+                                {
+                                    e.Id,
+                                    e.AlternateId
+                                })
+                            .HasForeignKey(
+                                e => new
+                                {
+                                    e.ParentId,
+                                    e.ParentAlternateId
+                                });
+                    });
 
                 modelBuilder.Entity<OptionalAk1Derived>();
                 modelBuilder.Entity<OptionalAk1MoreDerived>();
 
                 modelBuilder.Entity<RequiredSingleAk1>(
                     b =>
-                        {
-                            b.Property(e => e.AlternateId)
-                                .ValueGeneratedOnAdd();
+                    {
+                        b.Property(e => e.AlternateId)
+                            .ValueGeneratedOnAdd();
 
-                            b.HasOne(e => e.Single)
-                                .WithOne(e => e.Back)
-                                .HasForeignKey<RequiredSingleAk2>(e => e.BackId)
-                                .HasPrincipalKey<RequiredSingleAk1>(e => e.AlternateId);
+                        b.HasOne(e => e.Single)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<RequiredSingleAk2>(e => e.BackId)
+                            .HasPrincipalKey<RequiredSingleAk1>(e => e.AlternateId);
 
-                            b.HasOne(e => e.SingleComposite)
-                                .WithOne(e => e.Back)
-                                .HasForeignKey<RequiredSingleComposite2>(e => new { e.BackId, e.BackAlternateId })
-                                .HasPrincipalKey<RequiredSingleAk1>(e => new { e.Id, e.AlternateId });
-                        });
+                        b.HasOne(e => e.SingleComposite)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<RequiredSingleComposite2>(
+                                e => new
+                                {
+                                    e.BackId,
+                                    e.BackAlternateId
+                                })
+                            .HasPrincipalKey<RequiredSingleAk1>(
+                                e => new
+                                {
+                                    e.Id,
+                                    e.AlternateId
+                                });
+                    });
 
                 modelBuilder.Entity<OptionalSingleAk1>(
                     b =>
-                        {
-                            b.Property(e => e.AlternateId)
-                                .ValueGeneratedOnAdd();
+                    {
+                        b.Property(e => e.AlternateId)
+                            .ValueGeneratedOnAdd();
 
-                            b.HasOne(e => e.Single)
-                                .WithOne(e => e.Back)
-                                .HasForeignKey<OptionalSingleAk2>(e => e.BackId)
-                                .HasPrincipalKey<OptionalSingleAk1>(e => e.AlternateId)
-                                .OnDelete(DeleteBehavior.SetNull);
+                        b.HasOne(e => e.Single)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<OptionalSingleAk2>(e => e.BackId)
+                            .HasPrincipalKey<OptionalSingleAk1>(e => e.AlternateId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                            b.HasOne(e => e.SingleComposite)
-                                .WithOne(e => e.Back)
-                                .HasForeignKey<OptionalSingleComposite2>(e => new { e.BackId, e.ParentAlternateId })
-                                .HasPrincipalKey<OptionalSingleAk1>(e => new { e.Id, e.AlternateId });
-                        });
+                        b.HasOne(e => e.SingleComposite)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<OptionalSingleComposite2>(
+                                e => new
+                                {
+                                    e.BackId,
+                                    e.ParentAlternateId
+                                })
+                            .HasPrincipalKey<OptionalSingleAk1>(
+                                e => new
+                                {
+                                    e.Id,
+                                    e.AlternateId
+                                });
+                    });
 
                 modelBuilder.Entity<OptionalSingleAk2Derived>();
                 modelBuilder.Entity<OptionalSingleAk2MoreDerived>();
 
                 modelBuilder.Entity<RequiredNonPkSingleAk1>(
                     b =>
-                        {
-                            b.Property(e => e.AlternateId)
-                                .ValueGeneratedOnAdd();
+                    {
+                        b.Property(e => e.AlternateId)
+                            .ValueGeneratedOnAdd();
 
-                            b.HasOne(e => e.Single)
-                                .WithOne(e => e.Back)
-                                .HasForeignKey<RequiredNonPkSingleAk2>(e => e.BackId)
-                                .HasPrincipalKey<RequiredNonPkSingleAk1>(e => e.AlternateId);
-                        });
+                        b.HasOne(e => e.Single)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<RequiredNonPkSingleAk2>(e => e.BackId)
+                            .HasPrincipalKey<RequiredNonPkSingleAk1>(e => e.AlternateId);
+                    });
 
                 modelBuilder.Entity<RequiredAk2>()
                     .Property(e => e.AlternateId)
@@ -306,25 +349,45 @@ namespace Microsoft.EntityFrameworkCore
 
                 modelBuilder.Entity<RequiredComposite1>(
                     eb =>
-                        {
-                            eb.HasKey(e => new { e.Id, e.ParentAlternateId });
+                    {
+                        eb.HasKey(
+                            e => new
+                            {
+                                e.Id,
+                                e.ParentAlternateId
+                            });
 
-                            eb.HasMany(e => e.CompositeChildren)
-                                .WithOne(e => e.Parent)
-                                .HasPrincipalKey(e => new { e.Id, e.ParentAlternateId })
-                                .HasForeignKey(e => new { e.ParentId, e.ParentAlternateId });
-                        });
+                        eb.HasMany(e => e.CompositeChildren)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(
+                                e => new
+                                {
+                                    e.Id,
+                                    e.ParentAlternateId
+                                })
+                            .HasForeignKey(
+                                e => new
+                                {
+                                    e.ParentId,
+                                    e.ParentAlternateId
+                                });
+                    });
 
                 modelBuilder.Entity<OptionalOverlaping2>(
                     eb =>
-                        {
-                            eb.HasKey(e => new { e.Id, e.ParentAlternateId });
+                    {
+                        eb.HasKey(
+                            e => new
+                            {
+                                e.Id,
+                                e.ParentAlternateId
+                            });
 
-                            eb.HasOne(e => e.Root)
-                                .WithMany()
-                                .HasPrincipalKey(e => e.AlternateId)
-                                .HasForeignKey(e => e.ParentAlternateId);
-                        });
+                        eb.HasOne(e => e.Root)
+                            .WithMany()
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentAlternateId);
+                    });
 
                 modelBuilder.Entity<BadCustomer>();
                 modelBuilder.Entity<BadOrder>();
@@ -412,8 +475,14 @@ namespace Microsoft.EntityFrameworkCore
                             AlternateId = Guid.NewGuid(),
                             Children = new ObservableHashSet<RequiredAk2>(ReferenceEqualityComparer.Instance)
                             {
-                                new RequiredAk2 { AlternateId = Guid.NewGuid() },
-                                new RequiredAk2 { AlternateId = Guid.NewGuid() }
+                                new RequiredAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                },
+                                new RequiredAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                }
                             },
                             CompositeChildren = new ObservableHashSet<RequiredComposite2>(ReferenceEqualityComparer.Instance)
                             {
@@ -426,8 +495,14 @@ namespace Microsoft.EntityFrameworkCore
                             AlternateId = Guid.NewGuid(),
                             Children = new ObservableHashSet<RequiredAk2>(ReferenceEqualityComparer.Instance)
                             {
-                                new RequiredAk2 { AlternateId = Guid.NewGuid() },
-                                new RequiredAk2 { AlternateId = Guid.NewGuid() }
+                                new RequiredAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                },
+                                new RequiredAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                }
                             },
                             CompositeChildren = new ObservableHashSet<RequiredComposite2>(ReferenceEqualityComparer.Instance)
                             {
@@ -443,8 +518,14 @@ namespace Microsoft.EntityFrameworkCore
                             AlternateId = Guid.NewGuid(),
                             Children = new ObservableHashSet<OptionalAk2>(ReferenceEqualityComparer.Instance)
                             {
-                                new OptionalAk2 { AlternateId = Guid.NewGuid() },
-                                new OptionalAk2 { AlternateId = Guid.NewGuid() }
+                                new OptionalAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                },
+                                new OptionalAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                }
                             },
                             CompositeChildren = new ObservableHashSet<OptionalComposite2>(ReferenceEqualityComparer.Instance)
                             {
@@ -457,8 +538,14 @@ namespace Microsoft.EntityFrameworkCore
                             AlternateId = Guid.NewGuid(),
                             Children = new ObservableHashSet<OptionalAk2>(ReferenceEqualityComparer.Instance)
                             {
-                                new OptionalAk2 { AlternateId = Guid.NewGuid() },
-                                new OptionalAk2 { AlternateId = Guid.NewGuid() }
+                                new OptionalAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                },
+                                new OptionalAk2
+                                {
+                                    AlternateId = Guid.NewGuid()
+                                }
                             },
                             CompositeChildren = new ObservableHashSet<OptionalComposite2>(ReferenceEqualityComparer.Instance)
                             {
@@ -470,40 +557,61 @@ namespace Microsoft.EntityFrameworkCore
                     RequiredSingleAk = new RequiredSingleAk1
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new RequiredSingleAk2 { AlternateId = Guid.NewGuid() },
+                        Single = new RequiredSingleAk2
+                        {
+                            AlternateId = Guid.NewGuid()
+                        },
                         SingleComposite = new RequiredSingleComposite2()
                     },
                     OptionalSingleAk = new OptionalSingleAk1
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new OptionalSingleAk2 { AlternateId = Guid.NewGuid() },
+                        Single = new OptionalSingleAk2
+                        {
+                            AlternateId = Guid.NewGuid()
+                        },
                         SingleComposite = new OptionalSingleComposite2()
                     },
                     OptionalSingleAkDerived = new OptionalSingleAk1Derived
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new OptionalSingleAk2Derived { AlternateId = Guid.NewGuid() }
+                        Single = new OptionalSingleAk2Derived
+                        {
+                            AlternateId = Guid.NewGuid()
+                        }
                     },
                     OptionalSingleAkMoreDerived = new OptionalSingleAk1MoreDerived
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new OptionalSingleAk2MoreDerived { AlternateId = Guid.NewGuid() }
+                        Single = new OptionalSingleAk2MoreDerived
+                        {
+                            AlternateId = Guid.NewGuid()
+                        }
                     },
                     RequiredNonPkSingleAk = new RequiredNonPkSingleAk1
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new RequiredNonPkSingleAk2 { AlternateId = Guid.NewGuid() }
+                        Single = new RequiredNonPkSingleAk2
+                        {
+                            AlternateId = Guid.NewGuid()
+                        }
                     },
                     RequiredNonPkSingleAkDerived = new RequiredNonPkSingleAk1Derived
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new RequiredNonPkSingleAk2Derived { AlternateId = Guid.NewGuid() },
+                        Single = new RequiredNonPkSingleAk2Derived
+                        {
+                            AlternateId = Guid.NewGuid()
+                        },
                         Root = new Root()
                     },
                     RequiredNonPkSingleAkMoreDerived = new RequiredNonPkSingleAk1MoreDerived
                     {
                         AlternateId = Guid.NewGuid(),
-                        Single = new RequiredNonPkSingleAk2MoreDerived { AlternateId = Guid.NewGuid() },
+                        Single = new RequiredNonPkSingleAk2MoreDerived
+                        {
+                            AlternateId = Guid.NewGuid()
+                        },
                         Root = new Root(),
                         DerivedRoot = new Root()
                     },
@@ -514,8 +622,14 @@ namespace Microsoft.EntityFrameworkCore
                             Id = 1,
                             CompositeChildren = new ObservableHashSet<OptionalOverlaping2>(ReferenceEqualityComparer.Instance)
                             {
-                                new OptionalOverlaping2 { Id = 1 },
-                                new OptionalOverlaping2 { Id = 2 }
+                                new OptionalOverlaping2
+                                {
+                                    Id = 1
+                                },
+                                new OptionalOverlaping2
+                                {
+                                    Id = 2
+                                }
                             }
                         },
                         new RequiredComposite1
@@ -523,20 +637,30 @@ namespace Microsoft.EntityFrameworkCore
                             Id = 2,
                             CompositeChildren = new ObservableHashSet<OptionalOverlaping2>(ReferenceEqualityComparer.Instance)
                             {
-                                new OptionalOverlaping2 { Id = 3 },
-                                new OptionalOverlaping2 { Id = 4 }
+                                new OptionalOverlaping2
+                                {
+                                    Id = 3
+                                },
+                                new OptionalOverlaping2
+                                {
+                                    Id = 4
+                                }
                             }
                         }
                     }
                 };
 
-            protected override void Seed(DbContext context)
+            protected override void Seed(PoolableDbContext context)
             {
                 var tracker = new KeyValueEntityTracker();
 
                 context.ChangeTracker.TrackGraph(CreateFullGraph(), e => tracker.TrackEntity(e.Entry));
 
-                context.Add(new BadOrder { BadCustomer = new BadCustomer() });
+                context.Add(
+                    new BadOrder
+                    {
+                        BadCustomer = new BadCustomer()
+                    });
 
                 context.SaveChanges();
             }
@@ -552,9 +676,9 @@ namespace Microsoft.EntityFrameworkCore
             }
         }
 
-        private void Add<T>(IEnumerable<T> collection, T item) => ((ICollection<T>)collection).Add(item);
+        private static void Add<T>(IEnumerable<T> collection, T item) => ((ICollection<T>)collection).Add(item);
 
-        private void Remove<T>(IEnumerable<T> collection, T item) => ((ICollection<T>)collection).Remove(item);
+        private static void Remove<T>(IEnumerable<T> collection, T item) => ((ICollection<T>)collection).Remove(item);
 
         [Flags]
         public enum ChangeMechanism
@@ -636,7 +760,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var newEntities = new HashSet<object>(actualEntries.Select(ne => ne.Entity));
             var missingEntities = expectedEntries.Select(e => e.Entity).Where(e => !newEntities.Contains(e)).ToList();
-            Assert.Equal(new object[0], missingEntities);
+            Assert.Equal(Array.Empty<object>(), missingEntities);
             Assert.Equal(expectedEntries.Count, actualEntries.Count);
         }
 
@@ -741,8 +865,18 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Equal(expected.RequiredNonPkSingleAkMoreDerived?.Single?.AlternateId, actual.RequiredNonPkSingleAkMoreDerived?.Single?.AlternateId);
 
             Assert.Equal(
-                expected.RequiredCompositeChildren.OrderBy(e => e.Id).Select(e => new { e.Id, e.ParentAlternateId }),
-                actual.RequiredCompositeChildren.OrderBy(e => e.Id).Select(e => new { e.Id, e.ParentAlternateId }));
+                expected.RequiredCompositeChildren.OrderBy(e => e.Id).Select(
+                    e => new
+                    {
+                        e.Id,
+                        e.ParentAlternateId
+                    }),
+                actual.RequiredCompositeChildren.OrderBy(e => e.Id).Select(
+                    e => new
+                    {
+                        e.Id,
+                        e.ParentAlternateId
+                    }));
 
             Assert.Equal(
                 expected.RequiredCompositeChildren.OrderBy(e => e.Id).Select(e => e.CompositeChildren.Count),
@@ -750,9 +884,19 @@ namespace Microsoft.EntityFrameworkCore
 
             Assert.Equal(
                 expected.RequiredCompositeChildren.OrderBy(e => e.Id).SelectMany(e => e.CompositeChildren).OrderBy(e => e.Id)
-                    .Select(e => new { e.Id, e.ParentAlternateId }),
+                    .Select(
+                        e => new
+                        {
+                            e.Id,
+                            e.ParentAlternateId
+                        }),
                 actual.RequiredCompositeChildren.OrderBy(e => e.Id).SelectMany(e => e.CompositeChildren).OrderBy(e => e.Id)
-                    .Select(e => new { e.Id, e.ParentAlternateId }));
+                    .Select(
+                        e => new
+                        {
+                            e.Id,
+                            e.ParentAlternateId
+                        }));
         }
 
         private static void AssertNavigations(Root root)
@@ -939,128 +1083,128 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public IEnumerable<Required1> RequiredChildren
             {
-                get { return _requiredChildren; }
-                set { SetWithNotify(value, ref _requiredChildren); }
+                get => _requiredChildren;
+                set => SetWithNotify(value, ref _requiredChildren);
             }
 
             public IEnumerable<Optional1> OptionalChildren
             {
-                get { return _optionalChildren; }
-                set { SetWithNotify(value, ref _optionalChildren); }
+                get => _optionalChildren;
+                set => SetWithNotify(value, ref _optionalChildren);
             }
 
             public RequiredSingle1 RequiredSingle
             {
-                get { return _requiredSingle; }
-                set { SetWithNotify(value, ref _requiredSingle); }
+                get => _requiredSingle;
+                set => SetWithNotify(value, ref _requiredSingle);
             }
 
             public RequiredNonPkSingle1 RequiredNonPkSingle
             {
-                get { return _requiredNonPkSingle; }
-                set { SetWithNotify(value, ref _requiredNonPkSingle); }
+                get => _requiredNonPkSingle;
+                set => SetWithNotify(value, ref _requiredNonPkSingle);
             }
 
             public RequiredNonPkSingle1Derived RequiredNonPkSingleDerived
             {
-                get { return _requiredNonPkSingleDerived; }
-                set { SetWithNotify(value, ref _requiredNonPkSingleDerived); }
+                get => _requiredNonPkSingleDerived;
+                set => SetWithNotify(value, ref _requiredNonPkSingleDerived);
             }
 
             public RequiredNonPkSingle1MoreDerived RequiredNonPkSingleMoreDerived
             {
-                get { return _requiredNonPkSingleMoreDerived; }
-                set { SetWithNotify(value, ref _requiredNonPkSingleMoreDerived); }
+                get => _requiredNonPkSingleMoreDerived;
+                set => SetWithNotify(value, ref _requiredNonPkSingleMoreDerived);
             }
 
             public OptionalSingle1 OptionalSingle
             {
-                get { return _optionalSingle; }
-                set { SetWithNotify(value, ref _optionalSingle); }
+                get => _optionalSingle;
+                set => SetWithNotify(value, ref _optionalSingle);
             }
 
             public OptionalSingle1Derived OptionalSingleDerived
             {
-                get { return _optionalSingleDerived; }
-                set { SetWithNotify(value, ref _optionalSingleDerived); }
+                get => _optionalSingleDerived;
+                set => SetWithNotify(value, ref _optionalSingleDerived);
             }
 
             public OptionalSingle1MoreDerived OptionalSingleMoreDerived
             {
-                get { return _optionalSingleMoreDerived; }
-                set { SetWithNotify(value, ref _optionalSingleMoreDerived); }
+                get => _optionalSingleMoreDerived;
+                set => SetWithNotify(value, ref _optionalSingleMoreDerived);
             }
 
             public IEnumerable<RequiredAk1> RequiredChildrenAk
             {
-                get { return _requiredChildrenAk; }
-                set { SetWithNotify(value, ref _requiredChildrenAk); }
+                get => _requiredChildrenAk;
+                set => SetWithNotify(value, ref _requiredChildrenAk);
             }
 
             public IEnumerable<OptionalAk1> OptionalChildrenAk
             {
-                get { return _optionalChildrenAk; }
-                set { SetWithNotify(value, ref _optionalChildrenAk); }
+                get => _optionalChildrenAk;
+                set => SetWithNotify(value, ref _optionalChildrenAk);
             }
 
             public RequiredSingleAk1 RequiredSingleAk
             {
-                get { return _requiredSingleAk; }
-                set { SetWithNotify(value, ref _requiredSingleAk); }
+                get => _requiredSingleAk;
+                set => SetWithNotify(value, ref _requiredSingleAk);
             }
 
             public RequiredNonPkSingleAk1 RequiredNonPkSingleAk
             {
-                get { return _requiredNonPkSingleAk; }
-                set { SetWithNotify(value, ref _requiredNonPkSingleAk); }
+                get => _requiredNonPkSingleAk;
+                set => SetWithNotify(value, ref _requiredNonPkSingleAk);
             }
 
             public RequiredNonPkSingleAk1Derived RequiredNonPkSingleAkDerived
             {
-                get { return _requiredNonPkSingleAkDerived; }
-                set { SetWithNotify(value, ref _requiredNonPkSingleAkDerived); }
+                get => _requiredNonPkSingleAkDerived;
+                set => SetWithNotify(value, ref _requiredNonPkSingleAkDerived);
             }
 
             public RequiredNonPkSingleAk1MoreDerived RequiredNonPkSingleAkMoreDerived
             {
-                get { return _requiredNonPkSingleAkMoreDerived; }
-                set { SetWithNotify(value, ref _requiredNonPkSingleAkMoreDerived); }
+                get => _requiredNonPkSingleAkMoreDerived;
+                set => SetWithNotify(value, ref _requiredNonPkSingleAkMoreDerived);
             }
 
             public OptionalSingleAk1 OptionalSingleAk
             {
-                get { return _optionalSingleAk; }
-                set { SetWithNotify(value, ref _optionalSingleAk); }
+                get => _optionalSingleAk;
+                set => SetWithNotify(value, ref _optionalSingleAk);
             }
 
             public OptionalSingleAk1Derived OptionalSingleAkDerived
             {
-                get { return _optionalSingleAkDerived; }
-                set { SetWithNotify(value, ref _optionalSingleAkDerived); }
+                get => _optionalSingleAkDerived;
+                set => SetWithNotify(value, ref _optionalSingleAkDerived);
             }
 
             public OptionalSingleAk1MoreDerived OptionalSingleAkMoreDerived
             {
-                get { return _optionalSingleAkMoreDerived; }
-                set { SetWithNotify(value, ref _optionalSingleAkMoreDerived); }
+                get => _optionalSingleAkMoreDerived;
+                set => SetWithNotify(value, ref _optionalSingleAkMoreDerived);
             }
 
             public IEnumerable<RequiredComposite1> RequiredCompositeChildren
             {
-                get { return _requiredCompositeChildren; }
-                set { SetWithNotify(value, ref _requiredCompositeChildren); }
+                get => _requiredCompositeChildren;
+                set => SetWithNotify(value, ref _requiredCompositeChildren);
             }
 
             public override bool Equals(object obj)
@@ -1081,26 +1225,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public Root Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public IEnumerable<Required2> Children
             {
-                get { return _children; }
-                set { SetWithNotify(value, ref _children); }
+                get => _children;
+                set => SetWithNotify(value, ref _children);
             }
 
             public override bool Equals(object obj)
@@ -1134,20 +1278,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public Required1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public override bool Equals(object obj)
@@ -1183,32 +1327,32 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int? ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public Root Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public IEnumerable<Optional2> Children
             {
-                get { return _children; }
-                set { SetWithNotify(value, ref _children); }
+                get => _children;
+                set => SetWithNotify(value, ref _children);
             }
 
             public ICollection<OptionalComposite2> CompositeChildren
             {
-                get { return _compositeChildren; }
-                set { SetWithNotify(value, ref _compositeChildren); }
+                get => _compositeChildren;
+                set => SetWithNotify(value, ref _compositeChildren);
             }
 
             public override bool Equals(object obj)
@@ -1242,20 +1386,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int? ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public Optional1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public override bool Equals(object obj)
@@ -1289,20 +1433,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public RequiredSingle2 Single
             {
-                get { return _single; }
-                set { SetWithNotify(value, ref _single); }
+                get => _single;
+                set => SetWithNotify(value, ref _single);
             }
 
             public override bool Equals(object obj)
@@ -1321,14 +1465,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public RequiredSingle1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -1349,26 +1493,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int RootId
             {
-                get { return _rootId; }
-                set { SetWithNotify(value, ref _rootId); }
+                get => _rootId;
+                set => SetWithNotify(value, ref _rootId);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public RequiredNonPkSingle2 Single
             {
-                get { return _single; }
-                set { SetWithNotify(value, ref _single); }
+                get => _single;
+                set => SetWithNotify(value, ref _single);
             }
 
             public override bool Equals(object obj)
@@ -1387,14 +1531,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public int DerivedRootId
             {
-                get { return _derivedRootId; }
-                set { SetWithNotify(value, ref _derivedRootId); }
+                get => _derivedRootId;
+                set => SetWithNotify(value, ref _derivedRootId);
             }
 
             public Root DerivedRoot
             {
-                get { return _derivedRoot; }
-                set { SetWithNotify(value, ref _derivedRoot); }
+                get => _derivedRoot;
+                set => SetWithNotify(value, ref _derivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as RequiredNonPkSingle1Derived);
@@ -1409,14 +1553,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public int MoreDerivedRootId
             {
-                get { return _moreDerivedRootId; }
-                set { SetWithNotify(value, ref _moreDerivedRootId); }
+                get => _moreDerivedRootId;
+                set => SetWithNotify(value, ref _moreDerivedRootId);
             }
 
             public Root MoreDerivedRoot
             {
-                get { return _moreDerivedRoot; }
-                set { SetWithNotify(value, ref _moreDerivedRoot); }
+                get => _moreDerivedRoot;
+                set => SetWithNotify(value, ref _moreDerivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as RequiredNonPkSingle1MoreDerived);
@@ -1432,20 +1576,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public RequiredNonPkSingle1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -1480,26 +1624,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int? RootId
             {
-                get { return _rootId; }
-                set { SetWithNotify(value, ref _rootId); }
+                get => _rootId;
+                set => SetWithNotify(value, ref _rootId);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public OptionalSingle2 Single
             {
-                get { return _single; }
-                set { SetWithNotify(value, ref _single); }
+                get => _single;
+                set => SetWithNotify(value, ref _single);
             }
 
             public override bool Equals(object obj)
@@ -1518,14 +1662,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public int? DerivedRootId
             {
-                get { return _derivedRootId; }
-                set { SetWithNotify(value, ref _derivedRootId); }
+                get => _derivedRootId;
+                set => SetWithNotify(value, ref _derivedRootId);
             }
 
             public Root DerivedRoot
             {
-                get { return _derivedRoot; }
-                set { SetWithNotify(value, ref _derivedRoot); }
+                get => _derivedRoot;
+                set => SetWithNotify(value, ref _derivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as OptionalSingle1Derived);
@@ -1540,14 +1684,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public int? MoreDerivedRootId
             {
-                get { return _moreDerivedRootId; }
-                set { SetWithNotify(value, ref _moreDerivedRootId); }
+                get => _moreDerivedRootId;
+                set => SetWithNotify(value, ref _moreDerivedRootId);
             }
 
             public Root MoreDerivedRoot
             {
-                get { return _moreDerivedRoot; }
-                set { SetWithNotify(value, ref _moreDerivedRoot); }
+                get => _moreDerivedRoot;
+                set => SetWithNotify(value, ref _moreDerivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as OptionalSingle1MoreDerived);
@@ -1563,20 +1707,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int? BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public OptionalSingle1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -1613,38 +1757,38 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public Root Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public IEnumerable<RequiredAk2> Children
             {
-                get { return _children; }
-                set { SetWithNotify(value, ref _children); }
+                get => _children;
+                set => SetWithNotify(value, ref _children);
             }
 
             public IEnumerable<RequiredComposite2> CompositeChildren
             {
-                get { return _compositeChildren; }
-                set { SetWithNotify(value, ref _compositeChildren); }
+                get => _compositeChildren;
+                set => SetWithNotify(value, ref _compositeChildren);
             }
 
             public override bool Equals(object obj)
@@ -1679,26 +1823,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public RequiredAk1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public override bool Equals(object obj)
@@ -1719,20 +1863,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid ParentAlternateId
             {
-                get { return _parentAlternateId; }
-                set { SetWithNotify(value, ref _parentAlternateId); }
+                get => _parentAlternateId;
+                set => SetWithNotify(value, ref _parentAlternateId);
             }
 
             public Root Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public override bool Equals(object obj)
@@ -1743,8 +1887,8 @@ namespace Microsoft.EntityFrameworkCore
 
             public ICollection<OptionalOverlaping2> CompositeChildren
             {
-                get { return _compositeChildren; }
-                set { SetWithNotify(value, ref _compositeChildren); }
+                get => _compositeChildren;
+                set => SetWithNotify(value, ref _compositeChildren);
             }
 
             public override int GetHashCode() => _id;
@@ -1760,32 +1904,32 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid ParentAlternateId
             {
-                get { return _parentAlternateId; }
-                set { SetWithNotify(value, ref _parentAlternateId); }
+                get => _parentAlternateId;
+                set => SetWithNotify(value, ref _parentAlternateId);
             }
 
             public int? ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public RequiredComposite1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public override bool Equals(object obj)
@@ -1806,26 +1950,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid ParentAlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public int ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public RequiredAk1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public override bool Equals(object obj)
@@ -1862,38 +2006,38 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid? ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public Root Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public IEnumerable<OptionalAk2> Children
             {
-                get { return _children; }
-                set { SetWithNotify(value, ref _children); }
+                get => _children;
+                set => SetWithNotify(value, ref _children);
             }
 
             public ICollection<OptionalComposite2> CompositeChildren
             {
-                get { return _compositeChildren; }
-                set { SetWithNotify(value, ref _compositeChildren); }
+                get => _compositeChildren;
+                set => SetWithNotify(value, ref _compositeChildren);
             }
 
             public override bool Equals(object obj)
@@ -1928,26 +2072,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid? ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public OptionalAk1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public override bool Equals(object obj)
@@ -1970,38 +2114,38 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid ParentAlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public int? ParentId
             {
-                get { return _parentId; }
-                set { SetWithNotify(value, ref _parentId); }
+                get => _parentId;
+                set => SetWithNotify(value, ref _parentId);
             }
 
             public OptionalAk1 Parent
             {
-                get { return _parent; }
-                set { SetWithNotify(value, ref _parent); }
+                get => _parent;
+                set => SetWithNotify(value, ref _parent);
             }
 
             public int? Parent2Id
             {
-                get { return _parent2Id; }
-                set { SetWithNotify(value, ref _parent2Id); }
+                get => _parent2Id;
+                set => SetWithNotify(value, ref _parent2Id);
             }
 
             public Optional1 Parent2
             {
-                get { return _parent2; }
-                set { SetWithNotify(value, ref _parent2); }
+                get => _parent2;
+                set => SetWithNotify(value, ref _parent2);
             }
 
             public override bool Equals(object obj)
@@ -2038,38 +2182,38 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid RootId
             {
-                get { return _rootId; }
-                set { SetWithNotify(value, ref _rootId); }
+                get => _rootId;
+                set => SetWithNotify(value, ref _rootId);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public RequiredSingleAk2 Single
             {
-                get { return _single; }
-                set { SetWithNotify(value, ref _single); }
+                get => _single;
+                set => SetWithNotify(value, ref _single);
             }
 
             public RequiredSingleComposite2 SingleComposite
             {
-                get { return _singleComposite; }
-                set { SetWithNotify(value, ref _singleComposite); }
+                get => _singleComposite;
+                set => SetWithNotify(value, ref _singleComposite);
             }
 
             public override bool Equals(object obj)
@@ -2090,26 +2234,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public RequiredSingleAk1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -2130,26 +2274,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid BackAlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public int BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public RequiredSingleAk1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -2171,32 +2315,32 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid RootId
             {
-                get { return _rootId; }
-                set { SetWithNotify(value, ref _rootId); }
+                get => _rootId;
+                set => SetWithNotify(value, ref _rootId);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public RequiredNonPkSingleAk2 Single
             {
-                get { return _single; }
-                set { SetWithNotify(value, ref _single); }
+                get => _single;
+                set => SetWithNotify(value, ref _single);
             }
 
             public override bool Equals(object obj)
@@ -2215,14 +2359,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public Guid DerivedRootId
             {
-                get { return _derivedRootId; }
-                set { SetWithNotify(value, ref _derivedRootId); }
+                get => _derivedRootId;
+                set => SetWithNotify(value, ref _derivedRootId);
             }
 
             public Root DerivedRoot
             {
-                get { return _derivedRoot; }
-                set { SetWithNotify(value, ref _derivedRoot); }
+                get => _derivedRoot;
+                set => SetWithNotify(value, ref _derivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as RequiredNonPkSingleAk1Derived);
@@ -2237,14 +2381,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public Guid MoreDerivedRootId
             {
-                get { return _moreDerivedRootId; }
-                set { SetWithNotify(value, ref _moreDerivedRootId); }
+                get => _moreDerivedRootId;
+                set => SetWithNotify(value, ref _moreDerivedRootId);
             }
 
             public Root MoreDerivedRoot
             {
-                get { return _moreDerivedRoot; }
-                set { SetWithNotify(value, ref _moreDerivedRoot); }
+                get => _moreDerivedRoot;
+                set => SetWithNotify(value, ref _moreDerivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as RequiredNonPkSingleAk1MoreDerived);
@@ -2261,26 +2405,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public RequiredNonPkSingleAk1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -2317,38 +2461,38 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid? RootId
             {
-                get { return _rootId; }
-                set { SetWithNotify(value, ref _rootId); }
+                get => _rootId;
+                set => SetWithNotify(value, ref _rootId);
             }
 
             public Root Root
             {
-                get { return _root; }
-                set { SetWithNotify(value, ref _root); }
+                get => _root;
+                set => SetWithNotify(value, ref _root);
             }
 
             public OptionalSingleComposite2 SingleComposite
             {
-                get { return _singleComposite; }
-                set { SetWithNotify(value, ref _singleComposite); }
+                get => _singleComposite;
+                set => SetWithNotify(value, ref _singleComposite);
             }
 
             public OptionalSingleAk2 Single
             {
-                get { return _single; }
-                set { SetWithNotify(value, ref _single); }
+                get => _single;
+                set => SetWithNotify(value, ref _single);
             }
 
             public override bool Equals(object obj)
@@ -2367,14 +2511,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public Guid? DerivedRootId
             {
-                get { return _derivedRootId; }
-                set { SetWithNotify(value, ref _derivedRootId); }
+                get => _derivedRootId;
+                set => SetWithNotify(value, ref _derivedRootId);
             }
 
             public Root DerivedRoot
             {
-                get { return _derivedRoot; }
-                set { SetWithNotify(value, ref _derivedRoot); }
+                get => _derivedRoot;
+                set => SetWithNotify(value, ref _derivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as OptionalSingleAk1Derived);
@@ -2389,14 +2533,14 @@ namespace Microsoft.EntityFrameworkCore
 
             public Guid? MoreDerivedRootId
             {
-                get { return _moreDerivedRootId; }
-                set { SetWithNotify(value, ref _moreDerivedRootId); }
+                get => _moreDerivedRootId;
+                set => SetWithNotify(value, ref _moreDerivedRootId);
             }
 
             public Root MoreDerivedRoot
             {
-                get { return _moreDerivedRoot; }
-                set { SetWithNotify(value, ref _moreDerivedRoot); }
+                get => _moreDerivedRoot;
+                set => SetWithNotify(value, ref _moreDerivedRoot);
             }
 
             public override bool Equals(object obj) => base.Equals(obj as OptionalSingleAk1MoreDerived);
@@ -2413,26 +2557,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid AlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public Guid? BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public OptionalSingleAk1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -2453,26 +2597,26 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public Guid ParentAlternateId
             {
-                get { return _alternateId; }
-                set { SetWithNotify(value, ref _alternateId); }
+                get => _alternateId;
+                set => SetWithNotify(value, ref _alternateId);
             }
 
             public int? BackId
             {
-                get { return _backId; }
-                set { SetWithNotify(value, ref _backId); }
+                get => _backId;
+                set => SetWithNotify(value, ref _backId);
             }
 
             public OptionalSingleAk1 Back
             {
-                get { return _back; }
-                set { SetWithNotify(value, ref _back); }
+                get => _back;
+                set => SetWithNotify(value, ref _back);
             }
 
             public override bool Equals(object obj)
@@ -2506,20 +2650,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int Status
             {
-                get { return _status; }
-                set { SetWithNotify(value, ref _status); }
+                get => _status;
+                set => SetWithNotify(value, ref _status);
             }
 
             public ICollection<BadOrder> BadOrders
             {
-                get { return _badOrders; }
-                set { SetWithNotify(value, ref _badOrders); }
+                get => _badOrders;
+                set => SetWithNotify(value, ref _badOrders);
             }
         }
 
@@ -2531,20 +2675,20 @@ namespace Microsoft.EntityFrameworkCore
 
             public int Id
             {
-                get { return _id; }
-                set { SetWithNotify(value, ref _id); }
+                get => _id;
+                set => SetWithNotify(value, ref _id);
             }
 
             public int? BadCustomerId
             {
-                get { return _badCustomerId; }
-                set { SetWithNotify(value, ref _badCustomerId); }
+                get => _badCustomerId;
+                set => SetWithNotify(value, ref _badCustomerId);
             }
 
             public BadCustomer BadCustomer
             {
-                get { return _badCustomer; }
-                set { SetWithNotify(value, ref _badCustomer); }
+                get => _badCustomer;
+                set => SetWithNotify(value, ref _badCustomer);
             }
         }
 

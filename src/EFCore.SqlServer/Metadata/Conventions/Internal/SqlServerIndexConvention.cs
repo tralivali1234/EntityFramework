@@ -5,16 +5,20 @@ using System.Linq;
 using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Metadata.Conventions.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
     public class SqlServerIndexConvention :
+        IBaseTypeChangedConvention,
         IIndexAddedConvention,
         IIndexUniquenessChangedConvention,
         IIndexAnnotationChangedConvention,
@@ -30,6 +34,24 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         public SqlServerIndexConvention([NotNull] ISqlGenerationHelper sqlGenerationHelper)
         {
             _sqlGenerationHelper = sqlGenerationHelper;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool Apply(InternalEntityTypeBuilder entityTypeBuilder, EntityType oldBaseType)
+        {
+            if (oldBaseType == null
+                || entityTypeBuilder.Metadata.BaseType == null)
+            {
+                foreach (var index in entityTypeBuilder.Metadata.GetDeclaredIndexes())
+                {
+                    SetIndexFilter(index.Builder);
+                }
+            }
+
+            return true;
         }
 
         InternalIndexBuilder IIndexAddedConvention.Apply(InternalIndexBuilder indexBuilder)
@@ -51,6 +73,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             {
                 SetIndexFilter(index.Builder);
             }
+
             return true;
         }
 
@@ -81,6 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     SetIndexFilter(index.Builder, columnNameChanged: true);
                 }
             }
+
             return annotation;
         }
 
@@ -89,7 +113,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             // TODO: compare with a cached filter to avoid overriding if it was set by a different convention
             var index = indexBuilder.Metadata;
             if (index.IsUnique
-                && indexBuilder.Metadata.SqlServer().IsClustered != true
+                && index.SqlServer().IsClustered != true
                 && index.Properties
                     .Any(property => property.IsColumnNullable()))
             {

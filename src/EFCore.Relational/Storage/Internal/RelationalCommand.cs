@@ -18,6 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class RelationalCommand : IRelationalCommand
     {
         /// <summary>
@@ -80,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteNonQuery,
                 parameterValues,
-                cancellationToken: cancellationToken).Cast<object, int>();
+                cancellationToken).Cast<object, int>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -106,7 +107,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteScalar,
                 parameterValues,
-                cancellationToken: cancellationToken);
+                cancellationToken);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -132,7 +133,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 Check.NotNull(connection, nameof(connection)),
                 DbCommandMethod.ExecuteReader,
                 parameterValues,
-                cancellationToken: cancellationToken).Cast<object, RelationalDataReader>();
+                cancellationToken).Cast<object, RelationalDataReader>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -338,14 +339,20 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             return result;
         }
 
-        private DbCommand CreateCommand(
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual DbCommand CreateCommand(
             IRelationalConnection connection,
             IReadOnlyDictionary<string, object> parameterValues)
         {
             var command = connection.DbConnection.CreateCommand();
 
-            command.CommandText = CommandText;
+            command.CommandText = AdjustCommandText(CommandText);
 
+            ConfigureCommand(command);
+            
             if (connection.CurrentTransaction != null)
             {
                 command.Transaction = connection.CurrentTransaction.GetDbTransaction();
@@ -373,5 +380,20 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
 
             return command;
         }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void ConfigureCommand(DbCommand command)
+        {
+        }
+        
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual string AdjustCommandText(string commandText)
+            => commandText;
     }
 }

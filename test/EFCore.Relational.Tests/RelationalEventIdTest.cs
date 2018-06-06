@@ -10,6 +10,8 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -19,43 +21,68 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.Update;
+using Microsoft.Extensions.DependencyInjection;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
 using Xunit;
+using IsolationLevel = System.Data.IsolationLevel;
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
-    public class RelationalEventIdTest
+    public class RelationalEventIdTest : EventIdTestBase
     {
         [Fact]
         public void Every_eventId_has_a_logger_method_and_logs_when_level_enabled()
         {
             var constantExpression = Expression.Constant("A");
-            var entityType = new EntityType(typeof(object), new Model(new ConventionSet()), ConfigurationSource.Convention);
+            var model = new Model(new ConventionSet());
+            var entityType = new EntityType(typeof(object), model, ConfigurationSource.Convention);
             var property = new Property("A", typeof(int), null, null, entityType, ConfigurationSource.Convention, ConfigurationSource.Convention);
+            var contextServices = RelationalTestHelpers.Instance.CreateContextServices(model);
 
             var queryModel = new QueryModel(new MainFromClause("A", typeof(object), constantExpression), new SelectClause(constantExpression));
 
             var fakeFactories = new Dictionary<Type, Func<object>>
             {
                 { typeof(string), () => "Fake" },
-                { typeof(IList<string>), () => new List<string> { "Fake1", "Fake2" } },
+                {
+                    typeof(IList<string>), () => new List<string>
+                    {
+                        "Fake1",
+                        "Fake2"
+                    }
+                },
+                {
+                    typeof(IEnumerable<IUpdateEntry>), () => new List<IUpdateEntry>
+                    {
+                        new InternalClrEntityEntry(
+                            contextServices.GetRequiredService<IStateManager>(),
+                            entityType,
+                            new object())
+                    }
+                },
                 { typeof(IRelationalConnection), () => new FakeRelationalConnection() },
                 { typeof(DbCommand), () => new FakeDbCommand() },
                 { typeof(DbTransaction), () => new FakeDbTransaction() },
                 { typeof(DbDataReader), () => new FakeDbDataReader() },
+                { typeof(Transaction), () => new CommittableTransaction() },
                 { typeof(IMigrator), () => new FakeMigrator() },
                 { typeof(Migration), () => new FakeMigration() },
                 { typeof(IMigrationsAssembly), () => new FakeMigrationsAssembly() },
                 { typeof(QueryModel), () => queryModel },
                 { typeof(MethodCallExpression), () => Expression.Call(constantExpression, typeof(object).GetMethod("ToString")) },
                 { typeof(Expression), () => constantExpression },
-                { typeof(IProperty), () => property }
+                { typeof(IProperty), () => property },
+                { typeof(TypeInfo), () => typeof(object).GetTypeInfo() },
+                { typeof(Type), () => typeof(object) },
+                { typeof(ValueConverter), () => new BoolToZeroOneConverter<int>() }
             };
 
-            RelationalTestHelpers.Instance.TestEventLogging(
+            TestEventLogging(
                 typeof(RelationalEventId),
                 typeof(RelationalLoggerExtensions),
                 fakeFactories);
@@ -90,8 +117,8 @@ namespace Microsoft.EntityFrameworkCore
             public int? CommandTimeout { get; set; }
             public bool IsMultipleActiveResultSetsEnabled => throw new NotImplementedException();
             public IDbContextTransaction CurrentTransaction => throw new NotImplementedException();
-            public System.Transactions.Transaction EnlistedTransaction { get; }
-            public void EnlistTransaction(System.Transactions.Transaction transaction) => throw new NotImplementedException();
+            public Transaction EnlistedTransaction { get; }
+            public void EnlistTransaction(Transaction transaction) => throw new NotImplementedException();
 
             public SemaphoreSlim Semaphore => throw new NotImplementedException();
             public void RegisterBufferable(IBufferable bufferable) => throw new NotImplementedException();

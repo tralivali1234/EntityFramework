@@ -17,6 +17,24 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public class ModelBuilderNonGenericStringTest : ModelBuilderNonGenericTest
     {
+        public class NonGenericStringOwnedTypes : OwnedTypesTestBase
+        {
+            protected override TestModelBuilder CreateTestModelBuilder(TestHelpers testHelpers)
+                => new NonGenericStringTestModelBuilder(testHelpers);
+
+            public override void Can_configure_one_to_one_relationship_from_an_owned_type()
+            {
+                var modelBuilder = CreateModelBuilder();
+
+                // Test issue: HasOne<SpecialCustomer> in the base test is adding a shadow entity type when strings are
+                // used. This would not normally happen, but it happens here because no navigation property
+                // or type to do otherwise.
+                modelBuilder.Entity<SpecialCustomer>();
+
+                Can_configure_one_to_one_relationship_from_an_owned_type(modelBuilder);
+            }
+        }
+
         public class NonGenericStringOneToManyType : OneToManyTestBase
         {
             [Fact]
@@ -152,6 +170,19 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                     Assert.Throws<InvalidOperationException>(() => orderEntityType.HasOne(typeof(OrderDetails), "OrderDetailsNavigation")).Message);
             }
 
+            //Shadow navigations not supported #3864
+            public override void Ignoring_properties_resolves_ambiguity()
+            {
+            }
+
+            public override void Ignoring_properties_on_principal_resolves_ambiguity()
+            {
+            }
+
+            public override void Throws_for_one_to_one_relationship_if_no_side_has_matching_property_anymore()
+            {
+            }
+
             protected override TestModelBuilder CreateTestModelBuilder(TestHelpers testHelpers)
                 => new NonGenericStringTestModelBuilder(testHelpers);
         }
@@ -179,6 +210,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public NonGenericStringTestEntityTypeBuilder Entity(string name)
                 => new NonGenericStringTestEntityTypeBuilder(ModelBuilder.Entity(name));
+
+            public override TestQueryTypeBuilder<TQuery> Query<TQuery>()
+                => new NonGenericTestQueryTypeBuilder<TQuery>(ModelBuilder.Query(typeof(TQuery)));
+
+            public override TestOwnedEntityTypeBuilder<TEntity> Owned<TEntity>()
+                => new NonGenericTestOwnedEntityTypeBuilder<TEntity>(ModelBuilder.Owned(typeof(TEntity)));
 
             public override TestModelBuilder Ignore<TEntity>()
             {

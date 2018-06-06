@@ -2,10 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Linq.Expressions;
+using System.Reflection;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -14,6 +17,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.EntityFrameworkCore.Update;
 using Remotion.Linq;
 
 namespace Microsoft.EntityFrameworkCore.Internal
@@ -28,6 +33,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void CommandExecuting(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Command> diagnostics,
             [NotNull] DbCommand command,
@@ -39,11 +45,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerExecutingCommand;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     command.Parameters.FormatParameters(ShouldLogParameterValues(diagnostics, command)),
                     command.CommandType,
                     command.CommandTimeout,
@@ -90,6 +97,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void CommandExecuted(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Command> diagnostics,
             [NotNull] DbCommand command,
@@ -103,11 +111,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerExecutedCommand;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     string.Format(CultureInfo.InvariantCulture, "{0:N0}", duration.TotalMilliseconds),
                     command.Parameters.FormatParameters(ShouldLogParameterValues(diagnostics, command)),
                     command.CommandType,
@@ -152,6 +161,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void CommandError(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Command> diagnostics,
             [NotNull] DbCommand command,
@@ -165,11 +175,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerCommandFailed;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     string.Format(CultureInfo.InvariantCulture, "{0:N0}", duration.TotalMilliseconds),
                     command.Parameters.FormatParameters(ShouldLogParameterValues(diagnostics, command)),
                     command.CommandType,
@@ -224,13 +235,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerOpeningConnection;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
-                    connection.DbConnection.Database,
-                    connection.DbConnection.DataSource);
+                    warningBehavior,
+                    connection.DbConnection.Database, connection.DbConnection.DataSource);
             }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
@@ -269,13 +280,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerOpenedConnection;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
-                    connection.DbConnection.Database,
-                    connection.DbConnection.DataSource);
+                    warningBehavior,
+                    connection.DbConnection.Database, connection.DbConnection.DataSource);
             }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
@@ -313,13 +324,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerClosingConnection;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
-                    connection.DbConnection.Database,
-                    connection.DbConnection.DataSource);
+                    warningBehavior,
+                    connection.DbConnection.Database, connection.DbConnection.DataSource);
             }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
@@ -357,13 +368,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerClosedConnection;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
-                    connection.DbConnection.Database,
-                    connection.DbConnection.DataSource);
+                    warningBehavior,
+                    connection.DbConnection.Database, connection.DbConnection.DataSource);
             }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
@@ -407,13 +418,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 ? RelationalStrings.LogRelationalLoggerConnectionErrorAsDebug
                 : RelationalStrings.LogRelationalLoggerConnectionError;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
-                    connection.DbConnection.Database,
-                    connection.DbConnection.DataSource,
+                    warningBehavior,
+                    connection.DbConnection.Database, connection.DbConnection.DataSource,
                     exception);
             }
 
@@ -446,6 +457,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void TransactionStarted(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
             [NotNull] IRelationalConnection connection,
@@ -455,9 +467,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerBeginningTransaction;
 
-            definition.Log(
-                diagnostics,
-                transaction.IsolationLevel.ToString("G"));
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    transaction.IsolationLevel.ToString("G"));
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -485,6 +502,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void TransactionUsed(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
             [NotNull] IRelationalConnection connection,
@@ -494,9 +512,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerUsingTransaction;
 
-            definition.Log(
-                diagnostics,
-                transaction.IsolationLevel.ToString("G"));
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    transaction.IsolationLevel.ToString("G"));
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -524,6 +547,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void TransactionCommitted(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
             [NotNull] IRelationalConnection connection,
@@ -534,7 +558,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerCommittingTransaction;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -555,6 +583,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void TransactionRolledBack(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
             [NotNull] IRelationalConnection connection,
@@ -565,7 +594,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerRollingbackTransaction;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -595,7 +628,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerDisposingTransaction;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -615,6 +652,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static void TransactionError(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
             [NotNull] IRelationalConnection connection,
@@ -627,7 +665,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRelationalLoggerTransactionError;
 
-            definition.Log(diagnostics, exception);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior, exception);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -657,7 +699,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogAmbientTransaction;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -677,6 +723,86 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static void AmbientTransactionEnlisted(
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
+            [NotNull] IRelationalConnection connection,
+            [NotNull] Transaction transaction)
+        {
+            var definition = RelationalStrings.LogAmbientTransactionEnlisted;
+
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    transaction.IsolationLevel.ToString("G"));
+            }
+
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
+            {
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new TransactionEnlistedEventData(
+                        definition,
+                        AmbientTransactionEnlisted,
+                        transaction,
+                        connection.DbConnection,
+                        connection.ConnectionId));
+            }
+        }
+
+        private static string AmbientTransactionEnlisted(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<string>)definition;
+            var p = (TransactionEnlistedEventData)payload;
+            return d.GenerateMessage(p.Transaction.IsolationLevel.ToString("G"));
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static void ExplicitTransactionEnlisted(
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> diagnostics,
+            [NotNull] IRelationalConnection connection,
+            [NotNull] Transaction transaction)
+        {
+            var definition = RelationalStrings.LogExplicitTransactionEnlisted;
+
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    transaction.IsolationLevel.ToString("G"));
+            }
+
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
+            {
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new TransactionEnlistedEventData(
+                        definition,
+                        ExplicitTransactionEnlisted,
+                        transaction,
+                        connection.DbConnection,
+                        connection.ConnectionId));
+            }
+        }
+
+        private static string ExplicitTransactionEnlisted(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<string>)definition;
+            var p = (TransactionEnlistedEventData)payload;
+            return d.GenerateMessage(p.Transaction.IsolationLevel.ToString("G"));
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static void DataReaderDisposing(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Database.Command> diagnostics,
             [NotNull] IRelationalConnection connection,
@@ -690,7 +816,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogDisposingDataReader;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -721,15 +851,15 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogMigrating;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 var dbConnection = connection.DbConnection;
 
                 definition.Log(
                     diagnostics,
-                    dbConnection.Database,
-                    dbConnection.DataSource);
+                    warningBehavior,
+                    dbConnection.Database, dbConnection.DataSource);
             }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
@@ -765,11 +895,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogRevertingMigration;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     migration.GetId());
             }
 
@@ -803,11 +934,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogApplyingMigration;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     migration.GetId());
             }
 
@@ -844,11 +976,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogGeneratingDown;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     migration.GetId());
             }
 
@@ -888,11 +1021,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogGeneratingUp;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     migration.GetId());
             }
 
@@ -928,7 +1062,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogNoMigrationsApplied;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -952,11 +1090,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogNoMigrationsFound;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     migrationsAssembly.Assembly.GetName().Name);
             }
 
@@ -983,6 +1122,43 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static void MigrationAttributeMissingWarning(
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Migrations> diagnostics,
+            [NotNull] TypeInfo migrationType)
+        {
+            var definition = RelationalStrings.LogMigrationAttributeMissingWarning;
+
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    migrationType.Name);
+            }
+
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
+            {
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new MigrationTypeEventData(
+                        definition,
+                        MigrationAttributeMissingWarning,
+                        migrationType));
+            }
+        }
+
+        private static string MigrationAttributeMissingWarning(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<string>)definition;
+            var p = (MigrationTypeEventData)payload;
+            return d.GenerateMessage(p.MigrationType.Name);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static void QueryClientEvaluationWarning(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Query> diagnostics,
             [NotNull] QueryModel queryModel,
@@ -990,7 +1166,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogClientEvalWarning;
 
-            definition.Log(diagnostics, queryModelElement);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    queryModelElement);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -1021,7 +1204,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogPossibleUnintendedUseOfEquals;
 
-            definition.Log(diagnostics, methodCallExpression);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    methodCallExpression);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -1050,7 +1240,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogQueryPossibleExceptionWithAggregateOperator;
 
-            definition.Log(diagnostics);
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(diagnostics, warningBehavior);
+            }
 
             if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
             {
@@ -1066,17 +1260,58 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static void ValueConversionSqlLiteralWarning(
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Query> diagnostics,
+            [NotNull] Type mappingClrType,
+            [NotNull] ValueConverter valueConverter)
+        {
+            var definition = RelationalStrings.LogValueConversionSqlLiteralWarning;
+
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    mappingClrType.ShortDisplayName(),
+                    valueConverter.GetType().ShortDisplayName());
+            }
+
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
+            {
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new ValueConverterEventData(
+                        definition,
+                        ValueConversionSqlLiteral,
+                        mappingClrType,
+                        valueConverter));
+            }
+        }
+
+        private static string ValueConversionSqlLiteral(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<object, object>)definition;
+            var p = (ValueConverterEventData)payload;
+            return d.GenerateMessage(p.MappingClrType.ShortDisplayName(), p.ValueConverter.GetType().ShortDisplayName());
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static void ModelValidationKeyDefaultValueWarning(
             [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Model.Validation> diagnostics,
             [NotNull] IProperty property)
         {
             var definition = RelationalStrings.LogKeyHasDefaultValue;
 
-            // Checking for enabled here to avoid string formatting if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     property.Name,
                     property.DeclaringEntityType.DisplayName());
             }
@@ -1111,11 +1346,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var definition = RelationalStrings.LogBoolWithDefaultWarning;
 
-            // Checking for enabled here to avoid building strings if not needed.
-            if (diagnostics.GetLogBehavior(definition.EventId, definition.Level) != WarningBehavior.Ignore)
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
             {
                 definition.Log(
                     diagnostics,
+                    warningBehavior,
                     property.Name,
                     property.DeclaringEntityType.DisplayName());
             }
@@ -1136,6 +1372,86 @@ namespace Microsoft.EntityFrameworkCore.Internal
             var d = (EventDefinition<string, string>)definition;
             var p = (PropertyEventData)payload;
             return d.GenerateMessage(p.Property.Name, p.Property.DeclaringEntityType.DisplayName());
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static void BatchReadyForExecution(
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Update> diagnostics,
+            [NotNull] IEnumerable<IUpdateEntry> entries,
+            int commandCount)
+        {
+            var definition = RelationalStrings.LogBatchReadyForExecution;
+
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    commandCount);
+            }
+
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
+            {
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new BatchEventData(
+                        definition,
+                        BatchReadyForExecution,
+                        entries,
+                        commandCount));
+            }
+        }
+
+        private static string BatchReadyForExecution(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<int>)definition;
+            var p = (BatchEventData)payload;
+            return d.GenerateMessage(p.CommandCount);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static void BatchSmallerThanMinBatchSize(
+            [NotNull] this IDiagnosticsLogger<DbLoggerCategory.Update> diagnostics,
+            [NotNull] IEnumerable<IUpdateEntry> entries,
+            int commandCount,
+            int minBatchSize)
+        {
+            var definition = RelationalStrings.LogBatchSmallerThanMinBatchSize;
+
+            var warningBehavior = definition.GetLogBehavior(diagnostics);
+            if (warningBehavior != WarningBehavior.Ignore)
+            {
+                definition.Log(
+                    diagnostics,
+                    warningBehavior,
+                    commandCount, minBatchSize);
+            }
+
+            if (diagnostics.DiagnosticSource.IsEnabled(definition.EventId.Name))
+            {
+                diagnostics.DiagnosticSource.Write(
+                    definition.EventId.Name,
+                    new MinBatchSizeEventData(
+                        definition,
+                        BatchSmallerThanMinBatchSize,
+                        entries,
+                        commandCount,
+                        minBatchSize));
+            }
+        }
+
+        private static string BatchSmallerThanMinBatchSize(EventDefinitionBase definition, EventData payload)
+        {
+            var d = (EventDefinition<int, int>)definition;
+            var p = (MinBatchSizeEventData)payload;
+            return d.GenerateMessage(p.CommandCount, p.MinBatchSize);
         }
     }
 }

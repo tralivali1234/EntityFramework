@@ -6,9 +6,12 @@ using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -23,16 +26,36 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public SqlServerUdtTypeMapping(
-            [NotNull] string storeType,
             [NotNull] Type clrType,
+            [NotNull] string storeType,
+            StoreTypePostfix storeTypePostfix = StoreTypePostfix.None,
             [CanBeNull] string udtTypeName = null,
             [CanBeNull] ValueConverter converter = null,
+            [CanBeNull] ValueComparer comparer = null,
+            [CanBeNull] ValueComparer keyComparer = null,
             DbType? dbType = null,
             bool unicode = false,
-            int? size = null)
-            : base(storeType, clrType, converter, dbType, unicode, size)
+            int? size = null,
+            bool fixedLength = false,
+            int? precision = null,
+            int? scale = null)
+            : base(
+                new RelationalTypeMappingParameters(
+                    new CoreTypeMappingParameters(
+                        clrType, converter, comparer, keyComparer), storeType, storeTypePostfix, dbType, unicode, size, fixedLength, precision, scale))
+
         {
             UdtTypeName = udtTypeName ?? storeType;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected SqlServerUdtTypeMapping(RelationalTypeMappingParameters parameters, [CanBeNull] string udtTypeName)
+            : base(parameters)
+        {
+            UdtTypeName = udtTypeName ?? parameters.StoreType;
         }
 
         /// <summary>
@@ -42,18 +65,12 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public virtual string UdtTypeName { get; }
 
         /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
+        ///     Creates a copy of this mapping.
         /// </summary>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new SqlServerUdtTypeMapping(storeType, ClrType, UdtTypeName, Converter, DbType, IsUnicode, size);
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new SqlServerUdtTypeMapping(StoreType, ClrType, UdtTypeName, ComposeConverter(converter), DbType, IsUnicode, Size);
+        /// <param name="parameters"> The parameters for this mapping. </param>
+        /// <returns> The newly created mapping. </returns>
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new SqlServerUdtTypeMapping(parameters, UdtTypeName);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -69,7 +86,8 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                 parameter.GetType(),
                 CreateUdtTypeNameAccessor);
 
-            if (parameter.Value != null && parameter.Value != DBNull.Value)
+            if (parameter.Value != null
+                && parameter.Value != DBNull.Value)
             {
                 _udtTypeNameSetter(parameter, UdtTypeName);
             }

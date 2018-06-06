@@ -7,7 +7,7 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace Microsoft.EntityFrameworkCore.Internal
+namespace Microsoft.EntityFrameworkCore.InMemory.Internal
 {
     /// <summary>
     ///		This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
     public static class InMemoryStrings
     {
         private static readonly ResourceManager _resourceManager
-            = new ResourceManager("Microsoft.EntityFrameworkCore.Properties.InMemoryStrings", typeof(InMemoryStrings).GetTypeInfo().Assembly);
+            = new ResourceManager("Microsoft.EntityFrameworkCore.InMemory.Properties.InMemoryStrings", typeof(InMemoryStrings).GetTypeInfo().Assembly);
 
         /// <summary>
         ///     Saved {count} entities to in-memory store.
@@ -25,6 +25,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<int>(
                 InMemoryEventId.ChangesSaved,
                 LogLevel.Information,
+                "InMemoryEventId.ChangesSaved",
                 LoggerMessage.Define<int>(
                     LogLevel.Information,
                     InMemoryEventId.ChangesSaved,
@@ -37,6 +38,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 InMemoryEventId.TransactionIgnoredWarning,
                 LogLevel.Warning,
+                "InMemoryEventId.TransactionIgnoredWarning",
                 LoggerMessage.Define(
                     LogLevel.Warning,
                     InMemoryEventId.TransactionIgnoredWarning,

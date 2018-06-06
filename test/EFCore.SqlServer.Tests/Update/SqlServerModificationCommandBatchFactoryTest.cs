@@ -1,10 +1,12 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Update.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -18,9 +20,9 @@ namespace Microsoft.EntityFrameworkCore.Update
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseSqlServer("Database=Crunchie", b => b.MaxBatchSize(1));
 
-            var typeMapper = new SqlServerTypeMapper(
-                new CoreTypeMapperDependencies(),
-                new RelationalTypeMapperDependencies());
+            var typeMapper = new SqlServerTypeMappingSource(
+                TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>());
 
             var factory = new SqlServerModificationCommandBatchFactory(
                 new RelationalCommandBuilderFactory(
@@ -33,9 +35,9 @@ namespace Microsoft.EntityFrameworkCore.Update
                         new SqlServerSqlGenerationHelper(
                             new RelationalSqlGenerationHelperDependencies()),
                         typeMapper)),
-                new UntypedRelationalValueBufferFactoryFactory(
+                new TypedRelationalValueBufferFactoryFactory(
                     new RelationalValueBufferFactoryDependencies(
-                        typeMapper)),
+                        typeMapper, new CoreSingletonOptions())),
                 optionsBuilder.Options);
 
             var batch = factory.Create();
@@ -50,9 +52,9 @@ namespace Microsoft.EntityFrameworkCore.Update
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseSqlServer("Database=Crunchie");
 
-            var typeMapper = new SqlServerTypeMapper(
-                new CoreTypeMapperDependencies(),
-                new RelationalTypeMapperDependencies());
+            var typeMapper = new SqlServerTypeMappingSource(
+                TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>());
 
             var factory = new SqlServerModificationCommandBatchFactory(
                 new RelationalCommandBuilderFactory(
@@ -65,9 +67,9 @@ namespace Microsoft.EntityFrameworkCore.Update
                         new SqlServerSqlGenerationHelper(
                             new RelationalSqlGenerationHelperDependencies()),
                         typeMapper)),
-                new UntypedRelationalValueBufferFactoryFactory(
+                new TypedRelationalValueBufferFactoryFactory(
                     new RelationalValueBufferFactoryDependencies(
-                        typeMapper)),
+                        typeMapper, new CoreSingletonOptions())),
                 optionsBuilder.Options);
 
             var batch = factory.Create();

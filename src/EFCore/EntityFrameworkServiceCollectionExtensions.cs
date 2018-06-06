@@ -27,13 +27,13 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         /// <example>
         ///     <code>
-        ///          public void ConfigureServices(IServiceCollection services)
-        ///          {
-        ///              var connectionString = "connection string to database";
-        ///
-        ///              services.AddDbContext&lt;MyContext&gt;(options => options.UseSqlServer(connectionString));
-        ///          }
-        ///      </code>
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
+        /// 
+        ///               services.AddDbContext&lt;MyContext&gt;(options => options.UseSqlServer(connectionString));
+        ///           }
+        ///       </code>
         /// </example>
         /// <typeparam name="TContext"> The type of context to be registered. </typeparam>
         /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
@@ -64,7 +64,54 @@ namespace Microsoft.Extensions.DependencyInjection
             ServiceLifetime contextLifetime = ServiceLifetime.Scoped,
             ServiceLifetime optionsLifetime = ServiceLifetime.Scoped)
             where TContext : DbContext
-            => AddDbContext<TContext>(
+            => AddDbContext<TContext, TContext>(serviceCollection, optionsAction, contextLifetime, optionsLifetime);
+
+        /// <summary>
+        ///     Registers the given context as a service in the <see cref="IServiceCollection" />.
+        ///     You use this method when using dependency injection in your application, such as with ASP.NET.
+        ///     For more information on setting up dependency injection, see http://go.microsoft.com/fwlink/?LinkId=526890.
+        /// </summary>
+        /// <example>
+        ///     <code>
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
+        /// 
+        ///               services.AddDbContext&lt;MyContext&gt;(options => options.UseSqlServer(connectionString));
+        ///           }
+        ///       </code>
+        /// </example>
+        /// <typeparam name="TContextService"> The class or interface that will be used to resolve the context from the container. </typeparam>
+        /// <typeparam name="TContextImplementation"> The concrete implementation type to create. </typeparam>
+        /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
+        /// <param name="optionsAction">
+        ///     <para>
+        ///         An optional action to configure the <see cref="DbContextOptions" /> for the context. This provides an
+        ///         alternative to performing configuration of the context by overriding the
+        ///         <see cref="DbContext.OnConfiguring" /> method in your derived context.
+        ///     </para>
+        ///     <para>
+        ///         If an action is supplied here, the <see cref="DbContext.OnConfiguring" /> method will still be run if it has
+        ///         been overridden on the derived context. <see cref="DbContext.OnConfiguring" /> configuration will be applied
+        ///         in addition to configuration performed here.
+        ///     </para>
+        ///     <para>
+        ///         In order for the options to be passed into your context, you need to expose a constructor on your context that takes
+        ///         <see cref="DbContextOptions{TContext}" /> and passes it to the base constructor of <see cref="DbContext" />.
+        ///     </para>
+        /// </param>
+        /// <param name="contextLifetime"> The lifetime with which to register the DbContext service in the container. </param>
+        /// <param name="optionsLifetime"> The lifetime with which to register the DbContextOptions service in the container. </param>
+        /// <returns>
+        ///     The same service collection so that multiple calls can be chained.
+        /// </returns>
+        public static IServiceCollection AddDbContext<TContextService, TContextImplementation>(
+            [NotNull] this IServiceCollection serviceCollection,
+            [CanBeNull] Action<DbContextOptionsBuilder> optionsAction = null,
+            ServiceLifetime contextLifetime = ServiceLifetime.Scoped,
+            ServiceLifetime optionsLifetime = ServiceLifetime.Scoped)
+            where TContextImplementation : DbContext, TContextService
+            => AddDbContext<TContextService, TContextImplementation>(
                 serviceCollection,
                 optionsAction == null
                     ? (Action<IServiceProvider, DbContextOptionsBuilder>)null
@@ -97,10 +144,41 @@ namespace Microsoft.Extensions.DependencyInjection
             [NotNull] Action<DbContextOptionsBuilder> optionsAction,
             int poolSize = 128)
             where TContext : DbContext
+            => AddDbContextPool<TContext, TContext>(serviceCollection, optionsAction, poolSize);
+
+        /// <summary>
+        ///     Registers the given context as a service in the <see cref="IServiceCollection" /> and enables DbContext pooling.
+        ///     Instance pooling can increase throughput in high-scale scenarios such as web servers by re-using
+        ///     DbContext instances, rather than creating new instances for each request.
+        ///     You use this method when using dependency injection in your application, such as with ASP.NET.
+        ///     For more information on setting up dependency injection, see http://go.microsoft.com/fwlink/?LinkId=526890.
+        /// </summary>
+        /// <typeparam name="TContextService"> The class or interface that will be used to resolve the context from the container. </typeparam>
+        /// <typeparam name="TContextImplementation"> The concrete implementation type to create. </typeparam>
+        /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
+        /// <param name="optionsAction">
+        ///     <para>
+        ///         A required action to configure the <see cref="DbContextOptions" /> for the context. When using
+        ///         context pooling, options configuration must be performed externally; <see cref="DbContext.OnConfiguring" />
+        ///         will not be called.
+        ///     </para>
+        /// </param>
+        /// <param name="poolSize">
+        ///     ESets the maximum number of instances retained by the pool.
+        /// </param>
+        /// <returns>
+        ///     The same service collection so that multiple calls can be chained.
+        /// </returns>
+        public static IServiceCollection AddDbContextPool<TContextService, TContextImplementation>(
+            [NotNull] this IServiceCollection serviceCollection,
+            [NotNull] Action<DbContextOptionsBuilder> optionsAction,
+            int poolSize = 128)
+            where TContextImplementation : DbContext, TContextService
+            where TContextService : class
         {
             Check.NotNull(optionsAction, nameof(optionsAction));
 
-            return AddDbContextPool<TContext>(serviceCollection, (_, ob) => optionsAction(ob), poolSize);
+            return AddDbContextPool<TContextService, TContextImplementation>(serviceCollection, (_, ob) => optionsAction(ob), poolSize);
         }
 
         /// <summary>
@@ -140,6 +218,47 @@ namespace Microsoft.Extensions.DependencyInjection
             [NotNull] Action<IServiceProvider, DbContextOptionsBuilder> optionsAction,
             int poolSize = 128)
             where TContext : DbContext
+            => AddDbContextPool<TContext, TContext>(serviceCollection, optionsAction);
+
+        /// <summary>
+        ///     <para>
+        ///         Registers the given context as a service in the <see cref="IServiceCollection" /> and enables DbContext pooling.
+        ///         Instance pooling can increase throughput in high-scale scenarios such as web servers by re-using
+        ///         DbContext instances, rather than creating new instances for each request.
+        ///         You use this method when using dependency injection in your application, such as with ASP.NET.
+        ///         For more information on setting up dependency injection, see http://go.microsoft.com/fwlink/?LinkId=526890.
+        ///     </para>
+        ///     <para>
+        ///         This overload has an <paramref name="optionsAction" /> that provides the applications <see cref="IServiceProvider" />.
+        ///         This is useful if you want to setup Entity Framework to resolve its internal services from the primary application service
+        ///         provider.
+        ///         By default, we recommend using the other overload, which allows Entity Framework to create and maintain its own
+        ///         <see cref="IServiceProvider" />
+        ///         for internal Entity Framework services.
+        ///     </para>
+        /// </summary>
+        /// <typeparam name="TContextService"> The class or interface that will be used to resolve the context from the container. </typeparam>
+        /// <typeparam name="TContextImplementation"> The concrete implementation type to create. </typeparam>
+        /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
+        /// <param name="optionsAction">
+        ///     <para>
+        ///         A required action to configure the <see cref="DbContextOptions" /> for the context. When using
+        ///         context pooling, options configuration must be performed externally; <see cref="DbContext.OnConfiguring" />
+        ///         will not be called.
+        ///     </para>
+        /// </param>
+        /// <param name="poolSize">
+        ///     Sets the maximum number of instances retained by the pool.
+        /// </param>
+        /// <returns>
+        ///     The same service collection so that multiple calls can be chained.
+        /// </returns>
+        public static IServiceCollection AddDbContextPool<TContextService, TContextImplementation>(
+            [NotNull] this IServiceCollection serviceCollection,
+            [NotNull] Action<IServiceProvider, DbContextOptionsBuilder> optionsAction,
+            int poolSize = 128)
+            where TContextImplementation : DbContext, TContextService
+            where TContextService : class
         {
             Check.NotNull(serviceCollection, nameof(serviceCollection));
             Check.NotNull(optionsAction, nameof(optionsAction));
@@ -149,24 +268,29 @@ namespace Microsoft.Extensions.DependencyInjection
                 throw new ArgumentOutOfRangeException(nameof(poolSize), CoreStrings.InvalidPoolSize);
             }
 
-            CheckContextConstructors<TContext>();
+            CheckContextConstructors<TContextImplementation>();
 
-            AddCoreServices<TContext>(
+            AddCoreServices<TContextImplementation>(
                 serviceCollection,
                 (sp, ob) =>
-                    {
-                        optionsAction(sp, ob);
+                {
+                    optionsAction(sp, ob);
 
-                        var extension = (ob.Options.FindExtension<CoreOptionsExtension>() ?? new CoreOptionsExtension())
-                            .WithMaxPoolSize(poolSize);
+                    var extension = (ob.Options.FindExtension<CoreOptionsExtension>() ?? new CoreOptionsExtension())
+                        .WithMaxPoolSize(poolSize);
 
-                        ((IDbContextOptionsBuilderInfrastructure)ob).AddOrUpdateExtension(extension);
-                    },
+                    ((IDbContextOptionsBuilderInfrastructure)ob).AddOrUpdateExtension(extension);
+                },
                 ServiceLifetime.Singleton);
 
-            serviceCollection.TryAddSingleton(sp => new DbContextPool<TContext>(sp.GetService<DbContextOptions<TContext>>()));
-            serviceCollection.AddScoped<DbContextPool<TContext>.Lease>();
-            serviceCollection.AddScoped(sp => sp.GetService<DbContextPool<TContext>.Lease>().Context);
+            serviceCollection.TryAddSingleton(
+                sp => new DbContextPool<TContextImplementation>(
+                    sp.GetService<DbContextOptions<TContextImplementation>>()));
+
+            serviceCollection.AddScoped<DbContextPool<TContextImplementation>.Lease>();
+
+            serviceCollection.AddScoped(
+                sp => (TContextService)sp.GetService<DbContextPool<TContextImplementation>.Lease>().Context);
 
             return serviceCollection;
         }
@@ -178,13 +302,13 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         /// <example>
         ///     <code>
-        ///          public void ConfigureServices(IServiceCollection services)
-        ///          {
-        ///              var connectionString = "connection string to database";
-        ///
-        ///              services.AddDbContext&lt;MyContext&gt;(ServiceLifetime.Scoped);
-        ///          }
-        ///      </code>
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
+        /// 
+        ///               services.AddDbContext&lt;MyContext&gt;(ServiceLifetime.Scoped);
+        ///           }
+        ///       </code>
         /// </example>
         /// <typeparam name="TContext"> The type of context to be registered. </typeparam>
         /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
@@ -198,7 +322,42 @@ namespace Microsoft.Extensions.DependencyInjection
             ServiceLifetime contextLifetime,
             ServiceLifetime optionsLifetime = ServiceLifetime.Scoped)
             where TContext : DbContext
-            => AddDbContext<TContext>(serviceCollection, (Action<IServiceProvider, DbContextOptionsBuilder>)null, contextLifetime, optionsLifetime);
+            => AddDbContext<TContext, TContext>(serviceCollection, contextLifetime, optionsLifetime);
+
+        /// <summary>
+        ///     Registers the given context as a service in the <see cref="IServiceCollection" />.
+        ///     You use this method when using dependency injection in your application, such as with ASP.NET.
+        ///     For more information on setting up dependency injection, see http://go.microsoft.com/fwlink/?LinkId=526890.
+        /// </summary>
+        /// <example>
+        ///     <code>
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
+        /// 
+        ///               services.AddDbContext&lt;MyContext&gt;(ServiceLifetime.Scoped);
+        ///           }
+        ///       </code>
+        /// </example>
+        /// <typeparam name="TContextService"> The class or interface that will be used to resolve the context from the container. </typeparam>
+        /// <typeparam name="TContextImplementation"> The concrete implementation type to create. </typeparam>
+        /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
+        /// <param name="contextLifetime"> The lifetime with which to register the DbContext service in the container. </param>
+        /// <param name="optionsLifetime"> The lifetime with which to register the DbContextOptions service in the container. </param>
+        /// <returns>
+        ///     The same service collection so that multiple calls can be chained.
+        /// </returns>
+        public static IServiceCollection AddDbContext<TContextService, TContextImplementation>(
+            [NotNull] this IServiceCollection serviceCollection,
+            ServiceLifetime contextLifetime,
+            ServiceLifetime optionsLifetime = ServiceLifetime.Scoped)
+            where TContextImplementation : DbContext, TContextService
+            where TContextService : class
+            => AddDbContext<TContextService, TContextImplementation>(
+                serviceCollection,
+                (Action<IServiceProvider, DbContextOptionsBuilder>)null,
+                contextLifetime,
+                optionsLifetime);
 
         /// <summary>
         ///     <para>
@@ -217,17 +376,17 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         /// <example>
         ///     <code>
-        ///          public void ConfigureServices(IServiceCollection services)
-        ///          {
-        ///              var connectionString = "connection string to database";
-        ///
-        ///              services
-        ///                  .AddEntityFrameworkSqlServer()
-        ///                  .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
-        ///                      options.UseSqlServer(connectionString)
-        ///                             .UseInternalServiceProvider(serviceProvider));
-        ///          }
-        ///      </code>
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
+        /// 
+        ///               services
+        ///                   .AddEntityFrameworkSqlServer()
+        ///                   .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
+        ///                       options.UseSqlServer(connectionString)
+        ///                              .UseInternalServiceProvider(serviceProvider));
+        ///           }
+        ///       </code>
         /// </example>
         /// <typeparam name="TContext"> The type of context to be registered. </typeparam>
         /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
@@ -258,6 +417,67 @@ namespace Microsoft.Extensions.DependencyInjection
             ServiceLifetime contextLifetime = ServiceLifetime.Scoped,
             ServiceLifetime optionsLifetime = ServiceLifetime.Scoped)
             where TContext : DbContext
+            => AddDbContext<TContext, TContext>(serviceCollection, optionsAction, contextLifetime, optionsLifetime);
+
+        /// <summary>
+        ///     <para>
+        ///         Registers the given context as a service in the <see cref="IServiceCollection" />.
+        ///         You use this method when using dependency injection in your application, such as with ASP.NET.
+        ///         For more information on setting up dependency injection, see http://go.microsoft.com/fwlink/?LinkId=526890.
+        ///     </para>
+        ///     <para>
+        ///         This overload has an <paramref name="optionsAction" /> that provides the applications <see cref="IServiceProvider" />.
+        ///         This is useful if you want to setup Entity Framework to resolve its internal services from the primary application service
+        ///         provider.
+        ///         By default, we recommend using the other overload, which allows Entity Framework to create and maintain its own
+        ///         <see cref="IServiceProvider" />
+        ///         for internal Entity Framework services.
+        ///     </para>
+        /// </summary>
+        /// <example>
+        ///     <code>
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
+        /// 
+        ///               services
+        ///                   .AddEntityFrameworkSqlServer()
+        ///                   .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
+        ///                       options.UseSqlServer(connectionString)
+        ///                              .UseInternalServiceProvider(serviceProvider));
+        ///           }
+        ///       </code>
+        /// </example>
+        /// <typeparam name="TContextService"> The class or interface that will be used to resolve the context from the container. </typeparam>
+        /// <typeparam name="TContextImplementation"> The concrete implementation type to create. </typeparam>
+        /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
+        /// <param name="optionsAction">
+        ///     <para>
+        ///         An optional action to configure the <see cref="DbContextOptions" /> for the context. This provides an
+        ///         alternative to performing configuration of the context by overriding the
+        ///         <see cref="DbContext.OnConfiguring" /> method in your derived context.
+        ///     </para>
+        ///     <para>
+        ///         If an action is supplied here, the <see cref="DbContext.OnConfiguring" /> method will still be run if it has
+        ///         been overridden on the derived context. <see cref="DbContext.OnConfiguring" /> configuration will be applied
+        ///         in addition to configuration performed here.
+        ///     </para>
+        ///     <para>
+        ///         In order for the options to be passed into your context, you need to expose a constructor on your context that takes
+        ///         <see cref="DbContextOptions{TContext}" /> and passes it to the base constructor of <see cref="DbContext" />.
+        ///     </para>
+        /// </param>
+        /// <param name="contextLifetime"> The lifetime with which to register the DbContext service in the container. </param>
+        /// <param name="optionsLifetime"> The lifetime with which to register the DbContextOptions service in the container. </param>
+        /// <returns>
+        ///     The same service collection so that multiple calls can be chained.
+        /// </returns>
+        public static IServiceCollection AddDbContext<TContextService, TContextImplementation>(
+            [NotNull] this IServiceCollection serviceCollection,
+            [CanBeNull] Action<IServiceProvider, DbContextOptionsBuilder> optionsAction,
+            ServiceLifetime contextLifetime = ServiceLifetime.Scoped,
+            ServiceLifetime optionsLifetime = ServiceLifetime.Scoped)
+            where TContextImplementation : DbContext, TContextService
         {
             Check.NotNull(serviceCollection, nameof(serviceCollection));
 
@@ -268,21 +488,21 @@ namespace Microsoft.Extensions.DependencyInjection
 
             if (optionsAction != null)
             {
-                CheckContextConstructors<TContext>();
+                CheckContextConstructors<TContextImplementation>();
             }
 
-            AddCoreServices<TContext>(serviceCollection, optionsAction, optionsLifetime);
+            AddCoreServices<TContextImplementation>(serviceCollection, optionsAction, optionsLifetime);
 
-            serviceCollection.TryAdd(new ServiceDescriptor(typeof(TContext), typeof(TContext), contextLifetime));
+            serviceCollection.TryAdd(new ServiceDescriptor(typeof(TContextService), typeof(TContextImplementation), contextLifetime));
 
             return serviceCollection;
         }
 
-        private static void AddCoreServices<TContext>(
+        private static void AddCoreServices<TContextImplementation>(
             IServiceCollection serviceCollection,
             Action<IServiceProvider, DbContextOptionsBuilder> optionsAction,
             ServiceLifetime optionsLifetime)
-            where TContext : DbContext
+            where TContextImplementation : DbContext
         {
             serviceCollection
                 .AddMemoryCache()
@@ -290,14 +510,14 @@ namespace Microsoft.Extensions.DependencyInjection
 
             serviceCollection.TryAdd(
                 new ServiceDescriptor(
-                    typeof(DbContextOptions<TContext>),
-                    p => DbContextOptionsFactory<TContext>(p, optionsAction),
+                    typeof(DbContextOptions<TContextImplementation>),
+                    p => DbContextOptionsFactory<TContextImplementation>(p, optionsAction),
                     optionsLifetime));
 
             serviceCollection.Add(
                 new ServiceDescriptor(
                     typeof(DbContextOptions),
-                    p => p.GetRequiredService<DbContextOptions<TContext>>(),
+                    p => p.GetRequiredService<DbContextOptions<TContextImplementation>>(),
                     optionsLifetime));
         }
 

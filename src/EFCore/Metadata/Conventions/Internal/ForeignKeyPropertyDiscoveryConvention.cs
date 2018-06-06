@@ -1,10 +1,12 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 
@@ -18,13 +20,26 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         IForeignKeyAddedConvention,
         INavigationAddedConvention,
         IPropertyAddedConvention,
+        IEntityTypeMemberIgnoredConvention,
         IPrincipalEndChangedConvention,
         IPropertyFieldChangedConvention,
         IForeignKeyUniquenessChangedConvention,
         IKeyAddedConvention,
         IKeyRemovedConvention,
+        IPrimaryKeyChangedConvention,
         IModelBuiltConvention
     {
+        private readonly IDiagnosticsLogger<DbLoggerCategory.Model> _logger;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public ForeignKeyPropertyDiscoveryConvention([NotNull] IDiagnosticsLogger<DbLoggerCategory.Model> logger)
+        {
+            _logger = logger;
+        }
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -41,27 +56,47 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 {
                     conflictingForeignKey.Builder.HasForeignKey((IReadOnlyList<Property>)null, ConfigurationSource.Convention);
                 }
+
                 return relationshipBuilder;
             }
 
-            var foreignKeyProperties = FindCandidateForeignKeyProperties(foreignKey, onDependent: true);
+            var invertable = true;
+            if (foreignKey.DeclaringEntityType.DefiningEntityType == foreignKey.PrincipalEntityType
+                || foreignKey.IsOwnership
+                || foreignKey.DeclaringEntityType.IsQueryType
+                || foreignKey.IsSelfReferencing()
+                || foreignKey.PrincipalToDependent?.IsCollection() == true
+                || foreignKey.DeclaringEntityType.FindOwnership() != null)
+            {
+                relationshipBuilder = relationshipBuilder.RelatedEntityTypes(
+                    foreignKey.PrincipalEntityType, foreignKey.DeclaringEntityType, ConfigurationSource.Convention);
+                invertable = false;
+            }
+            else if (ConfigurationSource.Convention.Overrides(foreignKey.GetPrincipalEndConfigurationSource())
+                     && (foreignKey.PrincipalEntityType.DefiningEntityType == foreignKey.DeclaringEntityType
+                         || (foreignKey.PrincipalEntityType.FindOwnership() != null
+                             && foreignKey.PrincipalToDependent != null
+                             && foreignKey.DependentToPrincipal == null)))
+            {
+                var invertedRelationshipBuilder = relationshipBuilder.RelatedEntityTypes(
+                    foreignKey.DeclaringEntityType, foreignKey.PrincipalEntityType, ConfigurationSource.Convention);
+                if (invertedRelationshipBuilder != null)
+                {
+                    return invertedRelationshipBuilder;
+                }
+            }
+
+            var foreignKeyProperties = FindCandidateForeignKeyProperties(relationshipBuilder.Metadata, onDependent: true);
             if (foreignKeyProperties == null)
             {
-                if (foreignKey.DeclaringEntityType.DefiningEntityType == foreignKey.PrincipalEntityType)
-                {
-                    relationshipBuilder = relationshipBuilder
-                        .RelatedEntityTypes(foreignKey.PrincipalEntityType, foreignKey.DeclaringEntityType, ConfigurationSource.Convention);
-                }
                 // Try to invert if one to one or can be converted to one to one
-                else if ((foreignKey.IsUnique
-                          || foreignKey.PrincipalToDependent == null)
-                         && ConfigurationSource.Convention.Overrides(foreignKey.GetPrincipalEndConfigurationSource()))
+                if (invertable
+                    && (foreignKey.IsUnique || foreignKey.PrincipalToDependent == null)
+                    && ConfigurationSource.Convention.Overrides(foreignKey.GetPrincipalEndConfigurationSource()))
                 {
                     var candidatePropertiesOnPrincipal = FindCandidateForeignKeyProperties(foreignKey, onDependent: false);
-
-                    if ((candidatePropertiesOnPrincipal != null
-                         && !foreignKey.PrincipalEntityType.FindForeignKeysInHierarchy(candidatePropertiesOnPrincipal).Any())
-                        || foreignKey.PrincipalEntityType.DefiningEntityType == foreignKey.DeclaringEntityType)
+                    if (candidatePropertiesOnPrincipal != null
+                        && !foreignKey.PrincipalEntityType.FindForeignKeysInHierarchy(candidatePropertiesOnPrincipal).Any())
                     {
                         var invertedRelationshipBuilder = relationshipBuilder
                             .RelatedEntityTypes(foreignKey.DeclaringEntityType, foreignKey.PrincipalEntityType, ConfigurationSource.Convention);
@@ -75,20 +110,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     }
                 }
 
-                // Try to use PK properties if principal end is not ambiguous
                 if (foreignKey.IsUnique
-                    && !foreignKey.IsSelfReferencing()
-                    && foreignKey.DeclaringEntityType.BaseType == null)
+                    && foreignKey.DeclaringEntityType.BaseType == null
+                    && !foreignKey.IsSelfReferencing())
                 {
+                    // Try to use PK properties if principal end is not ambiguous
                     if (!ConfigurationSource.Convention.Overrides(foreignKey.GetPrincipalEndConfigurationSource())
-                        || foreignKey.DeclaringEntityType.DefiningEntityType == foreignKey.PrincipalEntityType)
+                        || foreignKey.DeclaringEntityType.DefiningEntityType == foreignKey.PrincipalEntityType
+                        || foreignKey.IsOwnership)
                     {
                         foreignKeyProperties = GetCompatiblePrimaryKeyProperties(
                             foreignKey.DeclaringEntityType,
                             foreignKey.PrincipalEntityType,
                             foreignKey.PrincipalKey.Properties);
                     }
-                    else
+                    else if (invertable)
                     {
                         foreignKeyProperties = FindCandidateForeignKeyProperties(foreignKey, onDependent: true, matchPk: true);
                         var candidatePropertiesOnPrincipal = FindCandidateForeignKeyProperties(foreignKey, onDependent: false, matchPk: true);
@@ -125,7 +161,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                     foreignKey.Properties,
                     foreignKey.PrincipalKey.Properties,
                     foreignKey.IsRequired,
-                    foreignKey.DependentToPrincipal?.Name ?? foreignKey.PrincipalEntityType.ShortName());
+                    GetPropertyBaseName(foreignKey));
                 return newTemporaryProperties != null
                     ? batch.Run(
                         relationshipBuilder.HasForeignKey(
@@ -134,33 +170,40 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             }
         }
 
-        private static InternalRelationshipBuilder SetForeignKeyProperties(
+        private static string GetPropertyBaseName(ForeignKey foreignKey)
+        {
+            return foreignKey.DependentToPrincipal?.Name ?? foreignKey.PrincipalEntityType.ShortName();
+        }
+
+        private InternalRelationshipBuilder SetForeignKeyProperties(
             InternalRelationshipBuilder relationshipBuilder, IReadOnlyList<Property> foreignKeyProperties)
         {
-            if (foreignKeyProperties == null)
-            {
-                return relationshipBuilder;
-            }
-
             var foreignKey = relationshipBuilder.Metadata;
             if (ConfigurationSource.Convention.Overrides(foreignKey.GetPrincipalEndConfigurationSource())
+                && foreignKey.DeclaringEntityType.DefiningEntityType != foreignKey.PrincipalEntityType
+                && !foreignKey.IsOwnership
+                && !foreignKey.DeclaringEntityType.IsQueryType
                 && !foreignKey.IsSelfReferencing()
-                && (foreignKey.PrincipalToDependent?.IsCollection() != true))
+                && foreignKey.PrincipalToDependent?.IsCollection() != true
+                && foreignKey.DeclaringEntityType.FindOwnership() == null)
             {
                 var candidatePropertiesOnPrincipal = FindCandidateForeignKeyProperties(foreignKey, onDependent: false);
-                if (candidatePropertiesOnPrincipal != null
-                    && !foreignKey.PrincipalEntityType.FindForeignKeysInHierarchy(candidatePropertiesOnPrincipal).Any())
+                if (foreignKeyProperties == null
+                    || (candidatePropertiesOnPrincipal != null
+                        && !foreignKey.PrincipalEntityType.FindForeignKeysInHierarchy(candidatePropertiesOnPrincipal).Any()))
                 {
-                    // Ambiguous principal end
+                    // Principal end became ambiguous
                     if (relationshipBuilder.Metadata.GetPrincipalEndConfigurationSource() == ConfigurationSource.Convention)
                     {
                         relationshipBuilder.Metadata.SetPrincipalEndConfigurationSource(null);
                     }
+
                     return relationshipBuilder;
                 }
             }
 
-            if (foreignKey.DeclaringEntityType.FindForeignKeysInHierarchy(foreignKeyProperties).Any())
+            if (foreignKeyProperties == null
+                || foreignKey.DeclaringEntityType.FindForeignKeysInHierarchy(foreignKeyProperties).Any())
             {
                 return relationshipBuilder;
             }
@@ -179,38 +222,38 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             return relationshipBuilder;
         }
 
-        private static IReadOnlyList<Property> FindCandidateForeignKeyProperties(ForeignKey foreignKey, bool onDependent, bool matchPk = false)
+        private IReadOnlyList<Property> FindCandidateForeignKeyProperties(
+            ForeignKey foreignKey, bool onDependent, bool matchPk = false)
         {
-            var baseNames = new List<string>();
+            IReadOnlyList<Property> match;
             var navigation = onDependent
                 ? foreignKey.DependentToPrincipal
                 : foreignKey.PrincipalToDependent;
             if (navigation != null)
             {
-                baseNames.Add(navigation.Name);
+                if (TryFindMatchingProperties(foreignKey, navigation.Name, onDependent, matchPk, out match))
+                {
+                    return match;
+                }
             }
 
             var entityTypeToReference = onDependent
                 ? foreignKey.PrincipalEntityType
                 : foreignKey.DeclaringEntityType;
-            baseNames.Add(entityTypeToReference.ShortName());
+            if (TryFindMatchingProperties(foreignKey, entityTypeToReference.ShortName(), onDependent, matchPk, out match))
+            {
+                return match;
+            }
 
             if (!matchPk)
             {
-                baseNames.Add("");
-            }
-
-            foreach (var baseName in baseNames)
-            {
-                var match = FindMatchingProperties(foreignKey, baseName, onDependent, matchPk);
-                if (match != null)
+                if (TryFindMatchingProperties(foreignKey, "", onDependent, false, out match))
                 {
-                    // Stop searching if match found, but is incompatible
-                    return match.Count == 0 ? null : match;
+                    return match;
                 }
             }
 
-            return null;
+            return match;
         }
 
         private static IReadOnlyList<Property> GetCompatiblePrimaryKeyProperties(EntityType dependentEntityType, EntityType principalEntityType, IReadOnlyList<Property> propertiesToReference)
@@ -230,9 +273,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             return null;
         }
 
-        private static IReadOnlyList<Property> FindMatchingProperties(
-            ForeignKey foreignKey, string baseName, bool onDependent, bool matchPK = false)
+        private bool TryFindMatchingProperties(
+            ForeignKey foreignKey, string baseName, bool onDependent, bool matchPK, out IReadOnlyList<Property> match)
         {
+            match = null;
             var dependentEntityType = onDependent
                 ? foreignKey.DeclaringEntityType
                 : foreignKey.PrincipalEntityType;
@@ -245,7 +289,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             if (propertiesToReference == null)
             {
-                return null;
+                return false;
             }
 
             var foreignKeyProperties = new Property[propertiesToReference.Count];
@@ -255,8 +299,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 var referencedProperty = propertiesToReference[i];
                 var property = TryGetProperty(
                     dependentEntityType,
-                    baseName, referencedProperty.Name,
-                    referencedProperty.ClrType.UnwrapNullableType());
+                    baseName, referencedProperty.Name);
 
                 if (property == null)
                 {
@@ -272,8 +315,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             {
                 var property = TryGetProperty(
                     dependentEntityType,
-                    baseName, "Id",
-                    propertiesToReference.Single().ClrType.UnwrapNullableType());
+                    baseName, "Id");
 
                 if (property != null)
                 {
@@ -284,7 +326,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             if (!matchFound)
             {
-                return null;
+                return false;
             }
 
             if (!ForeignKey.AreCompatible(
@@ -294,35 +336,57 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 dependentEntityType,
                 false))
             {
-                return new Property[0];
+                if (propertiesToReference.All(
+                    p => !p.IsShadowProperty
+                         || p.GetConfigurationSource().Overrides(ConfigurationSource.DataAnnotation)))
+                {
+                    _logger.IncompatibleMatchingForeignKeyProperties(foreignKeyProperties, propertiesToReference);
+                }
+
+                // Stop searching if match found, but is incompatible
+                return true;
             }
 
             foreach (var key in dependentEntityType.GetKeys())
             {
-                if (key.Properties.All(property => foreignKeyProperties.Contains(property))
+                var isContainedInForeignKey = true;
+                // ReSharper disable once LoopCanBeConvertedToQuery
+                // ReSharper disable once ForCanBeConvertedToForeach
+                for (var i = 0; i < key.Properties.Count; i++)
+                {
+                    if (!foreignKeyProperties.Contains(key.Properties[i]))
+                    {
+                        isContainedInForeignKey = false;
+                        break;
+                    }
+                }
+
+                if (isContainedInForeignKey
                     && (!foreignKey.IsUnique
                         || (key.IsPrimaryKey() && !matchPK)))
                 {
-                    return new Property[0];
+                    // Stop searching if match found, but is incompatible
+                    return true;
                 }
             }
 
-            return foreignKeyProperties;
+            match = foreignKeyProperties;
+            return true;
         }
 
-        private static Property TryGetProperty(EntityType entityType, string prefix, string suffix, Type type)
+        private static Property TryGetProperty(EntityType entityType, string prefix, string suffix)
         {
             foreach (var property in entityType.GetProperties())
             {
                 if ((!property.IsShadowProperty || !ConfigurationSource.Convention.Overrides(property.GetConfigurationSource()))
                     && property.Name.Length == prefix.Length + suffix.Length
                     && property.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                    && property.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-                    && (property.ClrType.UnwrapNullableType() == type))
+                    && property.Name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 {
                     return property;
                 }
             }
+
             return null;
         }
 
@@ -339,27 +403,50 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         /// </summary>
         public virtual InternalPropertyBuilder Apply(InternalPropertyBuilder propertyBuilder)
         {
-            if (!((IProperty)propertyBuilder.Metadata).IsShadowProperty)
+            var property = propertyBuilder.Metadata;
+            if (property.IsShadowProperty
+                && ConfigurationSource.Convention.Overrides(property.GetConfigurationSource()))
             {
-                var entityType = propertyBuilder.Metadata.DeclaringEntityType;
+                return propertyBuilder;
+            }
 
-                foreach (var foreignKey in entityType.GetDeclaredForeignKeys().Concat(entityType.GetDerivedForeignKeys()).ToList())
-                {
-                    if (foreignKey.Builder != null)
-                    {
-                        Apply(foreignKey.Builder);
-                    }
-                }
+            var entityType = propertyBuilder.Metadata.DeclaringEntityType;
 
-                foreach (var foreignKey in entityType.GetReferencingForeignKeys().ToList())
+            Apply(entityType);
+
+            return propertyBuilder;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool Apply(InternalEntityTypeBuilder entityTypeBuilder, string ignoredMemberName)
+        {
+            Apply(entityTypeBuilder.Metadata);
+            return true;
+        }
+
+        private void Apply(EntityType entityType)
+        {
+            foreach (var foreignKey in entityType.GetDeclaredForeignKeys().Concat(entityType.GetDerivedForeignKeys()).ToList())
+            {
+                if (foreignKey.Builder != null
+                    && ConfigurationSource.Convention.Overrides(foreignKey.GetForeignKeyPropertiesConfigurationSource()))
                 {
-                    if (foreignKey.Builder != null)
-                    {
-                        Apply(foreignKey.Builder);
-                    }
+                    Apply(foreignKey.Builder);
                 }
             }
-            return propertyBuilder;
+
+            foreach (var foreignKey in entityType.GetReferencingForeignKeys().ToList())
+            {
+                if (foreignKey.Builder != null
+                    && ConfigurationSource.Convention.Overrides(foreignKey.GetForeignKeyPropertiesConfigurationSource())
+                    && ConfigurationSource.Convention.Overrides(foreignKey.GetPrincipalEndConfigurationSource()))
+                {
+                    Apply(foreignKey.Builder);
+                }
+            }
         }
 
         /// <summary>
@@ -377,7 +464,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         InternalRelationshipBuilder IForeignKeyUniquenessChangedConvention.Apply(InternalRelationshipBuilder relationshipBuilder)
-            => Apply(relationshipBuilder);
+            => ConfigurationSource.Convention.Overrides(relationshipBuilder.Metadata.GetForeignKeyPropertiesConfigurationSource())
+                ? Apply(relationshipBuilder)
+                : relationshipBuilder;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -404,12 +493,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         /// </summary>
         public virtual void Apply(InternalEntityTypeBuilder entityTypeBuilder, Key key)
         {
-            var fks = key.DeclaringEntityType.GetDerivedForeignKeysInclusive().ToList();
-            foreach (var foreignKey in fks)
+            var foreignKeys = key.DeclaringEntityType.GetDerivedForeignKeysInclusive().ToList();
+            foreach (var foreignKey in foreignKeys)
             {
-                if (foreignKey.Builder != null
-                    && (!foreignKey.IsUnique
-                        || foreignKey.DeclaringEntityType.BaseType != null))
+                if ((!foreignKey.IsUnique
+                     || foreignKey.DeclaringEntityType.BaseType != null)
+                    && ConfigurationSource.Convention.Overrides(foreignKey.GetForeignKeyPropertiesConfigurationSource()))
                 {
                     Apply(foreignKey.Builder);
                 }
@@ -420,10 +509,39 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        bool IPrimaryKeyChangedConvention.Apply(InternalEntityTypeBuilder entityTypeBuilder, Key previousPrimaryKey)
+        {
+            var foreignKeys = entityTypeBuilder.Metadata.GetDerivedForeignKeysInclusive().ToList();
+            foreach (var foreignKey in foreignKeys)
+            {
+                if (foreignKey.IsUnique
+                    && ConfigurationSource.Convention.Overrides(foreignKey.GetForeignKeyPropertiesConfigurationSource()))
+                {
+                    Apply(foreignKey.Builder);
+                }
+            }
+
+            var referencingForeignKeys = entityTypeBuilder.Metadata.GetDerivedReferencingForeignKeysInclusive().ToList();
+            foreach (var referencingForeignKey in referencingForeignKeys)
+            {
+                if (ConfigurationSource.Convention.Overrides(referencingForeignKey.GetForeignKeyPropertiesConfigurationSource()))
+                {
+                    Apply(referencingForeignKey.Builder);
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual InternalModelBuilder Apply(InternalModelBuilder modelBuilder)
         {
             foreach (var entityType in modelBuilder.Metadata.GetEntityTypes())
             {
+                var conflictingFkFound = false;
                 foreach (var foreignKey in entityType.GetDeclaredForeignKeys().Where(fk => fk.GetForeignKeyPropertiesConfigurationSource() == null))
                 {
                     var foreignKeyProperties = FindCandidateForeignKeyProperties(foreignKey, onDependent: true);
@@ -448,10 +566,47 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                                     Property.Format(foreignKeyProperties)));
                         }
                     }
+
+                    if (conflictingFkFound)
+                    {
+                        continue;
+                    }
+
+                    if (HasUniquifiedProperties(foreignKey))
+                    {
+                        var conflictingShadowFk = entityType.GetDeclaredForeignKeys().FirstOrDefault(
+                            otherForeignKey =>
+                                otherForeignKey != foreignKey
+                                && otherForeignKey.PrincipalEntityType == foreignKey.PrincipalEntityType
+                                && otherForeignKey.GetForeignKeyPropertiesConfigurationSource() == null);
+                        if (conflictingShadowFk != null)
+                        {
+                            conflictingFkFound = true;
+                            _logger.ConflictingShadowForeignKeysWarning(conflictingShadowFk);
+                        }
+                    }
                 }
             }
 
             return modelBuilder;
+        }
+
+        private static bool HasUniquifiedProperties(ForeignKey foreignKey)
+        {
+            var fkBaseName = GetPropertyBaseName(foreignKey);
+            for (var i = 0; i < foreignKey.Properties.Count; i++)
+            {
+                var fkPropertyName = foreignKey.Properties[i].Name;
+                var pkPropertyName = foreignKey.PrincipalKey.Properties[i].Name;
+                if (fkPropertyName.Length != fkBaseName.Length + pkPropertyName.Length
+                    || !fkPropertyName.StartsWith(fkBaseName, StringComparison.Ordinal)
+                    || !fkPropertyName.EndsWith(pkPropertyName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

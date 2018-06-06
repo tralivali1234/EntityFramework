@@ -7,15 +7,16 @@ using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.InMemory.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
-    public class InMemoryTransactionManager : IDbContextTransactionManager
+    public class InMemoryTransactionManager : IDbContextTransactionManager, ITransactionEnlistmentManager
     {
         private static readonly InMemoryTransaction _stubTransaction = new InMemoryTransaction();
 
@@ -86,6 +87,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         /// </summary>
         public virtual void EnlistTransaction(Transaction transaction)
         {
+            _logger.TransactionIgnoredWarning();
         }
 
         /// <summary>

@@ -72,6 +72,40 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             return builder;
         }
 
+        public static ModelBuilderTest.TestEntityTypeBuilder<TEntity> ToTable<TEntity>(
+            this ModelBuilderTest.TestEntityTypeBuilder<TEntity> builder, string name)
+            where TEntity : class
+        {
+            var genericBuilder = (builder as IInfrastructure<EntityTypeBuilder<TEntity>>)?.Instance;
+            if (genericBuilder != null)
+            {
+                genericBuilder.ToTable(name);
+            }
+            else
+            {
+                (builder as IInfrastructure<EntityTypeBuilder>).Instance.ToTable(name);
+            }
+
+            return builder;
+        }
+
+        public static ModelBuilderTest.TestEntityTypeBuilder<TEntity> ToTable<TEntity>(
+            this ModelBuilderTest.TestEntityTypeBuilder<TEntity> builder, string name, string schema)
+            where TEntity : class
+        {
+            var genericBuilder = (builder as IInfrastructure<EntityTypeBuilder<TEntity>>)?.Instance;
+            if (genericBuilder != null)
+            {
+                genericBuilder.ToTable(name, schema);
+            }
+            else
+            {
+                (builder as IInfrastructure<EntityTypeBuilder>).Instance.ToTable(name, schema);
+            }
+
+            return builder;
+        }
+
         public static ModelBuilderTest.TestReferenceOwnershipBuilder<TEntity, TRelatedEntity> ToTable<TEntity, TRelatedEntity>(
             this ModelBuilderTest.TestReferenceOwnershipBuilder<TEntity, TRelatedEntity> builder, string name)
             where TEntity : class
@@ -86,6 +120,25 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             {
                 (builder as IInfrastructure<ReferenceOwnershipBuilder>).Instance.ToTable(name);
             }
+
+            return builder;
+        }
+
+        public static ModelBuilderTest.TestReferenceOwnershipBuilder<TEntity, TRelatedEntity> ToTable<TEntity, TRelatedEntity>(
+            this ModelBuilderTest.TestReferenceOwnershipBuilder<TEntity, TRelatedEntity> builder, string name, string schema)
+            where TEntity : class
+            where TRelatedEntity : class
+        {
+            var genericBuilder = (builder as IInfrastructure<ReferenceOwnershipBuilder<TEntity, TRelatedEntity>>)?.Instance;
+            if (genericBuilder != null)
+            {
+                genericBuilder.ToTable(name, schema);
+            }
+            else
+            {
+                (builder as IInfrastructure<ReferenceOwnershipBuilder>).Instance.ToTable(name, schema);
+            }
+
             return builder;
         }
 

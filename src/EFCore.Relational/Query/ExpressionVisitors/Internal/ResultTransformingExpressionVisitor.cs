@@ -7,7 +7,6 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
-using Remotion.Linq.Clauses;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 {
@@ -25,11 +24,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public ResultTransformingExpressionVisitor(
-            [NotNull] IQuerySource outerQuerySource,
             [NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext,
             bool throwOnNullResult)
         {
-            Check.NotNull(outerQuerySource, nameof(outerQuerySource));
             Check.NotNull(relationalQueryCompilationContext, nameof(relationalQueryCompilationContext));
 
             _relationalQueryCompilationContext = relationalQueryCompilationContext;

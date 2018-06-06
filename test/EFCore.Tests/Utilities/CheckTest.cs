@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.Internal;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -46,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void Generic_Not_empty_throws_when_arg_is_empty()
         {
             // ReSharper disable once NotResolvedInText
-            Assert.Throws<ArgumentException>(() => Check.NotEmpty(new string[] { }, "foo"));
+            Assert.Throws<ArgumentException>(() => Check.NotEmpty(Array.Empty<string>(), "foo"));
         }
 
         [Fact]
@@ -60,15 +59,6 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void Generic_Not_empty_throws_when_arg_name_empty()
         {
             Assert.Throws<ArgumentException>(() => Check.NotEmpty(null, string.Empty));
-        }
-
-        [Fact]
-        public void Valid_entity_type_throws_when_type_is_not_class()
-        {
-            Assert.Equal(
-                CoreStrings.InvalidEntityType(typeof(IComparable), "foo"),
-                Assert.Throws<ArgumentException>(
-                    () => Check.ValidEntityType(typeof(IComparable), "foo")).Message);
         }
     }
 }

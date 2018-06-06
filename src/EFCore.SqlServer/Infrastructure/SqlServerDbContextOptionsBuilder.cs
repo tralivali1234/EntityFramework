@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Microsoft.EntityFrameworkCore.Infrastructure
@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
     ///     <para>
     ///         Instances of this class are returned from a call to
     ///         <see
-    ///             cref="SqlServerDbContextOptionsExtensions.UseSqlServer(DbContextOptionsBuilder, string, Action{SqlServerDbContextOptionsBuilder})" />
+    ///             cref="SqlServerDbContextOptionsExtensions.UseSqlServer(DbContextOptionsBuilder,string,Action{SqlServerDbContextOptionsBuilder})" />
     ///         and it is not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>

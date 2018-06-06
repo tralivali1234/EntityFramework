@@ -91,12 +91,9 @@ namespace Microsoft.EntityFrameworkCore.Tools
             string executable;
             var args = new List<string>();
 
-            var toolsPath = Path.GetFullPath(
-                Path.Combine(
-                    Path.GetDirectoryName(typeof(Program).GetTypeInfo().Assembly.Location),
-                    "..",
-                    "..",
-                    "tools"));
+            var toolsPath = Path.Combine(
+                Path.GetDirectoryName(typeof(Program).GetTypeInfo().Assembly.Location),
+                "tools");
 
             var targetDir = Path.GetFullPath(Path.Combine(startupProject.ProjectDir, startupProject.OutputPath));
             var targetPath = Path.Combine(targetDir, project.TargetFileName);
@@ -116,11 +113,18 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     toolsPath,
                     "net461",
                     startupProject.PlatformTarget == "x86"
-                        ? "ef.x86.exe"
-                        : "ef.exe");
+                        ? "win-x86"
+                        : "any",
+                    "ef.exe");
             }
             else if (targetFramework.Identifier == ".NETCoreApp")
             {
+                if (targetFramework.Version < new Version(2, 0))
+                {
+                    throw new CommandException(
+                        Resources.NETCoreApp1StartupProject(startupProject.ProjectName, targetFramework.Version));
+                }
+
                 executable = "dotnet";
                 args.Add("exec");
                 args.Add("--depsfile");
@@ -152,7 +156,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     args.Add(startupProject.RuntimeFrameworkVersion);
                 }
 
-                args.Add(Path.Combine(toolsPath, "netcoreapp2.0", "ef.dll"));
+                args.Add(Path.Combine(toolsPath, "netcoreapp2.0", "any", "ef.dll"));
             }
             else if (targetFramework.Identifier == ".NETStandard")
             {
@@ -173,6 +177,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
             args.Add(project.ProjectDir);
             args.Add("--language");
             args.Add(project.Language);
+            args.Add("--working-dir");
+            args.Add(Directory.GetCurrentDirectory());
 
             if (Reporter.IsVerbose)
             {

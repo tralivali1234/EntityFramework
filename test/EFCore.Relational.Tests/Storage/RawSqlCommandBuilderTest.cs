@@ -1,9 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Storage
@@ -16,9 +16,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
             var builder = new RawSqlCommandBuilder(
                 new RelationalCommandBuilderFactory(
                     new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                    new FakeRelationalTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())),
+                    new TestRelationalTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())),
                 new RelationalSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
                 new ParameterNameGeneratorFactory(new ParameterNameGeneratorDependencies()));
 
@@ -34,13 +34,13 @@ namespace Microsoft.EntityFrameworkCore.Storage
             var builder = new RawSqlCommandBuilder(
                 new RelationalCommandBuilderFactory(
                     new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                    new FakeRelationalTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())),
+                    new TestRelationalTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())),
                 new RelationalSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
                 new ParameterNameGeneratorFactory(new ParameterNameGeneratorDependencies()));
 
-            var rawSqlCommand = builder.Build("SQL COMMAND TEXT", new object[0]);
+            var rawSqlCommand = builder.Build("SQL COMMAND TEXT", Array.Empty<object>());
 
             Assert.Equal("SQL COMMAND TEXT", rawSqlCommand.RelationalCommand.CommandText);
             Assert.Equal(0, rawSqlCommand.RelationalCommand.Parameters.Count);
@@ -53,9 +53,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
             var builder = new RawSqlCommandBuilder(
                 new RelationalCommandBuilderFactory(
                     new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                    new FakeRelationalTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())),
+                    new TestRelationalTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())),
                 new RelationalSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
                 new ParameterNameGeneratorFactory(new ParameterNameGeneratorDependencies()));
 

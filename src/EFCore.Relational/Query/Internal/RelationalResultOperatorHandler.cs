@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -13,10 +14,13 @@ using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
+using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Clauses.ResultOperators;
 
 namespace Microsoft.EntityFrameworkCore.Query.Internal
@@ -226,19 +230,23 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
+                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
+                    expression = UnwrapAliasExpression(expression);
+
                     var inputType = handlerContext.QueryModel.SelectClause.Selector.Type;
                     var outputType = inputType;
-
                     var nonNullableInputType = inputType.UnwrapNullableType();
                     if (nonNullableInputType == typeof(int)
                         || nonNullableInputType == typeof(long))
                     {
                         outputType = inputType.IsNullableType() ? typeof(double?) : typeof(double);
+                        expression = new ExplicitCastExpression(expression, outputType);
                     }
 
-                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
-                    expression = new ExplicitCastExpression(expression, outputType);
-                    Expression averageExpression = new SqlFunctionExpression("AVG", outputType, new[] { expression });
+                    Expression averageExpression = new SqlFunctionExpression(
+                        "AVG",
+                        outputType,
+                        new[] { expression });
 
                     if (nonNullableInputType == typeof(float))
                     {
@@ -449,12 +457,132 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         private static Expression HandleGroup(HandlerContext handlerContext)
         {
+            if (handlerContext.QueryModelVisitor.QueryCompilationContext.IsIncludeQuery
+                && handlerContext.QueryModel.ResultOperators.Any(
+                    o => o is SkipResultOperator || o is TakeResultOperator || o is ChoiceResultOperatorBase || o is DistinctResultOperator))
+            {
+                return handlerContext.EvalOnClient();
+            }
+
             var sqlTranslatingExpressionVisitor = handlerContext.CreateSqlTranslatingVisitor();
 
             var groupResultOperator = (GroupResultOperator)handlerContext.ResultOperator;
 
             var sqlExpression
                 = sqlTranslatingExpressionVisitor.Visit(groupResultOperator.KeySelector);
+
+            if ((sqlExpression != null || groupResultOperator.KeySelector is ConstantExpression)
+                && !handlerContext.QueryModelVisitor.QueryCompilationContext
+                    .QuerySourceRequiresMaterialization(groupResultOperator)
+                && (groupResultOperator.ElementSelector is QuerySourceReferenceExpression elementQsre
+                    || sqlTranslatingExpressionVisitor.Visit(groupResultOperator.ElementSelector) != null)
+                && handlerContext.QueryModelVisitor.Expression is MethodCallExpression shapedQueryMethod
+                && shapedQueryMethod.Method.MethodIsClosedFormOf(
+                    handlerContext.QueryModelVisitor.QueryCompilationContext.QueryMethodProvider.ShapedQueryMethod))
+            {
+                var selectExpression = handlerContext.SelectExpression;
+                PrepareSelectExpressionForAggregate(selectExpression);
+
+                // GroupBy Aggregate
+                // TODO: InjectParameters type Expression.
+                Expression[] key = null;
+                var groupByKeyMemberInfo = groupResultOperator.ItemType.GetMember("Key")[0];
+                var memberInfoMappings = new Dictionary<MemberInfo, Expression>();
+
+                switch (groupResultOperator.KeySelector)
+                {
+                    case MemberExpression memberExpression:
+                        var sql = sqlTranslatingExpressionVisitor.Visit(memberExpression);
+                        memberInfoMappings[groupByKeyMemberInfo] = sql;
+                        key = new[] { sql };
+                        break;
+
+                    case NullConditionalExpression nullConditionalExpression:
+                        sql = sqlTranslatingExpressionVisitor.Visit(nullConditionalExpression);
+                        memberInfoMappings[groupByKeyMemberInfo] = sql;
+                        key = new[] { sql };
+                        break;
+
+                    case NewExpression newExpression:
+                        key = VisitAndSaveMapping(
+                            sqlTranslatingExpressionVisitor,
+                            memberInfoMappings,
+                            newExpression);
+                        break;
+
+                    case MemberInitExpression memberInitExpression:
+                        key = VisitAndSaveMapping(
+                            sqlTranslatingExpressionVisitor,
+                            memberInfoMappings,
+                            memberInitExpression);
+                        break;
+                }
+
+                if (key != null
+                    || groupResultOperator.KeySelector is ConstantExpression
+                    || groupResultOperator.KeySelector is ParameterExpression)
+                {
+                    if (!(groupResultOperator.ElementSelector is QuerySourceReferenceExpression))
+                    {
+                        handlerContext.QueryModelVisitor.VisitSelectClause(
+                            new SelectClause(groupResultOperator.ElementSelector),
+                            handlerContext.QueryModel);
+                    }
+
+                    foreach (var keyValue in memberInfoMappings)
+                    {
+                        selectExpression.SetProjectionForMemberInfo(keyValue.Key, keyValue.Value);
+                    }
+
+                    if (key == null)
+                    {
+                        var constantOrParameter = sqlTranslatingExpressionVisitor.Visit(groupResultOperator.KeySelector);
+                        var saveMapping = constantOrParameter != null;
+                        if (!saveMapping)
+                        {
+                            constantOrParameter = Expression.Constant(1);
+                        }
+
+                        var subquery = selectExpression.PushDownSubquery();
+
+                        if (subquery.Projection.Count == 0)
+                        {
+                            selectExpression.IsProjectStar = false;
+                        }
+                        else
+                        {
+                            selectExpression.ExplodeStarProjection();
+                        }
+
+                        var projectionIndex = subquery.AddToProjection(constantOrParameter, resetProjectStar: false);
+
+                        subquery.SetProjectionForMemberInfo(groupByKeyMemberInfo, constantOrParameter);
+
+                        var projection = subquery.Projection[projectionIndex].LiftExpressionFromSubquery(subquery);
+                        if (saveMapping)
+                        {
+                            selectExpression.SetProjectionForMemberInfo(groupByKeyMemberInfo, projection);
+                        }
+
+                        key = new[] { projection };
+                    }
+
+                    if (groupResultOperator.ElementSelector.NodeType == ExpressionType.New
+                        || groupResultOperator.ElementSelector.NodeType == ExpressionType.MemberInit)
+                    {
+                        selectExpression.ClearProjection();
+                    }
+
+                    selectExpression.AddToGroupBy(key);
+
+                    return Expression.Call(
+                        handlerContext.QueryModelVisitor.QueryCompilationContext.QueryMethodProvider
+                            .ShapedQueryMethod.MakeGenericMethod(typeof(ValueBuffer)),
+                        shapedQueryMethod.Arguments[0],
+                        shapedQueryMethod.Arguments[1],
+                        Expression.Constant(new ValueBufferShaper(groupResultOperator)));
+                }
+            }
 
             if (sqlExpression != null)
             {
@@ -488,6 +616,82 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         .MakeGenericMethod(oldGroupByCall.Method.GetGenericArguments()),
                     oldGroupByCall.Arguments)
                 : oldGroupByCall;
+        }
+
+        private static Expression[] VisitAndSaveMapping(
+            SqlTranslatingExpressionVisitor sqlTranslator,
+            Dictionary<MemberInfo, Expression> memberInfoMappings,
+            NewExpression newExpression)
+        {
+            var translation = new Expression[newExpression.Arguments.Count];
+
+            for (var i = 0; i < newExpression.Arguments.Count; i++)
+            {
+                var sourceExpression = newExpression.Arguments[i];
+
+                var sqlExpression = sqlTranslator.Visit(sourceExpression);
+
+                Debug.Assert(sqlExpression != null);
+
+                if (sqlExpression is ConstantExpression constantExpression
+                    && constantExpression.Value is Expression[])
+                {
+                    // Encountered anonymous object inside anonymous object so abort
+                    return null;
+                }
+
+                var memberInfo = newExpression.Members?[i];
+
+                if (memberInfo != null)
+                {
+                    memberInfoMappings[memberInfo] = sqlExpression;
+                }
+
+                translation[i] = sqlExpression;
+            }
+
+            return translation;
+        }
+
+        private static Expression[] VisitAndSaveMapping(
+            SqlTranslatingExpressionVisitor sqlTranslator,
+            Dictionary<MemberInfo, Expression> memberInfoMappings,
+            MemberInitExpression memberInitExpression)
+        {
+            var translation = new Expression[memberInitExpression.Bindings.Count];
+
+            for (var i = 0; i < memberInitExpression.Bindings.Count; i++)
+            {
+                if (memberInitExpression.Bindings[i] is MemberAssignment sourceExpression)
+                {
+                    var sqlExpression = sqlTranslator.Visit(sourceExpression.Expression);
+
+                    Debug.Assert(sqlExpression != null);
+
+                    if (sqlExpression is ConstantExpression constantExpression
+                        && constantExpression.Value is Expression[])
+                    {
+                        // Encountered anonymous object inside DTO so abort
+                        return null;
+                    }
+
+                    var memberInfo = sourceExpression.Member;
+
+                    if (memberInfo != null)
+                    {
+                        memberInfoMappings[memberInfo] = sqlExpression;
+                    }
+
+                    translation[i] = sqlExpression;
+                }
+                else
+                {
+                    // Unknown binding
+                    return null;
+                }
+            }
+
+            return translation;
         }
 
         private static readonly MethodInfo _groupByAsync
@@ -551,7 +755,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     {
                         var currentKey = _groupByAsyncEnumerable._keySelector(_sourceEnumerator.Current);
                         var element = await _groupByAsyncEnumerable._elementSelector(_sourceEnumerator.Current, cancellationToken);
-                        var grouping = new Grouping<TKey, TElement>(currentKey) { element };
+                        var grouping = new Grouping<TKey, TElement>(currentKey)
+                        {
+                            element
+                        };
 
                         while (true)
                         {
@@ -591,6 +798,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             var requiresClientResultOperator = true;
             if (handlerContext.SelectExpression.OrderBy.Any())
             {
+                if (handlerContext.SelectExpression.Limit != null
+                    || handlerContext.SelectExpression.Offset != null)
+                {
+                    handlerContext.SelectExpression.PushDownSubquery();
+                    handlerContext.SelectExpression.LiftOrderBy();
+                }
+
                 foreach (var ordering in handlerContext.SelectExpression.OrderBy)
                 {
                     ordering.OrderingDirection
@@ -637,8 +851,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
-                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
-                    var minExpression = new SqlFunctionExpression("MIN", handlerContext.QueryModel.SelectClause.Selector.Type, new[] { expression });
+                    var minExpression = new SqlFunctionExpression(
+                        "MIN",
+                        handlerContext.QueryModel.SelectClause.Selector.Type,
+                        new[] { UnwrapAliasExpression(expression) });
 
                     handlerContext.SelectExpression.SetProjectionExpression(minExpression);
 
@@ -664,8 +880,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
-                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
-                    var maxExpression = new SqlFunctionExpression("MAX", handlerContext.QueryModel.SelectClause.Selector.Type, new[] { expression });
+                    var maxExpression = new SqlFunctionExpression(
+                        "MAX",
+                        handlerContext.QueryModel.SelectClause.Selector.Type,
+                        new[] { UnwrapAliasExpression(expression) });
 
                     handlerContext.SelectExpression.SetProjectionExpression(maxExpression);
 
@@ -697,7 +915,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     .QueryPossibleExceptionWithAggregateOperator();
             }
 
-            handlerContext.QueryModelVisitor.RequiresClientResultOperator = throwOnNullResult;
+            if (handlerContext.QueryModelVisitor.ParentQueryModelVisitor != null)
+            {
+                handlerContext.QueryModelVisitor.RequiresClientResultOperator = throwOnNullResult;
+            }
 
             return throwOnNullResult;
         }
@@ -748,19 +969,20 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     var inputType = handlerContext.QueryModel.SelectClause.Selector.Type;
 
                     expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
-                    Expression sumExpression = new SqlFunctionExpression("SUM", inputType, new[] { expression });
+                    Expression sumExpression = new SqlFunctionExpression(
+                        "SUM", inputType, new[] { UnwrapAliasExpression(expression) });
                     if (inputType.UnwrapNullableType() == typeof(float))
                     {
                         sumExpression = new ExplicitCastExpression(sumExpression, inputType);
                     }
 
                     handlerContext.SelectExpression.SetProjectionExpression(sumExpression);
-                    
-                    var clientExpression 
+
+                    var clientExpression
                         = (Expression)_transformClientExpressionMethodInfo
                             .MakeGenericMethod(sumExpression.Type.UnwrapNullableType())
                             .Invoke(null, new object[] { handlerContext, /*throwOnNullResult:*/ false });
-                    
+
                     return
                         sumExpression.Type.IsNullableType()
                             ? Expression.Convert(clientExpression, sumExpression.Type)
@@ -803,7 +1025,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     typeof(bool)));
         }
 
-        private static void PrepareSelectExpressionForAggregate(SelectExpression selectExpression)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected static void PrepareSelectExpressionForAggregate(SelectExpression selectExpression)
         {
             if (selectExpression.IsDistinct
                 || selectExpression.Limit != null
@@ -814,26 +1040,18 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
         }
 
+        private static Expression UnwrapAliasExpression(Expression expression)
+            => (expression as AliasExpression)?.Expression ?? expression;
+
         private static readonly MethodInfo _transformClientExpressionMethodInfo
             = typeof(RelationalResultOperatorHandler).GetTypeInfo()
                 .GetDeclaredMethod(nameof(TransformClientExpression));
 
         private static Expression TransformClientExpression<TResult>(
             HandlerContext handlerContext, bool throwOnNullResult = false)
-        {
-            var querySource
-                = handlerContext.QueryModel.BodyClauses
-                      .OfType<IQuerySource>()
-                      .LastOrDefault()
-                  ?? handlerContext.QueryModel.MainFromClause;
-
-            var visitor
-                = new ResultTransformingExpressionVisitor<TResult>(
-                    querySource,
+            => new ResultTransformingExpressionVisitor<TResult>(
                     handlerContext.QueryModelVisitor.QueryCompilationContext,
-                    throwOnNullResult);
-
-            return visitor.Visit(handlerContext.QueryModelVisitor.Expression);
-        }
+                    throwOnNullResult)
+                .Visit(handlerContext.QueryModelVisitor.Expression);
     }
 }

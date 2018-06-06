@@ -8,20 +8,21 @@ using System.Linq;
 using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Update.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Update.Internal
 {
     public class OracleUpdateSqlGenerator : UpdateSqlGenerator, IOracleUpdateSqlGenerator
     {
-        private readonly IRelationalTypeMapper _typeMapper;
+        private readonly IRelationalTypeMappingSource _typeMappingSource;
 
         public OracleUpdateSqlGenerator(
             [NotNull] UpdateSqlGeneratorDependencies dependencies,
-            [NotNull] IRelationalTypeMapper typeMapper)
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
             : base(dependencies)
         {
-            _typeMapper = typeMapper;
+            _typeMappingSource = typeMappingSource;
         }
 
         public virtual ResultSetMapping AppendBatchInsertOperation(
@@ -230,7 +231,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                 .Append("v_RowCount = ")
                 .Append(expectedRowsAffected.ToString(CultureInfo.InvariantCulture));
 
-        private ResultSetMapping AppendSelectAffectedCountCommand(
+        private static ResultSetMapping AppendSelectAffectedCountCommand(
             StringBuilder commandStringBuilder, int cursorPosition)
         {
             commandStringBuilder
@@ -294,7 +295,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
         private string GetVariableType(ColumnModification columnModification)
         {
-            return _typeMapper.FindMapping(columnModification.Property).StoreType;
+            return _typeMappingSource.FindMapping(columnModification.Property).StoreType;
         }
 
         private void AppendInsertCommand(

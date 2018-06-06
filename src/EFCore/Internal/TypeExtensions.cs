@@ -47,6 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Issue#11266 This method is being used by provider code. Do not break.
         public static string ShortDisplayName([NotNull] this Type type)
             => type.DisplayName(fullName: false);
 
@@ -136,6 +137,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 {
                     continue;
                 }
+
                 builder.Append(',');
                 if (!genericArguments[i + 1].IsGenericParameter)
                 {
@@ -151,7 +153,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static FieldInfo GetFieldInfo([NotNull] this Type type, [NotNull] string fieldName)
-                => type.GetRuntimeFields().FirstOrDefault(f => f.Name == fieldName && !f.IsStatic);
+            => type.GetRuntimeFields().FirstOrDefault(f => f.Name == fieldName && !f.IsStatic);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -159,6 +161,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public static IEnumerable<string> GetNamespaces([NotNull] this Type type)
         {
+            if (_builtInTypeNames.ContainsKey(type))
+            {
+                yield break;
+            }
+
             yield return type.Namespace;
 
             if (type.GetTypeInfo().IsGenericType)

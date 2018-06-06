@@ -51,10 +51,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual IMutableTypeBase DeclaringType
-        {
-            [DebuggerStepThrough] get => ((IMutablePropertyBase)this).DeclaringType;
-        }
+        public abstract TypeBase DeclaringType { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -62,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual bool IsShadowProperty
         {
-            [DebuggerStepThrough] get => MemberInfo == null;
+            [DebuggerStepThrough] get => this.GetIdentifyingMemberInfo() == null;
         }
 
         /// <summary>
@@ -78,7 +75,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         public virtual FieldInfo FieldInfo
         {
             [DebuggerStepThrough] get => _fieldInfo;
-            [DebuggerStepThrough] [param: CanBeNull] set { SetFieldInfo(value, ConfigurationSource.Explicit); }
+            [DebuggerStepThrough]
+            [param: CanBeNull]
+            set => SetFieldInfo(value, ConfigurationSource.Explicit);
         }
 
         /// <summary>
@@ -99,7 +98,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 return;
             }
 
-            var fieldInfo = GetFieldInfo(fieldName, DeclaringType.ClrType, Name, shouldThrow: true);
+            var fieldInfo = GetFieldInfo(fieldName, DeclaringType, Name, shouldThrow: true);
             if (fieldInfo != null)
             {
                 SetFieldInfo(fieldInfo, configurationSource);
@@ -110,16 +109,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static FieldInfo GetFieldInfo([NotNull] string fieldName, [NotNull] Type type, [CanBeNull] string propertyName, bool shouldThrow)
+        public static FieldInfo GetFieldInfo(
+            [NotNull] string fieldName, [NotNull] TypeBase type, [CanBeNull] string propertyName, bool shouldThrow)
         {
             Debug.Assert(propertyName != null || !shouldThrow);
 
-            var fieldInfo = type.GetFieldInfo(fieldName);
-            if (fieldInfo == null
+            if (!type.GetRuntimeFields().TryGetValue(fieldName, out var fieldInfo)
                 && shouldThrow)
             {
                 throw new InvalidOperationException(
-                    CoreStrings.MissingBackingField(fieldName, propertyName, type.ShortDisplayName()));
+                    CoreStrings.MissingBackingField(fieldName, propertyName, type.DisplayName()));
             }
 
             return fieldInfo;
@@ -179,6 +178,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                             propertyName,
                             propertyType.ShortDisplayName()));
                 }
+
                 return false;
             }
 
@@ -189,6 +189,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     throw new InvalidOperationException(
                         CoreStrings.MissingBackingField(fieldInfo.Name, propertyName, entityClrType.ShortDisplayName()));
                 }
+
                 return false;
             }
 
@@ -204,9 +205,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             get => NonCapturingLazyInitializer.EnsureInitialized(
                 ref _indexes, this,
                 property =>
-                    {
-                        var _ = (property.DeclaringType as EntityType)?.Counts;
-                    });
+                {
+                    var _ = (property.DeclaringType as EntityType)?.Counts;
+                });
 
             [param: CanBeNull]
             set
@@ -251,12 +252,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual MemberInfo MemberInfo => (MemberInfo)PropertyInfo ?? FieldInfo;
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public abstract Type ClrType { get; }
 
         /// <summary>
@@ -281,5 +276,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             => NonCapturingLazyInitializer.EnsureInitialized(ref _accessors, this, p => new PropertyAccessorsFactory().Create(p));
 
         ITypeBase IPropertyBase.DeclaringType => DeclaringType;
+        IMutableTypeBase IMutablePropertyBase.DeclaringType => DeclaringType;
     }
 }

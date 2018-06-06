@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -24,6 +25,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             {
                 startingPropertyIndex = entityType.PropertyCount() - 1;
             }
+
             var keyProperties = new Property[propertyCount];
             for (var i = 0; i < propertyCount; i++)
             {
@@ -31,6 +33,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 keyProperties[i] = property;
                 keyProperties[i].IsNullable = false;
             }
+
             return entityType.AddKey(keyProperties);
         }
 
@@ -71,9 +74,20 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             public int? P3 { get; set; }
 
             public A A { get; set; }
+
+            [NotMapped]
+            public A AnotherA { get; set; }
+        }
+
+        protected class C : A
+        {
         }
 
         protected class D : A
+        {
+        }
+
+        protected class F : D
         {
         }
 
@@ -81,6 +95,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
         }
 
+        // ReSharper disable once UnusedTypeParameter
         protected class Generic<T> : Abstract
         {
         }
@@ -91,6 +106,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             public int Number { get; set; }
             public string Name { get; set; }
             public ReferencedEntity ReferencedEntity { get; set; }
+            public ICollection<SampleEntity> OtherSamples { get; set; }
         }
 
         public class AnotherSampleEntity
@@ -109,6 +125,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             public int Id { get; set; }
             public bool ImBool { get; set; }
+            public bool ImNotUsed { get; set; }
             public bool? ImNot { get; set; }
         }
 
@@ -116,11 +133,14 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             Log = new List<(LogLevel, EventId, string)>();
             Logger = CreateLogger();
+            ModelLogger = CreateModelLogger();
         }
 
         protected List<(LogLevel Level, EventId Id, string Message)> Log { get; }
 
         protected IDiagnosticsLogger<DbLoggerCategory.Model.Validation> Logger { get; set; }
+
+        protected IDiagnosticsLogger<DbLoggerCategory.Model> ModelLogger { get; set; }
 
         protected virtual void VerifyWarning(string expectedMessage, IModel model)
         {
@@ -143,7 +163,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             CreateModelValidator().Validate(model);
         }
 
-        protected virtual DiagnosticsLogger<DbLoggerCategory.Model.Validation> CreateLogger(bool sensitiveDataLoggingEnabled = false)
+        protected DiagnosticsLogger<DbLoggerCategory.Model.Validation> CreateLogger(bool sensitiveDataLoggingEnabled = false)
         {
             var options = new LoggingOptions();
             options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(sensitiveDataLoggingEnabled).Options);
@@ -153,6 +173,19 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 new DiagnosticListener("Fake"));
         }
 
+        protected DiagnosticsLogger<DbLoggerCategory.Model> CreateModelLogger(bool sensitiveDataLoggingEnabled = false)
+        {
+            var options = new LoggingOptions();
+            options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(sensitiveDataLoggingEnabled).Options);
+            return new DiagnosticsLogger<DbLoggerCategory.Model>(
+                new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Name),
+                options,
+                new DiagnosticListener("Fake"));
+        }
+
         protected abstract IModelValidator CreateModelValidator();
+
+        protected virtual ModelBuilder CreateConventionalModelBuilder()
+            => InMemoryTestHelpers.Instance.CreateConventionBuilder();
     }
 }

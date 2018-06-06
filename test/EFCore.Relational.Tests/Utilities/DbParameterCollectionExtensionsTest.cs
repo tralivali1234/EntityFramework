@@ -99,7 +99,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void Formats_null_string_parameter()
         {
             Assert.Equal(
-                "@param='' (DbType = String)",
+                "@param=''",
                 DbParameterCollectionExtensions.FormatParameter(
                     "@param", null, true, ParameterDirection.Input, DbType.String, true, 0, 0, 0));
         }
@@ -111,6 +111,42 @@ namespace Microsoft.EntityFrameworkCore.Utilities
                 "@param='' (DbType = AnsiString)",
                 DbParameterCollectionExtensions.FormatParameter(
                     "@param", null, true, ParameterDirection.Input, DbType.AnsiString, true, 0, 0, 0));
+        }
+
+        [Fact]
+        public void Formats_fixed_length_string_parameter()
+        {
+            Assert.Equal(
+                "@param='Muffin' (DbType = StringFixedLength)",
+                DbParameterCollectionExtensions.FormatParameter(
+                    "@param", "Muffin", true, ParameterDirection.Input, DbType.StringFixedLength, true, 0, 0, 0));
+        }
+
+        [Fact]
+        public void Formats_fixed_length_non_nullable_string_parameter()
+        {
+            Assert.Equal(
+                "@param='Muffin' (Nullable = false) (DbType = StringFixedLength)",
+                DbParameterCollectionExtensions.FormatParameter(
+                    "@param", "Muffin", true, ParameterDirection.Input, DbType.StringFixedLength, false, 0, 0, 0));
+        }
+
+        [Fact]
+        public void Formats_fixed_length_non_nullable_sized_string_parameter()
+        {
+            Assert.Equal(
+                "@param='Muffin' (Nullable = false) (Size = 100) (DbType = StringFixedLength)",
+                DbParameterCollectionExtensions.FormatParameter(
+                    "@param", "Muffin", true, ParameterDirection.Input, DbType.StringFixedLength, false, 100, 0, 0));
+        }
+
+        [Fact]
+        public void Formats_null_fixed_length_string_parameter()
+        {
+            Assert.Equal(
+                "@param='' (DbType = StringFixedLength)",
+                DbParameterCollectionExtensions.FormatParameter(
+                    "@param", null, true, ParameterDirection.Input, DbType.StringFixedLength, true, 0, 0, 0));
         }
 
         [Fact]
@@ -162,7 +198,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void Formats_int_parameter_with_no_type()
         {
             Assert.Equal(
-                "@param='777'",
+                "@param='777' (DbType = AnsiString)",
                 DbParameterCollectionExtensions.FormatParameter(
                     "@param", 777, true, ParameterDirection.Input, 0, false, 0, 0, 0));
         }
@@ -180,7 +216,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void Formats_sensitive_int_parameter()
         {
             Assert.Equal(
-                "@param='?'",
+                "@param='?' (DbType = Int32)",
                 DbParameterCollectionExtensions.FormatParameter(
                     "@param", "?", false, ParameterDirection.Input, DbType.Int32, false, 0, 0, 0));
         }
@@ -189,7 +225,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void Formats_sensitive_nullable_int_parameter()
         {
             Assert.Equal(
-                "@param='?'",
+                "@param='?' (DbType = Int32)",
                 DbParameterCollectionExtensions.FormatParameter(
                     "@param", "?", false, ParameterDirection.Input, DbType.Int32, true, 0, 0, 0));
         }

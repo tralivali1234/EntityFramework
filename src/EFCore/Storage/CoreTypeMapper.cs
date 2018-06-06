@@ -2,9 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Storage
@@ -12,6 +12,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
     /// <summary>
     ///     A simple default implementation of <see cref="ITypeMapper" />
     /// </summary>
+    [Obsolete("Use TypeMappingSource")]
     public class CoreTypeMapper : ITypeMapper
     {
         /// <summary>
@@ -21,7 +22,14 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public CoreTypeMapper([NotNull] CoreTypeMapperDependencies dependencies)
         {
             Check.NotNull(dependencies, nameof(dependencies));
+
+            Dependencies = dependencies;
         }
+
+        /// <summary>
+        ///     Dependencies used to create a <see cref="CoreTypeMapper" />
+        /// </summary>
+        protected virtual CoreTypeMapperDependencies Dependencies { get; }
 
         /// <summary>
         ///     Gets a value indicating whether the given .NET type is mapped.
@@ -34,36 +42,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
 
             return type == typeof(string)
                    || type.GetTypeInfo().IsValueType
-                   || type == typeof(byte[]);
-        }
-
-        /// <summary>
-        ///     Describes metadata needed to decide on a type mapping for a property or type.
-        /// </summary>
-        protected class TypeMappingInfo
-        {
-            /// <summary>
-            ///     Creates a new instance of <see cref="TypeMappingInfo" />.
-            /// </summary>
-            /// <param name="property"> The property for which mapping is needed. </param>
-            /// <param name="modelClrType"> The CLR type in the model for which mapping is needed. </param>
-            public TypeMappingInfo(
-                [CanBeNull] IProperty property = null,
-                [CanBeNull] Type modelClrType = null)
-            {
-                Property = property;
-                ModelClrType = modelClrType ?? property?.ClrType;
-            }
-
-            /// <summary>
-            ///     The property for which mapping is needed.
-            /// </summary>
-            public virtual IProperty Property { get; }
-
-            /// <summary>
-            ///     The CLR type in the model for which mapping is needed.
-            /// </summary>
-            public virtual Type ModelClrType { get; }
+                   || type == typeof(byte[])
+                   || Dependencies.ValueConverterSelector.Select(type).Any(c => IsTypeMapped(c.ProviderClrType));
         }
     }
 }

@@ -336,19 +336,19 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
                 var expected = expectedQuery(ExpectedData.Set<TItem1>()).ToArray();
 
-                if (!assertOrder
-                    && elementSorter == null
-                    && expected.Length > 0
-                    && expected[0] != null)
+                var firstNonNullableElement = expected.FirstOrDefault(e => e != null);
+                if (firstNonNullableElement != null)
                 {
-                    _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
-                }
+                    if (!assertOrder
+                        && elementSorter == null)
+                    {
+                        _entitySorters.TryGetValue(firstNonNullableElement.GetType(), out elementSorter);
+                    }
 
-                if (elementAsserter == null
-                    && expected.Length > 0
-                    && expected[0] != null)
-                {
-                    _entityAsserters.TryGetValue(expected[0].GetType(), out elementAsserter);
+                    if (elementAsserter == null)
+                    {
+                        _entityAsserters.TryGetValue(firstNonNullableElement.GetType(), out elementAsserter);
+                    }
                 }
 
                 TestHelpers.AssertResults(
@@ -398,19 +398,19 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     ExpectedData.Set<TItem1>(),
                     ExpectedData.Set<TItem2>()).ToArray();
 
-                if (!assertOrder
-                    && elementSorter == null
-                    && expected.Length > 0
-                    && expected[0] != null)
+                var firstNonNullableElement = expected.FirstOrDefault(e => e != null);
+                if (firstNonNullableElement != null)
                 {
-                    _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
-                }
+                    if (!assertOrder
+                        && elementSorter == null)
+                    {
+                        _entitySorters.TryGetValue(firstNonNullableElement.GetType(), out elementSorter);
+                    }
 
-                if (elementAsserter == null
-                    && expected.Length > 0
-                    && expected[0] != null)
-                {
-                    _entityAsserters.TryGetValue(expected[0].GetType(), out elementAsserter);
+                    if (elementAsserter == null)
+                    {
+                        _entityAsserters.TryGetValue(firstNonNullableElement.GetType(), out elementAsserter);
+                    }
                 }
 
                 TestHelpers.AssertResults(
@@ -463,19 +463,19 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     ExpectedData.Set<TItem2>(),
                     ExpectedData.Set<TItem3>()).ToArray();
 
-                if (!assertOrder
-                    && elementSorter == null
-                    && expected.Length > 0
-                    && expected[0] != null)
+                var firstNonNullableElement = expected.FirstOrDefault(e => e != null);
+                if (firstNonNullableElement != null)
                 {
-                    _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
-                }
+                    if (!assertOrder
+                        && elementSorter == null)
+                    {
+                        _entitySorters.TryGetValue(firstNonNullableElement.GetType(), out elementSorter);
+                    }
 
-                if (elementAsserter == null
-                    && expected.Length > 0
-                    && expected[0] != null)
-                {
-                    _entityAsserters.TryGetValue(expected[0].GetType(), out elementAsserter);
+                    if (elementAsserter == null)
+                    {
+                        _entityAsserters.TryGetValue(firstNonNullableElement.GetType(), out elementAsserter);
+                    }
                 }
 
                 TestHelpers.AssertResults(
@@ -733,36 +733,46 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
         #region AssertIncludeQuery
 
-        public List<object> AssertIncludeQuery<TItem1>(
+        public Task<List<object>> AssertIncludeQuery<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<object>> query,
             List<IExpectedInclude> expectedIncludes,
             Func<dynamic, object> elementSorter = null,
             List<Func<dynamic, object>> clientProjections = null,
             bool assertOrder = false,
-            int entryCount = 0)
+            int entryCount = 0,
+            bool isAsync = false)
             where TItem1 : class
-            => AssertIncludeQuery(query, query, expectedIncludes, elementSorter, clientProjections, assertOrder, entryCount);
+            => AssertIncludeQuery(query, query, expectedIncludes, elementSorter, clientProjections, assertOrder, entryCount, isAsync);
 
-        public override List<object> AssertIncludeQuery<TItem1>(
+        public override async Task<List<object>> AssertIncludeQuery<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<object>> actualQuery,
             Func<IQueryable<TItem1>, IQueryable<object>> expectedQuery,
             List<IExpectedInclude> expectedIncludes,
             Func<dynamic, object> elementSorter = null,
             List<Func<dynamic, object>> clientProjections = null,
             bool assertOrder = false,
-            int entryCount = 0)
+            int entryCount = 0,
+            bool isAsync = false)
         {
             using (var context = _contextCreator())
             {
-                var actual = actualQuery(SetExtractor.Set<TItem1>(context)).ToList();
+                var actual = isAsync
+                    ? await actualQuery(
+                        SetExtractor.Set<TItem1>(context)).ToListAsync()
+                    : actualQuery(
+                        SetExtractor.Set<TItem1>(context)).ToList();
+
                 var expected = expectedQuery(ExpectedData.Set<TItem1>()).ToList();
 
                 if (!assertOrder)
                 {
-                    if (elementSorter == null
-                        && expected[0] != null)
+                    if (elementSorter == null)
                     {
-                        _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
+                        var firstNonNullableElement = expected.FirstOrDefault(e => e != null);
+                        if (firstNonNullableElement != null)
+                        {
+                            _entitySorters.TryGetValue(firstNonNullableElement.GetType(), out elementSorter);
+                        }
                     }
 
                     if (elementSorter != null)
@@ -793,31 +803,37 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             }
         }
 
-        public List<object> AssertIncludeQuery<TItem1, TItem2>(
+        public Task<List<object>> AssertIncludeQuery<TItem1, TItem2>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> query,
             List<IExpectedInclude> expectedIncludes,
             Func<dynamic, object> elementSorter = null,
             List<Func<dynamic, object>> clientProjections = null,
             bool assertOrder = false,
-            int entryCount = 0)
+            int entryCount = 0,
+            bool isAsync = false)
             where TItem1 : class
             where TItem2 : class
-            => AssertIncludeQuery(query, query, expectedIncludes, elementSorter, clientProjections, assertOrder, entryCount);
+            => AssertIncludeQuery(query, query, expectedIncludes, elementSorter, clientProjections, assertOrder, entryCount, isAsync);
 
-        public override List<object> AssertIncludeQuery<TItem1, TItem2>(
+        public override async Task<List<object>> AssertIncludeQuery<TItem1, TItem2>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> actualQuery,
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> expectedQuery,
             List<IExpectedInclude> expectedIncludes,
             Func<dynamic, object> elementSorter = null,
             List<Func<dynamic, object>> clientProjections = null,
             bool assertOrder = false,
-            int entryCount = 0)
+            int entryCount = 0,
+            bool isAsync = false)
         {
             using (var context = _contextCreator())
             {
-                var actual = actualQuery(
-                    SetExtractor.Set<TItem1>(context),
-                    SetExtractor.Set<TItem2>(context)).ToList();
+                var actual = isAsync
+                    ? await actualQuery(
+                        SetExtractor.Set<TItem1>(context),
+                        SetExtractor.Set<TItem2>(context)).ToListAsync()
+                    : actualQuery(
+                        SetExtractor.Set<TItem1>(context),
+                        SetExtractor.Set<TItem2>(context)).ToList();
 
                 var expected = expectedQuery(
                     ExpectedData.Set<TItem1>(),
@@ -825,10 +841,13 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
                 if (!assertOrder)
                 {
-                    if (elementSorter == null
-                        && expected[0] != null)
+                    if (elementSorter == null)
                     {
-                        _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
+                        var firstNonNullableElement = expected.FirstOrDefault(e => e != null);
+                        if (firstNonNullableElement != null)
+                        {
+                            _entitySorters.TryGetValue(firstNonNullableElement.GetType(), out elementSorter);
+                        }
                     }
 
                     if (elementSorter != null)
@@ -864,7 +883,13 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         private class DefaultSetExtractor : ISetExtractor
         {
             public override IQueryable<TEntity> Set<TEntity>(DbContext context)
-                => context.Set<TEntity>();
+            {
+                var entityOrQueryType = context.Model.FindEntityType(typeof(TEntity));
+
+                return entityOrQueryType.IsQueryType
+                    ? (IQueryable<TEntity>)context.Query<TEntity>()
+                    : context.Set<TEntity>();
+            }
         }
     }
 }

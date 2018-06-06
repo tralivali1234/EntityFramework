@@ -35,7 +35,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public override object ToObject()
-            => MaterializerSource.GetMaterializer(EntityType)(new ValueBuffer(_values));
+            => MaterializerSource.GetMaterializer(EntityType)(
+                new MaterializationContext(
+                    new ValueBuffer(_values),
+                    InternalEntry.StateManager.Context));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -51,7 +54,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 {
                     if (!Properties[i].IsShadowProperty)
                     {
-                        SetValue(i, Properties[i].GetGetter().GetClrValue(obj));
+                        SetValue(i, ((Property)Properties[i]).Getter.GetClrValue(obj));
                     }
                 }
             }

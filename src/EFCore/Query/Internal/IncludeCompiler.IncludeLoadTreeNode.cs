@@ -101,7 +101,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     = new MainFromClause(
                         targetType.Name.Substring(0, 1).ToLowerInvariant(),
                         targetType,
-                        targetExpression.CreateEFPropertyExpression(Navigation.PropertyInfo));
+                        targetExpression.CreateEFPropertyExpression(Navigation.GetIdentifyingMemberInfo()));
 
                 queryCompilationContext.AddQuerySourceRequiringMaterialization(mainFromClause);
 
@@ -130,7 +130,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (asyncQuery)
                 {
-                    var asyncEnumerableType 
+                    var asyncEnumerableType
                         = typeof(IAsyncEnumerable<>).MakeGenericType(targetType);
 
                     collectionLambdaExpression
@@ -193,10 +193,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                             nameof(QueryContext.QueryBuffer)),
                         includeCollectionMethodInfo
                             .MakeGenericMethod(
-                            targetEntityExpression.Type,
+                                targetEntityExpression.Type,
                                 targetClrType,
                                 clrCollectionAccessor.CollectionType.TryGetSequenceType()
-                                    ?? targetClrType),
+                                ?? targetClrType),
                         arguments);
 
                 return
@@ -206,7 +206,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                 targetEntityExpression,
                                 navigation.DeclaringType.ClrType),
                             includeCollectionMethodCall,
-                            Expression.Default(includeCollectionMethodInfo.ReturnType))
+                            includeCollectionMethodInfo.ReturnType == typeof(Task)
+                                ? (Expression)Expression.Constant(Task.CompletedTask)
+                                : Expression.Default(includeCollectionMethodInfo.ReturnType))
                         : (Expression)includeCollectionMethodCall;
             }
 
@@ -221,18 +223,20 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     || foreignKeyProperties.Any(p => p.IsShadowProperty))
                 {
                     return
-                        Expression.Default(typeof(Func<,,>)
-                            .MakeGenericType(targetType, relatedType, typeof(bool)));
+                        Expression.Default(
+                            typeof(Func<,,>)
+                                .MakeGenericType(targetType, relatedType, typeof(bool)));
                 }
 
                 var targetEntityParameter = Expression.Parameter(targetType, "p");
                 var relatedEntityParameter = Expression.Parameter(relatedType, "d");
 
                 return Expression.Lambda(
-                    primaryKeyProperties.Zip(foreignKeyProperties,
+                    primaryKeyProperties.Zip(
+                            foreignKeyProperties,
                             (pk, fk) =>
                             {
-                                Expression pkMemberAccess 
+                                Expression pkMemberAccess
                                     = Expression.MakeMemberAccess(
                                         targetEntityParameter,
                                         pk.GetMemberInfo(forConstruction: false, forSet: false));
@@ -241,7 +245,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                     = Expression.MakeMemberAccess(
                                         relatedEntityParameter,
                                         fk.GetMemberInfo(forConstruction: false, forSet: false));
-                                
+
                                 if (pkMemberAccess.Type != fkMemberAccess.Type)
                                 {
                                     if (pkMemberAccess.Type.IsNullableType())
@@ -253,10 +257,27 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                         pkMemberAccess = Expression.Convert(pkMemberAccess, fkMemberAccess.Type);
                                     }
                                 }
-                                
+
                                 Expression equalityExpression;
 
-                                if (typeof(IStructuralEquatable).GetTypeInfo()
+                                var comparer
+                                    = pk.GetKeyValueComparer()
+                                      ?? pk.FindMapping()?.KeyComparer;
+
+                                if (comparer != null)
+                                {
+                                    if (comparer.Type != pkMemberAccess.Type
+                                        && comparer.Type == pkMemberAccess.Type.UnwrapNullableType())
+                                    {
+                                        comparer = comparer.ToNonNullNullableComparer();
+                                    }
+
+                                    equalityExpression
+                                        = comparer.ExtractEqualsBody(
+                                            pkMemberAccess,
+                                            fkMemberAccess);
+                                }
+                                else if (typeof(IStructuralEquatable).GetTypeInfo()
                                     .IsAssignableFrom(pkMemberAccess.Type.GetTypeInfo()))
                                 {
                                     equalityExpression
@@ -274,7 +295,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                         equalityExpression)
                                     : equalityExpression;
                             })
-                        .Aggregate((e1, e2) => Expression.AndAlso(e1, e2)),
+                        .Aggregate(Expression.AndAlso),
                     targetEntityParameter,
                     relatedEntityParameter);
             }
@@ -314,6 +335,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         nameof(QueryContext.StateManager));
 
                 var blockExpressions = new List<Expression>();
+                var isNullBlockExpressions = new List<Expression>();
 
                 if (trackingQuery)
                 {
@@ -333,6 +355,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                             Expression.Constant(Navigation),
                             targetEntityExpression,
                             relatedArrayAccessExpression));
+
+                    isNullBlockExpressions.Add(
+                        Expression.Call(
+                            _setRelationshipIsLoadedMethodInfo,
+                            stateManagerProperty,
+                            Expression.Constant(Navigation),
+                            targetEntityExpression));
                 }
                 else
                 {
@@ -394,6 +423,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 var blockType = blockExpressions.Last().Type;
 
+                isNullBlockExpressions.Add(
+                    blockType == typeof(Task)
+                        ? Expression.Constant(Task.CompletedTask)
+                        : (Expression)Expression.Default(blockType));
+
                 return
                     Expression.Condition(
                         Expression.Not(
@@ -404,9 +438,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         Expression.Block(
                             blockType,
                             blockExpressions),
-                        blockType == typeof(Task)
-                            ? Expression.Constant(Task.CompletedTask)
-                            : (Expression)Expression.Default(blockType),
+                        Expression.Block(
+                            blockType,
+                            isNullBlockExpressions),
                         blockType);
             }
 
@@ -425,6 +459,22 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 Debug.Assert(internalEntityEntry != null);
 
                 internalEntityEntry.SetRelationshipSnapshotValue(navigation, value);
+            }
+
+            private static readonly MethodInfo _setRelationshipIsLoadedMethodInfo
+                = typeof(IncludeLoadTreeNode).GetTypeInfo()
+                    .GetDeclaredMethod(nameof(SetRelationshipIsLoaded));
+
+            private static void SetRelationshipIsLoaded(
+                IStateManager stateManager,
+                IPropertyBase navigation,
+                object entity)
+            {
+                var internalEntityEntry = stateManager.TryGetEntry(entity);
+
+                Debug.Assert(internalEntityEntry != null);
+
+                internalEntityEntry.SetIsLoaded((INavigation)navigation);
             }
 
             private static readonly MethodInfo _addToCollectionSnapshotMethodInfo

@@ -84,7 +84,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         public const string Filter = Prefix + "Filter";
 
         /// <summary>
-        ///     The name for <see cref="RelationalTypeMapping"/> annotations.
+        ///     The name for <see cref="RelationalTypeMapping" /> annotations.
         /// </summary>
         [Obsolete("Use CoreAnnotationNames.TypeMapping")]
         public const string TypeMapping = Prefix + "TypeMapping";
@@ -98,5 +98,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         ///     The maximum length for database identifiers.
         /// </summary>
         public const string MaxIdentifierLength = Prefix + "MaxIdentifierLength";
+
+        /// <summary>
+        ///     A flag indicating whether the property is constrained to fixed length values.
+        /// </summary>
+        public const string IsFixedLength = Prefix + "IsFixedLength";
     }
 }

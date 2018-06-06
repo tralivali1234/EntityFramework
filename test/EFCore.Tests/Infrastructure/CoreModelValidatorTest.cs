@@ -10,9 +10,9 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.TestModels.Northwind;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 // ReSharper disable UnusedMember.Local
@@ -38,40 +38,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         [Fact]
-        public virtual void Detects_filter_with_navs()
-        {
-            var customerClrType = typeof(Customer);
-            var orderClrType = typeof(Order);
-
-            var model = new Model();
-            var customerType = model.AddEntityType(customerClrType);
-            var customerIdProperty = customerType.GetOrAddProperty(customerClrType.GetProperty("CustomerID"));
-            customerIdProperty.IsNullable = false;
-            var customerKey = customerType.SetPrimaryKey(customerIdProperty);
-
-            var orderType = model.AddEntityType(orderClrType);
-            var orderIdProperty = orderType.GetOrAddProperty(orderClrType.GetProperty("OrderID"));
-            orderType.SetPrimaryKey(orderIdProperty);
-
-            var foreignKeyProperty = orderType.GetOrAddProperty(orderClrType.GetProperty("CustomerID"));
-            var customerForeignKey = orderType.GetOrAddForeignKey(foreignKeyProperty, customerKey, customerType);
-
-            customerForeignKey.HasDependentToPrincipal(orderClrType.GetProperty("Customer"));
-
-            Expression<Func<Order, bool>> badExpression3 = o => o.Customer.CustomerID == "ALFKI";
-
-            orderType.QueryFilter = badExpression3;
-
-            VerifyError(CoreStrings.BadFilterExpression(badExpression3, orderType.DisplayName(), orderType.ClrType), model);
-
-            Expression<Func<Order, bool>> badExpression4 = o => EF.Property<Customer>(o, "Customer").CustomerID == "ALFKI";
-
-            orderType.QueryFilter = badExpression4;
-
-            VerifyError(CoreStrings.BadFilterExpression(badExpression4, orderType.DisplayName(), orderType.ClrType), model);
-        }
-
-        [Fact]
         public virtual void Detects_shadow_entities()
         {
             var model = new Model();
@@ -90,6 +56,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             entityType.AddKey(keyProperty);
 
             Validate(model);
+
+            Assert.Equal(1, Log.Count);
+            Assert.Equal(LogLevel.Debug, Log[0].Level);
+            Assert.Equal(CoreStrings.LogShadowPropertyCreated.GenerateMessage("Key", "A"), Log[0].Message);
         }
 
         [Fact]
@@ -101,6 +71,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             entityType.SetPrimaryKey(keyProperty);
 
             Validate(model);
+
+            Assert.Equal(1, Log.Count);
+            Assert.Equal(LogLevel.Debug, Log[0].Level);
+            Assert.Equal(CoreStrings.LogShadowPropertyCreated.GenerateMessage("Key", "A"), Log[0].Message);
         }
 
         [Fact]
@@ -109,16 +83,28 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             var modelBuilder = new InternalModelBuilder(new Model());
             var dependentEntityBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             dependentEntityBuilder.Property("Id", typeof(int), ConfigurationSource.Convention);
-            dependentEntityBuilder.PrimaryKey(new List<string> { "Id" }, ConfigurationSource.Convention);
+            dependentEntityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Id"
+                }, ConfigurationSource.Convention);
             var principalEntityBuilder = modelBuilder.Entity(typeof(ReferencedEntity), ConfigurationSource.Convention);
             principalEntityBuilder.Property("Id", typeof(int), ConfigurationSource.Convention);
-            principalEntityBuilder.PrimaryKey(new List<string> { "Id" }, ConfigurationSource.Convention);
+            principalEntityBuilder.PrimaryKey(
+                new List<string>
+                {
+                    "Id"
+                }, ConfigurationSource.Convention);
 
             dependentEntityBuilder.Property("Foo", typeof(string), ConfigurationSource.Convention);
             principalEntityBuilder.Property("ReferencedFoo", typeof(string), ConfigurationSource.Convention);
             dependentEntityBuilder.HasForeignKey(
                 principalEntityBuilder,
-                dependentEntityBuilder.GetOrCreateProperties(new List<string> { "Foo" }, ConfigurationSource.Convention),
+                dependentEntityBuilder.GetOrCreateProperties(
+                    new List<string>
+                    {
+                        "Foo"
+                    }, ConfigurationSource.Convention),
                 principalEntityBuilder.HasKey(new[] { "ReferencedFoo" }, ConfigurationSource.Convention).Metadata,
                 ConfigurationSource.Convention);
 
@@ -160,6 +146,23 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             entityTypeA.FindPrimaryKey().Properties.Single().ValueGenerated = ValueGenerated.OnAddOrUpdate;
 
             VerifyError(CoreStrings.MutableKeyProperty(nameof(A.Id)), model);
+        }
+
+        [Fact]
+        public virtual void Detects_relationship_cycle()
+        {
+            var modelBuilder = CreateConventionalModelBuilder();
+
+            modelBuilder.Entity<A>();
+            modelBuilder.Entity<B>();
+            modelBuilder.Entity<C>().HasBaseType((string)null);
+            modelBuilder.Entity<A>().HasOne<B>().WithOne().IsRequired().HasForeignKey<A>(a => a.Id).HasPrincipalKey<B>(b => b.Id);
+            modelBuilder.Entity<A>().HasOne<C>().WithOne().IsRequired().HasForeignKey<C>(a => a.Id).HasPrincipalKey<A>(b => b.Id);
+            modelBuilder.Entity<C>().HasOne<B>().WithOne().IsRequired().HasForeignKey<B>(a => a.Id).HasPrincipalKey<C>(b => b.Id);
+
+            VerifyError(
+                CoreStrings.IdentifyingRelationshipCycle(nameof(A)),
+                modelBuilder.Model);
         }
 
         [Fact]
@@ -277,15 +280,17 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         [Fact]
-        public virtual void Detects_base_type_not_set()
+        public virtual void Detects_skipped_base_type()
         {
             var model = new Model();
             var entityA = model.AddEntityType(typeof(A));
             SetPrimaryKey(entityA);
             var entityD = model.AddEntityType(typeof(D));
-            SetPrimaryKey(entityD);
+            SetBaseType(entityD, entityA);
+            var entityF = model.AddEntityType(typeof(F));
+            SetBaseType(entityF, entityA);
 
-            VerifyError(CoreStrings.InconsistentInheritance(entityD.DisplayName(), entityA.DisplayName()), model);
+            VerifyError(CoreStrings.InconsistentInheritance(nameof(F), nameof(D)), model);
         }
 
         [Fact]
@@ -327,11 +332,20 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         [Fact]
-        public virtual void Detects_dependent_entity_type_without_defining_navigation()
+        public virtual void Detects_weak_entity_type_without_defining_navigation()
         {
             var modelBuilder = new InternalModelBuilder(new Model());
             var entityTypeBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             entityTypeBuilder.PrimaryKey(new[] { nameof(SampleEntity.Id) }, ConfigurationSource.Convention);
+
+            var anotherEntityTypeBuilder = modelBuilder.Entity(typeof(AnotherSampleEntity), ConfigurationSource.Convention);
+            anotherEntityTypeBuilder.PrimaryKey(new[] { nameof(AnotherSampleEntity.Id) }, ConfigurationSource.Convention);
+
+            var anotherOwnershipBuilder = anotherEntityTypeBuilder.Owns(
+                typeof(ReferencedEntity), nameof(AnotherSampleEntity.ReferencedEntity), ConfigurationSource.Convention);
+            anotherOwnershipBuilder.Metadata.DeclaringEntityType.Builder.PrimaryKey(
+                anotherOwnershipBuilder.Metadata.Properties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
+
             var ownershipBuilder = entityTypeBuilder.Owns(
                 typeof(ReferencedEntity), nameof(SampleEntity.ReferencedEntity), ConfigurationSource.Convention);
             var ownedTypeBuilder = ownershipBuilder.Metadata.DeclaringEntityType.Builder;
@@ -348,7 +362,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         [Fact]
-        public virtual void Detects_dependent_entity_type_with_multiple_ownerships()
+        public virtual void Detects_entity_type_with_multiple_ownerships()
         {
             var modelBuilder = new InternalModelBuilder(new Model());
             var entityTypeBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
@@ -362,24 +376,33 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 .Metadata.IsOwnership = true;
 
             VerifyError(
-                CoreStrings.MultipleOwnerships(
-                    nameof(SampleEntity) + "." + nameof(SampleEntity.ReferencedEntity) + "#" + nameof(ReferencedEntity)),
+                CoreStrings.MultipleOwnerships(nameof(ReferencedEntity)),
                 modelBuilder.Metadata);
         }
 
         [Fact]
-        public virtual void Detects_dependent_entity_type_with_non_defining_ownership()
+        public virtual void Detects_weak_entity_type_with_non_defining_ownership()
         {
             var modelBuilder = new InternalModelBuilder(new Model());
             var entityTypeBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
             entityTypeBuilder.PrimaryKey(new[] { nameof(SampleEntity.Id) }, ConfigurationSource.Convention);
+
+            var anotherEntityTypeBuilder = modelBuilder.Entity(typeof(AnotherSampleEntity), ConfigurationSource.Convention);
+            anotherEntityTypeBuilder.PrimaryKey(new[] { nameof(AnotherSampleEntity.Id) }, ConfigurationSource.Convention);
+
+            var anotherOwnershipBuilder = anotherEntityTypeBuilder.Owns(
+                typeof(ReferencedEntity), nameof(AnotherSampleEntity.ReferencedEntity), ConfigurationSource.Convention);
+            anotherOwnershipBuilder.Metadata.DeclaringEntityType.Builder.PrimaryKey(
+                anotherOwnershipBuilder.Metadata.Properties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
+
             var ownershipBuilder = entityTypeBuilder.Owns(
                 typeof(ReferencedEntity), nameof(SampleEntity.ReferencedEntity), ConfigurationSource.Convention);
             var ownedTypeBuilder = ownershipBuilder.Metadata.DeclaringEntityType.Builder;
             ownedTypeBuilder.PrimaryKey(ownershipBuilder.Metadata.Properties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
 
+            ownershipBuilder.Metadata.IsOwnership = false;
             ownedTypeBuilder.Relationship(entityTypeBuilder, (string)null, null, ConfigurationSource.Convention, setTargetAsPrincipal: true)
-                .IsOwnership(true, ConfigurationSource.Convention);
+                .Metadata.IsOwnership = true;
 
             VerifyError(
                 CoreStrings.NonDefiningOwnership(
@@ -390,7 +413,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         [Fact]
-        public virtual void Detects_dependent_entity_type_without_ownership()
+        public virtual void Detects_weak_entity_type_without_ownership()
         {
             var modelBuilder = new InternalModelBuilder(new Model());
             var entityTypeBuilder = modelBuilder.Entity(typeof(SampleEntity), ConfigurationSource.Convention);
@@ -399,12 +422,15 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 typeof(ReferencedEntity), nameof(SampleEntity.ReferencedEntity), ConfigurationSource.Convention);
             var ownedTypeBuilder = ownershipBuilder.Metadata.DeclaringEntityType.Builder;
             ownedTypeBuilder.PrimaryKey(ownershipBuilder.Metadata.Properties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
+
             var anotherEntityTypeBuilder = modelBuilder.Entity(typeof(AnotherSampleEntity), ConfigurationSource.Convention);
             anotherEntityTypeBuilder.PrimaryKey(new[] { nameof(AnotherSampleEntity.Id) }, ConfigurationSource.Convention);
-            var nonOwnedTypeBuilder = modelBuilder.Metadata.AddEntityType(
-                typeof(ReferencedEntity), nameof(AnotherSampleEntity.ReferencedEntity), anotherEntityTypeBuilder.Metadata).Builder;
-            nonOwnedTypeBuilder.PrimaryKey(new[] { nameof(AnotherSampleEntity.Id) }, ConfigurationSource.Convention);
-            anotherEntityTypeBuilder.Navigation(nonOwnedTypeBuilder, nameof(AnotherSampleEntity.ReferencedEntity), ConfigurationSource.Convention);
+
+            var anotherOwnershipBuilder = anotherEntityTypeBuilder.Owns(
+                typeof(ReferencedEntity), nameof(AnotherSampleEntity.ReferencedEntity), ConfigurationSource.Convention);
+            anotherOwnershipBuilder.Metadata.DeclaringEntityType.Builder.PrimaryKey(
+                anotherOwnershipBuilder.Metadata.Properties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
+            anotherOwnershipBuilder.Metadata.IsOwnership = false;
 
             VerifyError(
                 CoreStrings.InconsistentOwnership(
@@ -432,8 +458,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             VerifyError(
                 CoreStrings.PrincipalOwnedType(
                     nameof(AnotherSampleEntity) + "." + nameof(AnotherSampleEntity.ReferencedEntity),
-                    nameof(SampleEntity) + "." + nameof(SampleEntity.ReferencedEntity) + "#" + nameof(ReferencedEntity),
-                    nameof(SampleEntity) + "." + nameof(SampleEntity.ReferencedEntity) + "#" + nameof(ReferencedEntity)),
+                    nameof(ReferencedEntity),
+                    nameof(ReferencedEntity)),
                 modelBuilder.Metadata);
         }
 
@@ -454,10 +480,73 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             VerifyError(
                 CoreStrings.InverseToOwnedType(
-                    nameof(AnotherSampleEntity),
-                    nameof(SampleEntity.ReferencedEntity),
-                    nameof(SampleEntity) + "." + nameof(SampleEntity.ReferencedEntity) + "#" + nameof(ReferencedEntity)),
+                    nameof(AnotherSampleEntity), nameof(SampleEntity.ReferencedEntity), nameof(ReferencedEntity), nameof(SampleEntity)),
                 modelBuilder.Metadata);
+        }
+
+        [Fact]
+        public virtual void Detects_derived_owned_entity_type()
+        {
+            var modelBuilder = new InternalModelBuilder(new Model());
+            var entityTypeBuilder = modelBuilder.Entity(typeof(B), ConfigurationSource.Convention);
+            entityTypeBuilder.PrimaryKey(new[] { nameof(B.Id) }, ConfigurationSource.Convention);
+            var ownershipBuilder = entityTypeBuilder.Owns(typeof(D), nameof(B.A), ConfigurationSource.Convention);
+            var ownedTypeBuilder = ownershipBuilder.Metadata.DeclaringEntityType.Builder;
+            ownedTypeBuilder.PrimaryKey(ownershipBuilder.Metadata.Properties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
+            var anotherEntityTypeBuilder = modelBuilder.Entity(typeof(A), ConfigurationSource.Convention);
+            anotherEntityTypeBuilder.PrimaryKey(new[] { nameof(A.Id) }, ConfigurationSource.Convention);
+            ownedTypeBuilder.HasBaseType(typeof(A), ConfigurationSource.Convention);
+
+            VerifyError(CoreStrings.OwnedDerivedType(nameof(D)), modelBuilder.Metadata);
+        }
+
+        [Fact]
+        public virtual void Detects_owned_entity_type_without_ownership()
+        {
+            var modelBuilder = new InternalModelBuilder(new Model());
+            modelBuilder.Entity(typeof(A), ConfigurationSource.Convention);
+            modelBuilder.Owned(typeof(A), ConfigurationSource.Convention);
+
+            VerifyError(CoreStrings.OwnerlessOwnedType(nameof(A)), modelBuilder.Metadata);
+        }
+
+        [Fact]
+        public virtual void Detects_ForeignKey_on_inherited_generated_key_property()
+        {
+            var modelBuilder = CreateModelBuilder();
+            modelBuilder.Entity<Abstract>().Property(e => e.Id).ValueGeneratedOnAdd();
+            modelBuilder.Entity<Generic<int>>().HasOne<Abstract>().WithOne().HasForeignKey<Generic<int>>(e => e.Id);
+            modelBuilder.Entity<Generic<string>>();
+
+            VerifyError(
+                CoreStrings.ForeignKeyPropertyInKey(
+                    nameof(Abstract.Id),
+                    "Generic<int>",
+                    "{'" + nameof(Abstract.Id) + "'}",
+                    nameof(Abstract)), modelBuilder.Model);
+        }
+
+        [Fact]
+        public virtual void Passes_ForeignKey_on_inherited_generated_key_property_abstract_base()
+        {
+            var modelBuilder = CreateModelBuilder();
+            modelBuilder.Entity<Abstract>().Property(e => e.Id).ValueGeneratedOnAdd();
+            modelBuilder.Entity<Generic<int>>().HasOne<Abstract>().WithOne().HasForeignKey<Generic<int>>(e => e.Id);
+
+            Validate(modelBuilder.Model);
+        }
+
+        [Fact]
+        public virtual void Detects_ToQuery_on_derived_query_types()
+        {
+            var modelBuilder = CreateConventionalModelBuilder();
+            var context = new DbContext(new DbContextOptions<DbContext>());
+            modelBuilder.Query<Abstract>().ToQuery(() => context.Set<Abstract>());
+            modelBuilder.Query<Generic<int>>().ToQuery(() => context.Set<Generic<int>>());
+
+            VerifyError(
+                CoreStrings.DerivedQueryTypeDefiningQuery("Generic<int>", nameof(Abstract)),
+                modelBuilder.Model);
         }
 
         [Theory]
@@ -544,8 +633,17 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         public virtual void Passes_for_valid_seeds()
         {
             var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<A>().SeedData(new A { Id = 1 });
-            modelBuilder.Entity<D>().SeedData(new D { Id = 2, P0 = 3 });
+            modelBuilder.Entity<A>().HasData(
+                new A
+                {
+                    Id = 1
+                });
+            modelBuilder.Entity<D>().HasData(
+                new D
+                {
+                    Id = 2,
+                    P0 = 3
+                });
 
             Validate(modelBuilder.Model);
         }
@@ -555,8 +653,15 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             var modelBuilder = CreateModelBuilder();
 
-            Assert.Equal(CoreStrings.SeedDatumDerivedType(nameof(A), nameof(D)),
-                Assert.Throws<InvalidOperationException>(() => modelBuilder.Entity<A>().SeedData(new D { Id = 2, P0 = 3 })).Message);
+            Assert.Equal(
+                CoreStrings.SeedDatumDerivedType(nameof(A), nameof(D)),
+                Assert.Throws<InvalidOperationException>(
+                    () => modelBuilder.Entity<A>().HasData(
+                        new D
+                        {
+                            Id = 2,
+                            P0 = 3
+                        })).Message);
         }
 
         [Fact]
@@ -564,22 +669,37 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             var modelBuilder = CreateModelBuilder();
 
-            Assert.Equal(CoreStrings.SeedDatumDerivedType("B.A#A", nameof(D)),
-                Assert.Throws<InvalidOperationException>(() => modelBuilder.Entity<B>()
-                    .OwnsOne(b => b.A, a => a.SeedData(new D { Id = 2, P0 = 3 }))).Message);
+            Assert.Equal(
+                CoreStrings.SeedDatumDerivedType(nameof(A), nameof(D)),
+                Assert.Throws<InvalidOperationException>(
+                    () => modelBuilder.Entity<B>()
+                        .OwnsOne(
+                            b => b.A, a => a.HasData(
+                                new D
+                                {
+                                    Id = 2,
+                                    P0 = 3
+                                }))
+                        .OwnsOne(b => b.AnotherA)).Message);
         }
 
         [Fact]
         public virtual void Detects_missing_required_values_in_seeds()
         {
             var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<A>(e =>
+            modelBuilder.Entity<A>(
+                e =>
                 {
                     e.Property(a => a.P0).IsRequired();
-                    e.SeedData(new A { Id = 1 });
+                    e.HasData(
+                        new A
+                        {
+                            Id = 1
+                        });
                 });
 
-            VerifyError(CoreStrings.SeedDatumMissingValue(nameof(A), nameof(A.P0)),
+            VerifyError(
+                CoreStrings.SeedDatumMissingValue(nameof(A), nameof(A.P0)),
                 modelBuilder.Model);
         }
 
@@ -587,12 +707,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         public virtual void Detects_missing_key_values_in_seeds()
         {
             var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<A>(e =>
-                {
-                    e.SeedData(new A());
-                });
+            modelBuilder.Entity<A>(e => { e.HasData(new A()); });
 
-            VerifyError(CoreStrings.SeedDatumMissingValue(nameof(A), nameof(A.Id)),
+            VerifyError(
+                CoreStrings.SeedDatumMissingValue(nameof(A), nameof(A.Id)),
                 modelBuilder.Model);
         }
 
@@ -603,8 +721,16 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             Logger = CreateLogger(sensitiveDataLoggingEnabled);
             var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<A>().SeedData(new A { Id = 1 });
-            modelBuilder.Entity<D>().SeedData(new D { Id = 1 });
+            modelBuilder.Entity<A>().HasData(
+                new A
+                {
+                    Id = 1
+                });
+            modelBuilder.Entity<D>().HasData(
+                new D
+                {
+                    Id = 1
+                });
 
             VerifyError(
                 sensitiveDataLoggingEnabled
@@ -620,7 +746,16 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             Logger = CreateLogger(sensitiveDataLoggingEnabled);
             var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<A>(e => { e.SeedData(new { Id = 1, P0 = "invalid" }); });
+            modelBuilder.Entity<A>(
+                e =>
+                {
+                    e.HasData(
+                        new
+                        {
+                            Id = 1,
+                            P0 = "invalid"
+                        });
+                });
 
             VerifyError(
                 sensitiveDataLoggingEnabled
@@ -632,11 +767,23 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         [Theory]
         [InlineData(true)]
         [InlineData(false)]
-        public virtual void Detects_navigations_in_seeds(bool sensitiveDataLoggingEnabled)
+        public virtual void Detects_reference_navigations_in_seeds(bool sensitiveDataLoggingEnabled)
         {
             Logger = CreateLogger(sensitiveDataLoggingEnabled);
             var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<SampleEntity>(e => { e.SeedData(new SampleEntity { Id = 1, ReferencedEntity = new ReferencedEntity { Id = 2 } }); });
+            modelBuilder.Entity<SampleEntity>(
+                e =>
+                {
+                    e.HasData(
+                        new SampleEntity
+                        {
+                            Id = 1,
+                            ReferencedEntity = new ReferencedEntity
+                            {
+                                Id = 2
+                            }
+                        });
+                });
 
             VerifyError(
                 sensitiveDataLoggingEnabled
@@ -651,6 +798,47 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                         nameof(SampleEntity.ReferencedEntity),
                         nameof(ReferencedEntity),
                         $"{{'{nameof(ReferencedEntity.SampleEntityId)}'}}"),
+                modelBuilder.Model);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public virtual void Detects_collection_navigations_in_seeds(bool sensitiveDataLoggingEnabled)
+        {
+            Logger = CreateLogger(sensitiveDataLoggingEnabled);
+            var modelBuilder = CreateModelBuilder();
+            modelBuilder.Entity<SampleEntity>(
+                e =>
+                {
+                    e.HasData(
+                        new SampleEntity
+                        {
+                            Id = 1,
+                            OtherSamples = new HashSet<SampleEntity>(
+                                new[]
+                                {
+                                    new SampleEntity
+                                    {
+                                        Id = 2
+                                    }
+                                })
+                        });
+                });
+
+            VerifyError(
+                sensitiveDataLoggingEnabled
+                    ? CoreStrings.SeedDatumNavigationSensitive(
+                        nameof(SampleEntity),
+                        $"{nameof(SampleEntity.Id)}:1",
+                        nameof(SampleEntity.OtherSamples),
+                        nameof(SampleEntity),
+                        "{'SampleEntityId'}")
+                    : CoreStrings.SeedDatumNavigation(
+                        nameof(SampleEntity),
+                        nameof(SampleEntity.OtherSamples),
+                        nameof(SampleEntity),
+                        "{'SampleEntityId'}"),
                 modelBuilder.Model);
         }
 
@@ -685,6 +873,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         protected override IModelValidator CreateModelValidator()
-            => new ModelValidator(new ModelValidatorDependencies(Logger));
+            => new ModelValidator(new ModelValidatorDependencies(Logger, ModelLogger));
     }
 }

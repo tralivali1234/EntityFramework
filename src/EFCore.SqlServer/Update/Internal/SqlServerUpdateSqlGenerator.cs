@@ -10,8 +10,9 @@ using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Update;
 
-namespace Microsoft.EntityFrameworkCore.Update.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Update.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -43,7 +44,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     o =>
                         !o.IsKey
                         || !o.IsRead
-                        || o.Property.SqlServer().ValueGenerationStrategy == SqlServerValueGenerationStrategy.IdentityColumn))
+                        || o.Property?.SqlServer().ValueGenerationStrategy == SqlServerValueGenerationStrategy.IdentityColumn))
             {
                 return AppendInsertOperation(commandStringBuilder, modificationCommands[0], commandPosition);
             }
@@ -54,7 +55,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
             var defaultValuesOnly = writeOperations.Count == 0;
             var nonIdentityOperations = modificationCommands[0].ColumnModifications
-                .Where(o => o.Property.SqlServer().ValueGenerationStrategy != SqlServerValueGenerationStrategy.IdentityColumn)
+                .Where(o => o.Property?.SqlServer().ValueGenerationStrategy != SqlServerValueGenerationStrategy.IdentityColumn)
                 .ToList();
 
             if (defaultValuesOnly)
@@ -74,7 +75,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
                 if (nonIdentityOperations.Count > 1)
                 {
-                    nonIdentityOperations = new List<ColumnModification> { nonIdentityOperations.First() };
+                    nonIdentityOperations.RemoveRange(1, nonIdentityOperations.Count - 1);
                 }
             }
 
@@ -130,6 +131,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                 commandStringBuilder.Append(",").AppendLine();
                 AppendValues(commandStringBuilder, modificationCommands[i].ColumnModifications.Where(o => o.IsWrite).ToList());
             }
+
             commandStringBuilder.Append(SqlGenerationHelper.StatementTerminator).AppendLine();
 
             return ResultSetMapping.NoResultSet;
@@ -201,6 +203,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                 commandStringBuilder.Append(",").AppendLine();
                 AppendValues(commandStringBuilder, nonIdentityOperations);
             }
+
             commandStringBuilder.Append(SqlGenerationHelper.StatementTerminator);
 
             AppendSelectCommand(commandStringBuilder, readOperations, keyOperations, InsertedTableBaseName, commandPosition, name, schema);
@@ -270,10 +273,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     toInsertTableAlias,
                     SqlGenerationHelper,
                     (sb, o, alias, helper) =>
-                        {
-                            sb.Append(alias).Append(".");
-                            helper.DelimitIdentifier(sb, o.ColumnName);
-                        })
+                    {
+                        sb.Append(alias).Append(".");
+                        helper.DelimitIdentifier(sb, o.ColumnName);
+                    })
                 .Append(")");
         }
 
@@ -290,16 +293,16 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                         operations,
                         SqlGenerationHelper,
                         (sb, o, helper) =>
+                        {
+                            if (o.IsWrite)
                             {
-                                if (o.IsWrite)
-                                {
-                                    helper.GenerateParameterName(sb, o.ParameterName);
-                                }
-                                else
-                                {
-                                    sb.Append("DEFAULT");
-                                }
-                            })
+                                helper.GenerateParameterName(sb, o.ParameterName);
+                            }
+                            else
+                            {
+                                sb.Append("DEFAULT");
+                            }
+                        })
                     .Append(", ")
                     .Append(additionalLiteral)
                     .Append(")");
@@ -322,10 +325,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     operations,
                     this,
                     (sb, o, generator) =>
-                        {
-                            generator.SqlGenerationHelper.DelimitIdentifier(sb, o.ColumnName);
-                            sb.Append(" ").Append(generator.GetTypeNameForCopy(o.Property));
-                        });
+                    {
+                        generator.SqlGenerationHelper.DelimitIdentifier(sb, o.ColumnName);
+                        sb.Append(" ").Append(generator.GetTypeNameForCopy(o.Property));
+                    });
 
             if (additionalColumns != null)
             {
@@ -333,6 +336,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     .Append(", ")
                     .Append(additionalColumns);
             }
+
             commandStringBuilder
                 .Append(")")
                 .Append(SqlGenerationHelper.StatementTerminator)
@@ -345,28 +349,9 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             if (typeName == null)
             {
                 var principalProperty = property.FindPrincipal();
-                typeName = principalProperty?.SqlServer().ColumnType;
-                if (typeName == null)
-                {
-                    if (property.ClrType == typeof(string))
-                    {
-                        typeName = Dependencies.RelationalTypeMapper.StringMapper?.FindMapping(
-                            property.IsUnicode() ?? principalProperty?.IsUnicode() ?? true,
-                            keyOrIndex: false,
-                            maxLength: null).StoreType;
-                    }
-                    else if (property.ClrType == typeof(byte[]))
-                    {
-                        typeName = Dependencies.RelationalTypeMapper.ByteArrayMapper?.FindMapping(
-                            rowVersion: false,
-                            keyOrIndex: false,
-                            size: null).StoreType;
-                    }
-                    else
-                    {
-                        typeName = Dependencies.RelationalTypeMapper.FindMapping(property.ClrType).StoreType;
-                    }
-                }
+
+                typeName = principalProperty?.SqlServer().ColumnType
+                           ?? Dependencies.TypeMappingSource.FindMapping(property.ClrType)?.StoreType;
             }
 
             if (property.ClrType == typeof(byte[])
@@ -395,10 +380,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     operations,
                     SqlGenerationHelper,
                     (sb, o, helper) =>
-                        {
-                            sb.Append("INSERTED.");
-                            helper.DelimitIdentifier(sb, o.ColumnName);
-                        });
+                    {
+                        sb.Append("INSERTED.");
+                        helper.DelimitIdentifier(sb, o.ColumnName);
+                    });
 
             if (additionalColumns != null)
             {
@@ -462,13 +447,13 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                 .Append(" ON ")
                 .AppendJoin(
                     keyOperations, (sb, c) =>
-                        {
-                            sb.Append("(");
-                            SqlGenerationHelper.DelimitIdentifier(sb, c.ColumnName, "t");
-                            sb.Append(" = ");
-                            SqlGenerationHelper.DelimitIdentifier(sb, c.ColumnName, "i");
-                            sb.Append(")");
-                        }, " AND ");
+                    {
+                        sb.Append("(");
+                        SqlGenerationHelper.DelimitIdentifier(sb, c.ColumnName, "t");
+                        sb.Append(" = ");
+                        SqlGenerationHelper.DelimitIdentifier(sb, c.ColumnName, "i");
+                        sb.Append(")");
+                    }, " AND ");
 
             if (orderColumn != null)
             {

@@ -6,7 +6,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
@@ -30,9 +29,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
         private readonly IEntityMaterializerSource _entityMaterializerSource;
         private readonly IQuerySource _querySource;
-        private bool _topLevelProjection;
+        private readonly SelectExpression _groupAggregateTargetSelectExpression;
+        private readonly SelectExpression _targetSelectExpression;
+        private bool _isGroupAggregate;
 
-        private readonly Dictionary<Expression, Expression> _sourceExpressionProjectionMapping = new Dictionary<Expression, Expression>();
+        private readonly Dictionary<Expression, Expression> _sourceExpressionProjectionMapping
+            = new Dictionary<Expression, Expression>();
 
         /// <summary>
         ///     Creates a new instance of <see cref="RelationalProjectionExpressionVisitor" />.
@@ -52,7 +54,18 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             _sqlTranslatingExpressionVisitorFactory = dependencies.SqlTranslatingExpressionVisitorFactory;
             _entityMaterializerSource = dependencies.EntityMaterializerSource;
             _querySource = querySource;
-            _topLevelProjection = true;
+            _targetSelectExpression = QueryModelVisitor.TryGetQuery(querySource);
+
+            if (_targetSelectExpression != null)
+            {
+                _groupAggregateTargetSelectExpression = _targetSelectExpression.Clone();
+
+                _isGroupAggregate = _querySource.ItemType.IsGrouping() && _targetSelectExpression.GroupBy.Count > 0;
+                if (_isGroupAggregate)
+                {
+                    _targetSelectExpression.ClearProjection();
+                }
+            }
         }
 
         private new RelationalQueryModelVisitor QueryModelVisitor
@@ -69,9 +82,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         {
             var newMemberInitExpression = base.VisitMemberInit(memberInitExpression);
 
-            var selectExpression = QueryModelVisitor.TryGetQuery(_querySource);
-
-            if (selectExpression != null)
+            if (_targetSelectExpression != null)
             {
                 foreach (var sourceBinding in memberInitExpression.Bindings)
                 {
@@ -83,7 +94,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                         {
                             var memberInfo = memberAssignment.Member;
 
-                            selectExpression.SetProjectionForMemberInfo(
+                            _targetSelectExpression.SetProjectionForMemberInfo(
                                 memberInfo,
                                 sqlExpression);
                         }
@@ -92,40 +103,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             }
 
             return newMemberInitExpression;
-        }
-
-        /// <summary>
-        ///     Visit a method call expression.
-        /// </summary>
-        /// <param name="methodCallExpression"> The expression to visit. </param>
-        /// <returns>
-        ///     An Expression corresponding to the translated method call.
-        /// </returns>
-        protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
-        {
-            Check.NotNull(methodCallExpression, nameof(methodCallExpression));
-
-            if (IncludeCompiler.IsIncludeMethod(methodCallExpression))
-            {
-                return methodCallExpression;
-            }
-
-            if (methodCallExpression.Method.IsEFPropertyMethod())
-            {
-                var newArg0 = Visit(methodCallExpression.Arguments[0]);
-
-                if (newArg0 != methodCallExpression.Arguments[0])
-                {
-                    return Expression.Call(
-                        methodCallExpression.Method,
-                        newArg0,
-                        methodCallExpression.Arguments[1]);
-                }
-
-                return methodCallExpression;
-            }
-
-            return base.VisitMethodCall(methodCallExpression);
         }
 
         /// <summary>
@@ -139,24 +116,30 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         {
             Check.NotNull(newExpression, nameof(newExpression));
 
-            if (newExpression.Type == typeof(AnonymousObject))
+            if (newExpression.Type == typeof(AnonymousObject)
+                || newExpression.Type == typeof(MaterializedAnonymousObject))
             {
                 var propertyCallExpressions
                     = ((NewArrayExpression)newExpression.Arguments.Single()).Expressions;
 
+                var newProperyCallExpressions = new List<Expression>();
                 foreach (var propertyCallExpression in propertyCallExpressions)
                 {
-                    Visit(propertyCallExpression.RemoveConvert());
+                    newProperyCallExpressions.Add(Visit(propertyCallExpression.RemoveConvert()));
                 }
 
-                return newExpression;
+                return Expression.New(
+                    newExpression.Type == typeof(AnonymousObject)
+                        ? AnonymousObject.AnonymousObjectCtor
+                        : MaterializedAnonymousObject.AnonymousObjectCtor,
+                    Expression.NewArrayInit(
+                        typeof(object),
+                        newProperyCallExpressions.Select(e => Expression.Convert(e, typeof(object)))));
             }
 
             var newNewExpression = base.VisitNew(newExpression);
 
-            var selectExpression = QueryModelVisitor.TryGetQuery(_querySource);
-
-            if (selectExpression != null)
+            if (_targetSelectExpression != null)
             {
                 for (var i = 0; i < newExpression.Arguments.Count; i++)
                 {
@@ -168,7 +151,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
 
                         if (memberInfo != null)
                         {
-                            selectExpression.SetProjectionForMemberInfo(
+                            _targetSelectExpression.SetProjectionForMemberInfo(
                                 memberInfo,
                                 sqlExpression);
                         }
@@ -188,376 +171,161 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         /// </returns>
         public override Expression Visit(Expression expression)
         {
-            if (_topLevelProjection
-                && (QueryModelVisitor.Expression as MethodCallExpression)?.Method.MethodIsClosedFormOf(
-                    QueryModelVisitor.QueryCompilationContext.QueryMethodProvider.GroupByMethod) == true)
+            if (expression == null
+                || _targetSelectExpression == null)
             {
-                var translation = new GroupByAggregateTranslatingExpressionVisitor(this)
-                    .Translate(expression);
-
-                if (translation != null)
-                {
-                    QueryModelVisitor.RequiresStreamingGroupResultOperator = false;
-                    return translation;
-                }
+                return expression;
             }
 
-            _topLevelProjection = false;
-
-            var selectExpression = QueryModelVisitor.TryGetQuery(_querySource);
-
-            if (expression != null
-                && !(expression is ConstantExpression)
-                && !(expression is NewExpression)
-                && !(expression is MemberInitExpression)
-                && selectExpression != null)
+            switch (expression)
             {
-                var existingProjectionsCount = selectExpression.Projection.Count;
+                // To save mappings so that we can compose afterwards
+                case NewExpression newExpression:
+                    return VisitNew(newExpression);
 
-                var sqlExpression
-                    = _sqlTranslatingExpressionVisitorFactory
-                        .Create(QueryModelVisitor, selectExpression, inProjection: true)
-                        .Visit(expression);
+                case MemberInitExpression memberInitExpression:
+                    return VisitMemberInit(memberInitExpression);
 
-                if (sqlExpression == null)
-                {
-                    switch (expression)
+                case QuerySourceReferenceExpression qsre:
+                    if (_targetSelectExpression.HandlesQuerySource(qsre.ReferencedQuerySource))
                     {
-                        case MethodCallExpression methodCallExpression when IncludeCompiler.IsIncludeMethod(methodCallExpression):
-                            return base.Visit(expression);
-
-                        case QuerySourceReferenceExpression qsre:
-                            if (selectExpression.HandlesQuerySource(qsre.ReferencedQuerySource))
-                            {
-                                selectExpression.ProjectStarTable = selectExpression.GetTableForQuerySource(qsre.ReferencedQuerySource);
-                            }
-                            break;
-
-                        default:
-                            QueryModelVisitor.RequiresClientProjection = true;
-                            break;
-                    }
-                }
-                else
-                {
-                    selectExpression.RemoveRangeFromProjection(existingProjectionsCount);
-
-                    if (!(expression is QuerySourceReferenceExpression))
-                    {
-                        if (sqlExpression is NullableExpression nullableExpression)
-                        {
-                            sqlExpression = nullableExpression.Operand;
-                        }
-
-                        if (sqlExpression is ColumnExpression)
-                        {
-                            var index = selectExpression.AddToProjection(sqlExpression);
-
-                            _sourceExpressionProjectionMapping[expression] = selectExpression.Projection[index];
-
-                            return expression;
-                        }
+                        _targetSelectExpression.ProjectStarTable
+                            = _targetSelectExpression.GetTableForQuerySource(qsre.ReferencedQuerySource);
                     }
 
-                    if (!(sqlExpression is ConstantExpression))
+                    return qsre;
+
+                // Skip over Include and Correlated Collection methods
+                case MethodCallExpression methodCallExpression
+                    when IncludeCompiler.IsIncludeMethod(methodCallExpression)
+                         || CorrelatedCollectionOptimizingVisitor.IsCorrelatedCollectionMethod(methodCallExpression):
+                    return methodCallExpression;
+
+                // Group By key translation to cover composite key cases
+                case MemberExpression memberExpression
+                    when memberExpression.Expression.TryGetReferencedQuerySource() == _querySource
+                         && _querySource.ItemType.IsGrouping()
+                         && memberExpression.Member.Name == nameof(IGrouping<int, int>.Key)
+                         && QueryModelVisitor.IsShapedQueryExpression(QueryModelVisitor.Expression):
+
+                    var groupResultOperator
+                        = (GroupResultOperator)((SubQueryExpression)((FromClauseBase)_querySource).FromExpression)
+                        .QueryModel.ResultOperators.Last();
+
+                    var sqlTranslation
+                        = _sqlTranslatingExpressionVisitorFactory
+                            .Create(
+                                QueryModelVisitor,
+                                _isGroupAggregate ? _groupAggregateTargetSelectExpression : _targetSelectExpression,
+                                inProjection: true)
+                            .Visit(expression);
+
+                    if (sqlTranslation == null)
                     {
-                        var targetExpression
-                            = QueryModelVisitor.QueryCompilationContext.QuerySourceMapping
-                                .GetExpression(_querySource);
-
-                        if (targetExpression.Type == typeof(ValueBuffer))
-                        {
-                            var index = selectExpression.AddToProjection(sqlExpression);
-
-                            _sourceExpressionProjectionMapping[expression] = selectExpression.Projection[index];
-
-                            var readValueExpression
-                                = _entityMaterializerSource
-                                    .CreateReadValueExpression(
-                                        targetExpression,
-                                        expression.Type.MakeNullable(),
-                                        index,
-                                        sqlExpression.FindProperty(expression.Type));
-
-                            var outputDataInfo
-                                = (expression as SubQueryExpression)?.QueryModel
-                                .GetOutputDataInfo();
-
-                            if (outputDataInfo is StreamedScalarValueInfo)
-                            {
-                                // Compensate for possible nulls
-                                readValueExpression
-                                    = Expression.Coalesce(
-                                        readValueExpression,
-                                        Expression.Default(expression.Type));
-                            }
-
-                            return Expression.Convert(readValueExpression, expression.Type);
-                        }
-
-                        return expression;
-                    }
-                }
-            }
-
-            return base.Visit(expression);
-        }
-
-        private class GroupByAggregateTranslatingExpressionVisitor : RelinqExpressionVisitor
-        {
-            private readonly RelationalProjectionExpressionVisitor _projectionExpressionVisitor;
-            private readonly RelationalQueryModelVisitor _queryModelVisitor;
-            private readonly IQuerySource _groupQuerySource;
-            private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
-            private readonly IEntityMaterializerSource _entityMaterializerSource;
-            private readonly SelectExpression _selectExpression;
-            private readonly Dictionary<Expression, Expression> _sqlMapping = new Dictionary<Expression, Expression>();
-            private bool _translateToSql;
-            private Expression _keySelector;
-            private const string KeyName = nameof(IGrouping<object, object>.Key);
-
-            private static readonly List<Type> _aggregateResultOperators = new List<Type>
-            {
-                typeof(AverageResultOperator),
-                typeof(CountResultOperator),
-                typeof(LongCountResultOperator),
-                typeof(MaxResultOperator),
-                typeof(MinResultOperator),
-                typeof(SumResultOperator)
-            };
-
-            public GroupByAggregateTranslatingExpressionVisitor(RelationalProjectionExpressionVisitor projectionExpressionVisitor)
-            {
-                _projectionExpressionVisitor = projectionExpressionVisitor;
-                _queryModelVisitor = projectionExpressionVisitor.QueryModelVisitor;
-                _groupQuerySource = projectionExpressionVisitor._querySource;
-                _sqlTranslatingExpressionVisitorFactory = projectionExpressionVisitor._sqlTranslatingExpressionVisitorFactory;
-                _entityMaterializerSource = projectionExpressionVisitor._entityMaterializerSource;
-                _selectExpression = _queryModelVisitor.TryGetQuery(_groupQuerySource);
-            }
-
-            public Expression Translate(Expression expression)
-            {
-                if (!CanTranslate(expression))
-                {
-                    return null;
-                }
-
-                _translateToSql = true;
-
-                Visit(expression);
-
-                _selectExpression.ClearProjection();
-                UpdateGroupQuerySourceParameter(typeof(ValueBuffer));
-
-                _translateToSql = false;
-
-                return Visit(expression);
-            }
-
-            protected override Expression VisitMember(MemberExpression node)
-            {
-                if (!_translateToSql)
-                {
-                    var sqlExpression = _selectExpression.GetProjectionForMemberInfo(node.Member);
-                    if (sqlExpression != null)
-                    {
-                        return BindSqlToValueBuffer(sqlExpression, node.Type);
-                    }
-
-                    if (node.Member.Name == KeyName
-                        && node.Expression.TryGetReferencedQuerySource() == _groupQuerySource)
-                    {
+                        // If the key is composite then we need to visit actual keySelector to construct the type.
+                        // Since we are mapping translating actual KeySelector now, we need to re-map QuerySources
                         var querySourceFinder = new QuerySourceFindingExpressionVisitor();
-                        querySourceFinder.Visit(_keySelector);
-
-                        var currentParameter = _queryModelVisitor.CurrentParameter;
+                        querySourceFinder.Visit(groupResultOperator.KeySelector);
 
                         foreach (var querySource in querySourceFinder.QuerySources)
                         {
-                            _queryModelVisitor.QueryCompilationContext.AddOrUpdateMapping(
+                            QueryModelVisitor.QueryCompilationContext.AddOrUpdateMapping(
                                 querySource,
-                                currentParameter);
+                                QueryModelVisitor.CurrentParameter);
                         }
 
-                        return _projectionExpressionVisitor.Visit(_keySelector);
-                    }
-                }
+                        _isGroupAggregate = false;
+                        var translatedKey = Visit(groupResultOperator.KeySelector);
+                        _isGroupAggregate = true;
 
-                return base.VisitMember(node);
-            }
-
-            protected override Expression VisitSubQuery(SubQueryExpression subQueryExpression)
-            {
-                if (_translateToSql)
-                {
-                    var sqlExpression = _sqlTranslatingExpressionVisitorFactory.Create(
-                            _queryModelVisitor,
-                            _selectExpression,
-                            inProjection: true)
-                        .Visit(subQueryExpression);
-                    _sqlMapping[subQueryExpression] = sqlExpression;
-
-                    return subQueryExpression;
-                }
-
-                return BindSqlToValueBuffer(_sqlMapping[subQueryExpression], subQueryExpression.Type);
-            }
-
-            private Expression BindSqlToValueBuffer(Expression sqlExpression, Type expressionType)
-            {
-                var targetExpression
-                    = _queryModelVisitor.QueryCompilationContext.QuerySourceMapping
-                        .GetExpression(_groupQuerySource);
-
-                if (targetExpression.Type == typeof(ValueBuffer))
-                {
-                    var index = _selectExpression.AddToProjection(sqlExpression);
-
-                    var readValueExpression
-                        = _entityMaterializerSource
-                            .CreateReadValueExpression(
-                                targetExpression,
-                                expressionType,
-                                index,
-                                sqlExpression.FindProperty(expressionType));
-
-                    return Expression.Convert(readValueExpression, expressionType);
-                }
-
-                return null;
-            }
-
-            private bool CanTranslate(Expression expression)
-            {
-                // Check for Query shape
-                if (IsAggregateGroupBySelector(expression))
-                {
-                    var groupByResultOperator =
-                        (GroupResultOperator)((SubQueryExpression)((MainFromClause)_groupQuerySource).FromExpression)
-                        .QueryModel.ResultOperators
-                        .Last();
-
-                    _keySelector = groupByResultOperator.KeySelector;
-                    var elementSelector = groupByResultOperator.ElementSelector;
-
-                    if (!(elementSelector is QuerySourceReferenceExpression)
-                        && _sqlTranslatingExpressionVisitorFactory.Create(
-                                _queryModelVisitor,
-                                _selectExpression)
-                            .Visit(groupByResultOperator.ElementSelector) == null)
-                    {
-                        return false;
+                        return translatedKey;
                     }
 
-                    _selectExpression.ClearOrderBy();
-                    _selectExpression.ClearProjection();
-
-                    UpdateGroupQuerySourceParameter(typeof(ValueBuffer));
-
-                    _projectionExpressionVisitor.Visit(_keySelector);
-                    var columns = _selectExpression.Projection.ToArray();
-                    _selectExpression.ClearProjection();
-
-                    if (!(elementSelector is QuerySourceReferenceExpression))
-                    {
-                        _projectionExpressionVisitor.Visit(groupByResultOperator.ElementSelector);
-                    }
-
-                    if (_selectExpression.Projection.Count > 1)
-                    {
-                        _selectExpression.ClearProjection();
-                    }
-
-                    _selectExpression.AddToGroupBy(columns);
-
-                    var shapedQuery =
-                        (MethodCallExpression)((MethodCallExpression)_queryModelVisitor.Expression).Arguments[0];
-
-                    var valueBufferShaper = new ValueBufferShaper(_groupQuerySource);
-
-                    var groupShapedQuery = Expression.Call(
-                        _queryModelVisitor.QueryCompilationContext
-                            .QueryMethodProvider
-                            .ShapedQueryMethod
-                            .MakeGenericMethod(valueBufferShaper.Type),
-                        shapedQuery.Arguments[0],
-                        shapedQuery.Arguments[1],
-                        Expression.Constant(valueBufferShaper));
-
-                    _queryModelVisitor.Expression = groupShapedQuery;
-
-                    UpdateGroupQuerySourceParameter(groupShapedQuery.Type);
-
-                    return true;
-                }
-
-                return false;
+                    break;
             }
 
-            private class QuerySourceFindingExpressionVisitor : RelinqExpressionVisitor
-            {
-                public ICollection<IQuerySource> QuerySources { get; } = new HashSet<IQuerySource>();
+            // Fallback
+            var sqlExpression
+                = _sqlTranslatingExpressionVisitorFactory
+                    .Create(
+                        QueryModelVisitor,
+                        _isGroupAggregate ? _groupAggregateTargetSelectExpression : _targetSelectExpression,
+                        inProjection: true)
+                    .Visit(expression);
 
-                protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression querySourceReferenceExpression)
+            if (sqlExpression == null)
+            {
+                QueryModelVisitor.RequiresClientProjection = true;
+
+                return base.Visit(expression);
+            }
+
+            if (sqlExpression is ConstantExpression
+                && QueryModelVisitor.ParentQueryModelVisitor == null)
+            {
+                return base.Visit(expression);
+            }
+
+            sqlExpression = sqlExpression.UnwrapNullableExpression();
+
+            // We bind with ValueBuffer in GroupByAggregate case straight away
+            // Since the expression can be some translation from [g].[Key] which won't bind with MemberAccessBindingEV
+            if (!_isGroupAggregate
+                && sqlExpression is ColumnExpression)
+            {
+                var index = _targetSelectExpression.AddToProjection(sqlExpression);
+
+                _sourceExpressionProjectionMapping[expression] = _targetSelectExpression.Projection[index];
+
+                return expression;
+            }
+
+            var targetExpression
+                = QueryModelVisitor.QueryCompilationContext.QuerySourceMapping
+                    .GetExpression(_querySource);
+
+            if (targetExpression.Type == typeof(ValueBuffer))
+            {
+                var index = _targetSelectExpression.AddToProjection(sqlExpression);
+
+                _sourceExpressionProjectionMapping[expression] = _targetSelectExpression.Projection[index];
+
+                var readValueExpression
+                    = _entityMaterializerSource
+                        .CreateReadValueExpression(
+                            targetExpression,
+                            expression.Type.MakeNullable(),
+                            index,
+                            sqlExpression.FindProperty(expression.Type));
+
+                var outputDataInfo
+                    = (expression as SubQueryExpression)?.QueryModel
+                    .GetOutputDataInfo();
+
+                if (outputDataInfo is StreamedScalarValueInfo)
                 {
-                    QuerySources.Add(querySourceReferenceExpression.TryGetReferencedQuerySource());
-
-                    return base.VisitQuerySourceReference(querySourceReferenceExpression);
-                }
-            }
-
-            private void UpdateGroupQuerySourceParameter(Type parameterType)
-            {
-                var currentParameter = Expression.Parameter(
-                    parameterType,
-                    _groupQuerySource.ItemName);
-
-                _queryModelVisitor.CurrentParameter = currentParameter;
-                _queryModelVisitor.QueryCompilationContext.AddOrUpdateMapping(
-                    _groupQuerySource,
-                    currentParameter);
-            }
-
-            private bool IsAggregateGroupBySelector(Expression expression)
-            {
-                if (expression is NewExpression newExpression)
-                {
-                    return newExpression.Arguments.All(e => IsAggregateSubQueryExpression(e) || IsKeySelector(e));
+                    // Compensate for possible nulls
+                    readValueExpression
+                        = Expression.Coalesce(
+                            readValueExpression,
+                            Expression.Default(expression.Type));
                 }
 
-                return IsAggregateSubQueryExpression(expression);
+                return Expression.Convert(readValueExpression, expression.Type);
             }
 
-            private bool IsAggregateSubQueryExpression(Expression expression)
+            return expression;
+        }
+
+        private class QuerySourceFindingExpressionVisitor : RelinqExpressionVisitor
+        {
+            public ICollection<IQuerySource> QuerySources { get; } = new HashSet<IQuerySource>();
+
+            protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression querySourceReferenceExpression)
             {
-                if (expression is SubQueryExpression subQuery
-                    && subQuery.QueryModel.BodyClauses.Count == 0
-                    && subQuery.QueryModel.MainFromClause.FromExpression.TryGetReferencedQuerySource() == _groupQuerySource
-                    && subQuery.QueryModel.ResultOperators.Count == 1
-                    && !(subQuery.QueryModel.SelectClause.Selector is ConstantExpression)
-                    && _aggregateResultOperators.Contains(subQuery.QueryModel.ResultOperators.Single().GetType()))
-                {
-                    return true;
-                }
+                QuerySources.Add(querySourceReferenceExpression.TryGetReferencedQuerySource());
 
-                return false;
-            }
-
-            private bool IsKeySelector(Expression expression)
-            {
-                while (expression is MemberExpression memberExpression)
-                {
-                    if (memberExpression.Member.Name == KeyName
-                        && memberExpression.Expression.TryGetReferencedQuerySource() == _groupQuerySource)
-                    {
-                        return true;
-                    }
-
-                    expression = memberExpression.Expression;
-                }
-
-                return false;
+                return base.VisitQuerySourceReference(querySourceReferenceExpression);
             }
         }
     }

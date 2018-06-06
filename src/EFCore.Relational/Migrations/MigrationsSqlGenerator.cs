@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -12,8 +13,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Utilities;
-using System.Text;
 
 namespace Microsoft.EntityFrameworkCore.Migrations
 {
@@ -78,6 +79,17 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         ///     Parameter object containing dependencies for this service.
         /// </summary>
         protected virtual MigrationsSqlGeneratorDependencies Dependencies { get; }
+
+        /// <summary>
+        ///     The <see cref="IUpdateSqlGenerator" />.
+        /// </summary>
+        protected virtual IUpdateSqlGenerator SqlGenerator
+            => (IUpdateSqlGenerator)Dependencies.UpdateSqlGenerator;
+
+        /// <summary>
+        ///     Gets a comparer that can be used to compare two product versions.
+        /// </summary>
+        protected virtual IComparer<string> VersionComparer { get; } = new SemanticVersionComparer();
 
         /// <summary>
         ///     Generates commands from a list of operations.
@@ -519,7 +531,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 .Append("CREATE SEQUENCE ")
                 .Append(Dependencies.SqlGenerationHelper.DelimitIdentifier(operation.Name, operation.Schema));
 
-            var typeMapping = Dependencies.TypeMapper.GetMapping(operation.ClrType);
+            var typeMapping = Dependencies.TypeMappingSource.GetMapping(operation.ClrType);
 
             if (operation.ClrType != typeof(long))
             {
@@ -528,7 +540,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                     .Append(typeMapping.StoreType);
 
                 // set the typeMapping for use with operation.StartValue (i.e. a long) below
-                typeMapping = Dependencies.TypeMapper.GetMapping(typeof(long));
+                typeMapping = Dependencies.TypeMappingSource.GetMapping(typeof(long));
             }
 
             builder
@@ -939,7 +951,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
 
-            var longTypeMapping = Dependencies.TypeMapper.GetMapping(typeof(long));
+            var longTypeMapping = Dependencies.TypeMappingSource.GetMapping(typeof(long));
 
             builder
                 .Append("ALTER SEQUENCE ")
@@ -1002,16 +1014,20 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(builder, nameof(builder));
 
             var sqlBuilder = new StringBuilder();
-            foreach (var modificationCommand in operation.GenerateModificationCommands())
+            foreach (var modificationCommand in operation.GenerateModificationCommands(model))
             {
-                Dependencies.UpdateSqlGenerator.AppendInsertOperation(
+                SqlGenerator.AppendInsertOperation(
                     sqlBuilder,
                     modificationCommand,
                     0);
             }
 
             builder.Append(sqlBuilder.ToString());
-            EndStatement(builder);
+
+            if (terminate)
+            {
+                EndStatement(builder);
+            }
         }
 
         /// <summary>
@@ -1030,9 +1046,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(builder, nameof(builder));
 
             var sqlBuilder = new StringBuilder();
-            foreach (var modificationCommand in operation.GenerateModificationCommands())
+            foreach (var modificationCommand in operation.GenerateModificationCommands(model))
             {
-                Dependencies.UpdateSqlGenerator.AppendDeleteOperation(
+                SqlGenerator.AppendDeleteOperation(
                     sqlBuilder,
                     modificationCommand,
                     0);
@@ -1058,9 +1074,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(builder, nameof(builder));
 
             var sqlBuilder = new StringBuilder();
-            foreach (var modificationCommand in operation.GenerateModificationCommands())
+            foreach (var modificationCommand in operation.GenerateModificationCommands(model))
             {
-                Dependencies.UpdateSqlGenerator.AppendUpdateOperation(
+                SqlGenerator.AppendUpdateOperation(
                     sqlBuilder,
                     modificationCommand,
                     0);
@@ -1136,8 +1152,8 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             Check.NotNull(cycle, nameof(cycle));
             Check.NotNull(builder, nameof(builder));
 
-            var intTypeMapping = Dependencies.TypeMapper.GetMapping(typeof(int));
-            var longTypeMapping = Dependencies.TypeMapper.GetMapping(typeof(long));
+            var intTypeMapping = Dependencies.TypeMappingSource.GetMapping(typeof(int));
+            var longTypeMapping = Dependencies.TypeMappingSource.GetMapping(typeof(long));
 
             builder
                 .Append(" INCREMENT BY ")
@@ -1169,7 +1185,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         }
 
         /// <summary>
-        ///     Generates a SQL fragment for a column definition in an <see cref="AddColumnOperation" />.
+        ///     <para>
+        ///         Generates a SQL fragment for a column definition in an <see cref="AddColumnOperation" />.
+        ///     </para>
+        ///     <para>
+        ///         This method does not call the overload of ColumnDefinition that takes fixedLength because doing so
+        ///         would be a breaking change for providers that have overridden the method without fixedLength.
+        ///         Therefore, providers must explicitly override this method to get fixedLength functionality.
+        ///     </para>
         /// </summary>
         /// <param name="operation"> The operation. </param>
         /// <param name="model"> The target model which may be <c>null</c> if the operations exist without a model. </param>
@@ -1186,6 +1209,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                 operation.ColumnType,
                 operation.IsUnicode,
                 operation.MaxLength,
+                // operation.FixedLength not included--see comment above.
                 operation.IsRowVersion,
                 operation.IsNullable,
                 operation.DefaultValue,
@@ -1235,6 +1259,52 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             [NotNull] IAnnotatable annotatable,
             [CanBeNull] IModel model,
             [NotNull] MigrationCommandListBuilder builder)
+            => ColumnDefinition(
+                schema, table, name, clrType, type, unicode, maxLength, null,
+                rowVersion, nullable, defaultValue, defaultValueSql, computedColumnSql, annotatable, model, builder);
+
+        /// <summary>
+        ///     Generates a SQL fragment for a column definition for the given column metadata.
+        /// </summary>
+        /// <param name="schema"> The schema that contains the table, or <c>null</c> to use the default schema. </param>
+        /// <param name="table"> The table that contains the column. </param>
+        /// <param name="name"> The column name. </param>
+        /// <param name="clrType"> The CLR <see cref="Type" /> that the column is mapped to. </param>
+        /// <param name="type"> The database/store type for the column, or <c>null</c> if none has been specified. </param>
+        /// <param name="unicode">
+        ///     Indicates whether or not the column can contain Unicode data, or <c>null</c> if this is not applicable or not specified.
+        /// </param>
+        /// <param name="maxLength">
+        ///     The maximum amount of data that the column can contain, or <c>null</c> if this is not applicable or not specified.
+        /// </param>
+        /// <param name="fixedLength"> Indicates whether or not the column is constrained to fixed-length data. </param>
+        /// <param name="rowVersion">
+        ///     Indicates whether or not this column is an automatic concurrency token, such as a SQL Server timestamp/rowversion.
+        /// </param>
+        /// <param name="nullable"> Indicates whether or not the column can store <c>NULL</c> values. </param>
+        /// <param name="defaultValue"> The default value for the column. </param>
+        /// <param name="defaultValueSql"> The SQL expression to use for the column's default constraint. </param>
+        /// <param name="computedColumnSql"> The SQL expression to use to compute the column value. </param>
+        /// <param name="annotatable"> The <see cref="MigrationOperation" /> to use to find any custom annotations. </param>
+        /// <param name="model"> The target model which may be <c>null</c> if the operations exist without a model. </param>
+        /// <param name="builder"> The command builder to use to add the SQL fragment. </param>
+        protected virtual void ColumnDefinition(
+            [CanBeNull] string schema,
+            [NotNull] string table,
+            [NotNull] string name,
+            [NotNull] Type clrType,
+            [CanBeNull] string type,
+            bool? unicode,
+            int? maxLength,
+            bool? fixedLength,
+            bool rowVersion,
+            bool nullable,
+            [CanBeNull] object defaultValue,
+            [CanBeNull] string defaultValueSql,
+            [CanBeNull] string computedColumnSql,
+            [NotNull] IAnnotatable annotatable,
+            [CanBeNull] IModel model,
+            [NotNull] MigrationCommandListBuilder builder)
         {
             Check.NotEmpty(name, nameof(name));
             Check.NotNull(clrType, nameof(clrType));
@@ -1244,7 +1314,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             builder
                 .Append(Dependencies.SqlGenerationHelper.DelimitIdentifier(name))
                 .Append(" ")
-                .Append(type ?? GetColumnType(schema, table, name, clrType, unicode, maxLength, rowVersion, model));
+                .Append(type ?? GetColumnType(schema, table, name, clrType, unicode, maxLength, fixedLength, rowVersion, model));
 
             builder.Append(nullable ? " NULL" : " NOT NULL");
 
@@ -1278,6 +1348,37 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             int? maxLength,
             bool rowVersion,
             [CanBeNull] IModel model)
+            => GetColumnType(schema, table, name, clrType, unicode, maxLength, null, rowVersion, model);
+
+        /// <summary>
+        ///     Gets the store/database type of a column given the provided metadata.
+        /// </summary>
+        /// <param name="schema"> The schema that contains the table, or <c>null</c> to use the default schema. </param>
+        /// <param name="table"> The table that contains the column. </param>
+        /// <param name="name"> The column name. </param>
+        /// <param name="clrType"> The CLR <see cref="Type" /> that the column is mapped to. </param>
+        /// <param name="unicode">
+        ///     Indicates whether or not the column can contain Unicode data, or <c>null</c> if this is not applicable or not specified.
+        /// </param>
+        /// <param name="maxLength">
+        ///     The maximum amount of data that the column can contain, or <c>null</c> if this is not applicable or not specified.
+        /// </param>
+        /// <param name="fixedLength"> Indicates whether or not the data is constrained to fixed-length data. </param>
+        /// <param name="rowVersion">
+        ///     Indicates whether or not this column is an automatic concurrency token, such as a SQL Server timestamp/rowversion.
+        /// </param>
+        /// <param name="model"> The target model which may be <c>null</c> if the operations exist without a model. </param>
+        /// <returns> The database/store type for the column. </returns>
+        protected virtual string GetColumnType(
+            [CanBeNull] string schema,
+            [NotNull] string table,
+            [NotNull] string name,
+            [NotNull] Type clrType,
+            bool? unicode,
+            int? maxLength,
+            bool? fixedLength,
+            bool rowVersion,
+            [CanBeNull] IModel model)
         {
             Check.NotEmpty(table, nameof(table));
             Check.NotEmpty(name, nameof(name));
@@ -1290,20 +1391,16 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             {
                 if (unicode == property.IsUnicode()
                     && maxLength == property.GetMaxLength()
+                    && (fixedLength ?? false) == property.Relational().IsFixedLength
                     && rowVersion == (property.IsConcurrencyToken && property.ValueGenerated == ValueGenerated.OnAddOrUpdate))
                 {
-                    return Dependencies.TypeMapper.GetMapping(property).StoreType;
+                    return Dependencies.TypeMappingSource.FindMapping(property).StoreType;
                 }
 
                 keyOrIndex = property.IsKey() || property.IsForeignKey();
             }
 
-            return (clrType == typeof(string)
-                       ? Dependencies.TypeMapper.StringMapper?.FindMapping(unicode ?? true, keyOrIndex, maxLength)?.StoreType
-                       : clrType == typeof(byte[])
-                           ? Dependencies.TypeMapper.ByteArrayMapper?.FindMapping(rowVersion, keyOrIndex, maxLength)?.StoreType
-                           : null)
-                   ?? Dependencies.TypeMapper.GetMapping(clrType).StoreType;
+            return Dependencies.TypeMappingSource.FindMapping(clrType, null, keyOrIndex, unicode, maxLength, rowVersion, fixedLength).StoreType;
         }
 
         /// <summary>
@@ -1328,7 +1425,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             }
             else if (defaultValue != null)
             {
-                var typeMapping = Dependencies.TypeMapper.GetMappingForValue(defaultValue);
+                var typeMapping = Dependencies.TypeMappingSource.GetMappingForValue(defaultValue);
 
                 builder
                     .Append(" DEFAULT ")
@@ -1508,7 +1605,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
             [CanBeNull] string schema,
             [NotNull] string tableName)
             => model?.GetEntityTypes().Where(
-                t => t.Relational().TableName == tableName && t.Relational().Schema == schema);
+                t => t.Relational().TableName == tableName && t.Relational().Schema == schema && !t.IsQueryType);
 
         /// <summary>
         ///     <para>
@@ -1571,20 +1668,36 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         ///     no version specified, or was generated by an EF Core version prior to 1.1.
         /// </returns>
         protected virtual bool IsOldColumnSupported([CanBeNull] IModel model)
+            => TryGetVersion(model, out var version) && VersionComparer.Compare(version, "1.1.0") >= 0;
+
+        /// <summary>
+        ///     Checks whether or not <see cref="RenameTableOperation" /> and <see cref="RenameSequenceOperation" /> use
+        ///     the legacy behavior of setting the new name and schema to null when unchanged.
+        /// </summary>
+        /// <param name="model"> The target model. </param>
+        /// <returns> True if the legacy behavior is used. </returns>
+        protected virtual bool HasLegacyRenameOperations([CanBeNull] IModel model)
+            => !TryGetVersion(model, out var version) || VersionComparer.Compare(version, "2.1.0") < 0;
+
+        /// <summary>
+        ///     Gets the product version used to generate the current migration. Providers can use this to preserve
+        ///     compatibility with migrations generated using previous versions.
+        /// </summary>
+        /// <param name="model"> The target model. </param>
+        /// <param name="version"> The version. </param>
+        /// <returns> True if the version could be retrieved. </returns>
+        protected virtual bool TryGetVersion(IModel model, out string version)
         {
-            var versionString = model?[CoreAnnotationNames.ProductVersionAnnotation] as string;
-            if (versionString == null)
+            if (!(model?[CoreAnnotationNames.ProductVersionAnnotation] is string versionString))
             {
+                version = null;
+
                 return false;
             }
 
-            var prereleaseIndex = versionString.IndexOf("-", StringComparison.Ordinal);
-            if (prereleaseIndex != -1)
-            {
-                versionString = versionString.Substring(0, prereleaseIndex);
-            }
+            version = versionString;
 
-            return new Version(versionString) >= new Version(1, 1, 0);
+            return true;
         }
     }
 }

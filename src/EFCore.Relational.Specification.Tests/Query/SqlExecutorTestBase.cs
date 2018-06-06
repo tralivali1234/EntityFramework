@@ -70,13 +70,13 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                         var throwingTask = Task.Run(
                             () =>
-                                {
-                                    synchronizationEvent.Wait();
-                                    Assert.Equal(
-                                        CoreStrings.ConcurrentMethodInvocation,
-                                        Assert.Throws<InvalidOperationException>(
-                                            () => context.Database.ExecuteSqlCommand(@"SELECT * FROM ""Customers""")).Message);
-                                });
+                            {
+                                synchronizationEvent.Wait();
+                                Assert.Equal(
+                                    CoreStrings.ConcurrentMethodInvocation,
+                                    Assert.Throws<InvalidOperationException>(
+                                        () => context.Database.ExecuteSqlCommand(@"SELECT * FROM ""Customers""")).Message);
+                            });
 
                         throwingTask.Wait();
 
@@ -219,7 +219,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             }
         }
 
-        [Fact]
+        [Fact(Skip = "#12138")]
         public virtual async Task Throws_on_concurrent_command_async()
         {
             using (var context = CreateContext())
@@ -237,13 +237,13 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                         var throwingTask = Task.Run(
                             async () =>
-                                {
-                                    synchronizationEvent.Wait();
-                                    Assert.Equal(
-                                        CoreStrings.ConcurrentMethodInvocation,
-                                        (await Assert.ThrowsAsync<InvalidOperationException>(
-                                            () => context.Database.ExecuteSqlCommandAsync(@"SELECT * FROM ""Customers"""))).Message);
-                                });
+                            {
+                                synchronizationEvent.Wait();
+                                Assert.Equal(
+                                    CoreStrings.ConcurrentMethodInvocation,
+                                    (await Assert.ThrowsAsync<InvalidOperationException>(
+                                        () => context.Database.ExecuteSqlCommandAsync(@"SELECT * FROM ""Customers"""))).Message);
+                            });
 
                         await throwingTask;
 
@@ -255,7 +255,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             }
         }
 
-        private Customer Process(Customer c, ManualResetEventSlim e, SemaphoreSlim s)
+        private static Customer Process(Customer c, ManualResetEventSlim e, SemaphoreSlim s)
         {
             e.Set();
             s.Wait();

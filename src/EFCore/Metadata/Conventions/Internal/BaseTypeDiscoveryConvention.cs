@@ -19,12 +19,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityType = entityTypeBuilder.Metadata;
             var clrType = entityType.ClrType;
-            if (clrType == null)
+            if (clrType == null
+                || entityType.HasDefiningNavigation()
+                || entityType.FindDeclaredOwnership() != null)
             {
                 return entityTypeBuilder;
             }
 
             var baseEntityType = FindClosestBaseType(entityType);
+            if (baseEntityType == null
+                || baseEntityType.DefiningNavigationName != null)
+            {
+                return entityTypeBuilder;
+            }
+
             return entityTypeBuilder.HasBaseType(baseEntityType, ConfigurationSource.Convention);
         }
     }

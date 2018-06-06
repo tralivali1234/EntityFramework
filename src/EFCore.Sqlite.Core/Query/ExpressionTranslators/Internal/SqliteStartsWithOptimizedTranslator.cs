@@ -4,8 +4,9 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.Sqlite.Query.ExpressionTranslators.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -33,8 +34,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                     new LikeExpression(
                         // ReSharper disable once AssignNullToNotNullAttribute
                         methodCallExpression.Object,
-                        Expression.Add(methodCallExpression.Arguments[0],
-                        Expression.Constant("%", typeof(string)), _concat)),
+                        Expression.Add(
+                            methodCallExpression.Arguments[0],
+                            Expression.Constant("%", typeof(string)), _concat)),
                     new NullCompensatedExpression(
                         Expression.Equal(
                             new SqlFunctionExpression(
@@ -50,7 +52,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                             patternExpression)));
 
                 return patternExpression is ConstantExpression patternConstantExpression
-                    ? (string)patternConstantExpression.Value == string.Empty
+                    ? ((string)patternConstantExpression.Value)?.Length == 0
                         ? (Expression)Expression.Constant(true)
                         : startsWithExpression
                     : Expression.OrElse(

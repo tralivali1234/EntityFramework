@@ -79,6 +79,24 @@ ORDER BY [e0].[EmployeeID]");
 FROM [Customers] AS [c]");
         }
 
+        public override void Projection_when_client_evald_subquery()
+        {
+            base.Projection_when_client_evald_subquery();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID]
+FROM [Customers] AS [c]
+ORDER BY [c].[CustomerID]",
+                //
+                @"SELECT [t].[CustomerID], [c.Orders].[CustomerID]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID]
+    FROM [Customers] AS [c0]
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[CustomerID]");
+        }
+
         public override void Project_to_object_array()
         {
             base.Project_to_object_array();
@@ -153,16 +171,27 @@ FROM [Customers] AS [c]");
 FROM [Customers] AS [c]");
         }
 
+#if !Test20
         public override void Select_anonymous_conditional_expression()
         {
             base.Select_anonymous_conditional_expression();
 
             AssertSql(
                 @"SELECT [p].[ProductID], CASE
-    WHEN [p].[UnitsInStock] > 0
+    WHEN [p].[UnitsInStock] > CAST(0 AS smallint)
     THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
 END AS [IsAvailable]
 FROM [Products] AS [p]");
+        }
+#endif
+
+        public override void Select_constant_int()
+        {
+            base.Select_constant_int();
+
+            AssertSql(
+                @"SELECT 1
+FROM [Customers] AS [c]");
         }
 
         public override void Select_constant_null_string()
@@ -336,7 +365,7 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
             base.Select_nested_collection_multi_level4();
 
             AssertSql(
-                @"SELECT (
+                @"SELECT COALESCE((
     SELECT TOP(1) (
         SELECT COUNT(*)
         FROM [Order Details] AS [od]
@@ -344,7 +373,7 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
     )
     FROM [Orders] AS [o]
     WHERE ([o].[OrderID] < 10500) AND ([c].[CustomerID] = [o].[CustomerID])
-) AS [Order]
+), 0) AS [Order]
 FROM [Customers] AS [c]
 WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')");
         }
@@ -354,7 +383,7 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
             base.Select_nested_collection_multi_level5();
 
             AssertSql(
-                @"SELECT (
+                @"SELECT COALESCE((
     SELECT TOP(1) (
         SELECT TOP(1) [od].[ProductID]
         FROM [Order Details] AS [od]
@@ -366,7 +395,7 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
     )
     FROM [Orders] AS [o]
     WHERE ([o].[OrderID] < 10500) AND ([c].[CustomerID] = [o].[CustomerID])
-) AS [Order]
+), 0) AS [Order]
 FROM [Customers] AS [c]
 WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')");
         }
@@ -376,7 +405,7 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
             base.Select_nested_collection_multi_level6();
 
             AssertSql(
-                @"SELECT (
+                @"SELECT COALESCE((
     SELECT TOP(1) (
         SELECT TOP(1) [od].[ProductID]
         FROM [Order Details] AS [od]
@@ -384,7 +413,7 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
     )
     FROM [Orders] AS [o]
     WHERE ([o].[OrderID] < 10500) AND ([c].[CustomerID] = [o].[CustomerID])
-) AS [Order]
+), 0) AS [Order]
 FROM [Customers] AS [c]
 WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')");
         }
@@ -435,9 +464,9 @@ WHERE [o].[CustomerID] = N'ALFKI'
 ORDER BY [o].[OrderID]");
         }
 
-        public override void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduces_explicit_cast()
+        public override void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduce_explicit_cast()
         {
-            base.Select_non_matching_value_types_nullable_int_to_int_doesnt_introduces_explicit_cast();
+            base.Select_non_matching_value_types_nullable_int_to_int_doesnt_introduce_explicit_cast();
 
             AssertSql(
                 @"SELECT [o].[EmployeeID]
@@ -552,12 +581,330 @@ WHERE [o].[CustomerID] = N'ALFKI'");
             base.Projection_in_a_subquery_should_be_liftable();
 
             AssertSql(
-    @"@__p_0='1'
+                @"@__p_0='1'
 
 SELECT [e].[EmployeeID]
 FROM [Employees] AS [e]
 ORDER BY [e].[EmployeeID]
 OFFSET @__p_0 ROWS");
+        }
+
+#if !Test20
+        public override void Projection_containing_DateTime_subtraction()
+        {
+            base.Projection_containing_DateTime_subtraction();
+
+            AssertSql(
+                @"SELECT [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderID] < 10300");
+        }
+#endif
+
+        public override void Project_single_element_from_collection_with_OrderBy_Take_and_FirstOrDefault()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_Take_and_FirstOrDefault();
+
+            AssertSql(
+                @"SELECT (
+    SELECT TOP(1) [t].[CustomerID]
+    FROM (
+        SELECT TOP(1) [o].[CustomerID], [o].[OrderID]
+        FROM [Orders] AS [o]
+        WHERE [c].[CustomerID] = [o].[CustomerID]
+        ORDER BY [o].[OrderID]
+    ) AS [t]
+    ORDER BY [t].[OrderID]
+)
+FROM [Customers] AS [c]");
+        }
+
+        public override void Project_single_element_from_collection_with_OrderBy_Skip_and_FirstOrDefault()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_Skip_and_FirstOrDefault();
+
+            AssertSql(
+                @"SELECT (
+    SELECT [o].[CustomerID]
+    FROM [Orders] AS [o]
+    WHERE [c].[CustomerID] = [o].[CustomerID]
+    ORDER BY [o].[OrderID]
+    OFFSET 1 ROWS FETCH NEXT 1 ROWS ONLY
+)
+FROM [Customers] AS [c]");
+        }
+
+        public override void Project_single_element_from_collection_with_OrderBy_Distinct_and_FirstOrDefault()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_Distinct_and_FirstOrDefault();
+
+            AssertSql(
+                @"SELECT (
+    SELECT DISTINCT TOP(1) [o].[CustomerID]
+    FROM [Orders] AS [o]
+    WHERE [c].[CustomerID] = [o].[CustomerID]
+)
+FROM [Customers] AS [c]");
+        }
+
+        public override void Project_single_element_from_collection_with_OrderBy_Take_and_SingleOrDefault()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_Take_and_SingleOrDefault();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'",
+                //
+                @"@_outer_CustomerID='ALFKI' (Size = 5)
+
+SELECT TOP(2) [t0].[CustomerID]
+FROM (
+    SELECT TOP(1) [o0].[CustomerID], [o0].[OrderID]
+    FROM [Orders] AS [o0]
+    WHERE @_outer_CustomerID = [o0].[CustomerID]
+    ORDER BY [o0].[OrderID]
+) AS [t0]
+ORDER BY [t0].[OrderID]");
+        }
+
+        public override void Project_single_element_from_collection_with_OrderBy_Take_and_FirstOrDefault_with_parameter()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_Take_and_FirstOrDefault_with_parameter();
+
+            AssertSql(
+                @"@__i_0='1'
+
+SELECT (
+    SELECT TOP(1) [t].[CustomerID]
+    FROM (
+        SELECT TOP(@__i_0) [o].[CustomerID], [o].[OrderID]
+        FROM [Orders] AS [o]
+        WHERE [c].[CustomerID] = [o].[CustomerID]
+        ORDER BY [o].[OrderID]
+    ) AS [t]
+    ORDER BY [t].[OrderID]
+)
+FROM [Customers] AS [c]");
+        }
+
+        public override void Project_single_element_from_collection_with_multiple_OrderBys_Take_and_FirstOrDefault()
+        {
+            base.Project_single_element_from_collection_with_multiple_OrderBys_Take_and_FirstOrDefault();
+
+            AssertSql(
+                @"SELECT (
+    SELECT TOP(1) [t].[CustomerID]
+    FROM (
+        SELECT TOP(2) [o].[CustomerID], [o].[OrderID], [o].[OrderDate]
+        FROM [Orders] AS [o]
+        WHERE [c].[CustomerID] = [o].[CustomerID]
+        ORDER BY [o].[OrderID], [o].[OrderDate] DESC
+    ) AS [t]
+    ORDER BY [t].[OrderID], [t].[OrderDate] DESC
+)
+FROM [Customers] AS [c]");
+        }
+
+        public override void Project_single_element_from_collection_with_multiple_OrderBys_Take_and_FirstOrDefault_2()
+        {
+            base.Project_single_element_from_collection_with_multiple_OrderBys_Take_and_FirstOrDefault_2();
+
+            AssertSql(
+                @"SELECT (
+    SELECT TOP(1) [t].[CustomerID]
+    FROM (
+        SELECT TOP(2) [o].[CustomerID], [o].[OrderDate]
+        FROM [Orders] AS [o]
+        WHERE [c].[CustomerID] = [o].[CustomerID]
+        ORDER BY [o].[CustomerID], [o].[OrderDate] DESC
+    ) AS [t]
+    ORDER BY [t].[CustomerID], [t].[OrderDate] DESC
+)
+FROM [Customers] AS [c]");
+        }
+
+        public override void Project_single_element_from_collection_with_OrderBy_over_navigation_Take_and_FirstOrDefault()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_over_navigation_Take_and_FirstOrDefault();
+
+            AssertSql(
+                @"SELECT COALESCE((
+    SELECT TOP(1) [t].[OrderID]
+    FROM (
+        SELECT TOP(1) [od].[OrderID], [od.Product].[ProductName]
+        FROM [Order Details] AS [od]
+        INNER JOIN [Products] AS [od.Product] ON [od].[ProductID] = [od.Product].[ProductID]
+        WHERE [o].[OrderID] = [od].[OrderID]
+        ORDER BY [od.Product].[ProductName]
+    ) AS [t]
+    ORDER BY [t].[ProductName]
+), 0)
+FROM [Orders] AS [o]
+WHERE [o].[OrderID] < 10300");
+        }
+
+        public override void Project_single_element_from_collection_with_OrderBy_over_navigation_Take_and_FirstOrDefault_2()
+        {
+            base.Project_single_element_from_collection_with_OrderBy_over_navigation_Take_and_FirstOrDefault_2();
+
+            AssertSql(
+                @"SELECT [o].[OrderID]
+FROM [Orders] AS [o]
+WHERE [o].[OrderID] < 10250",
+                //
+                @"@_outer_OrderID='10248'
+
+SELECT TOP(1) [t].*
+FROM (
+    SELECT TOP(1) [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice], [od.Product].[ProductName]
+    FROM [Order Details] AS [od]
+    INNER JOIN [Products] AS [od.Product] ON [od].[ProductID] = [od.Product].[ProductID]
+    WHERE @_outer_OrderID = [od].[OrderID]
+    ORDER BY [od.Product].[ProductName]
+) AS [t]
+ORDER BY [t].[ProductName]",
+                //
+                @"@_outer_OrderID='10249'
+
+SELECT TOP(1) [t].*
+FROM (
+    SELECT TOP(1) [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice], [od.Product].[ProductName]
+    FROM [Order Details] AS [od]
+    INNER JOIN [Products] AS [od.Product] ON [od].[ProductID] = [od.Product].[ProductID]
+    WHERE @_outer_OrderID = [od].[OrderID]
+    ORDER BY [od.Product].[ProductName]
+) AS [t]
+ORDER BY [t].[ProductName]");
+        }
+
+        public override void Select_datetime_year_component()
+        {
+            base.Select_datetime_year_component();
+
+            AssertSql(
+                @"SELECT DATEPART(year, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_month_component()
+        {
+            base.Select_datetime_month_component();
+
+            AssertSql(
+                @"SELECT DATEPART(month, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_day_of_year_component()
+        {
+            base.Select_datetime_day_of_year_component();
+
+            AssertSql(
+                @"SELECT DATEPART(dayofyear, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_day_component()
+        {
+            base.Select_datetime_day_component();
+
+            AssertSql(
+                @"SELECT DATEPART(day, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_hour_component()
+        {
+            base.Select_datetime_hour_component();
+
+            AssertSql(
+                @"SELECT DATEPART(hour, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_minute_component()
+        {
+            base.Select_datetime_minute_component();
+
+            AssertSql(
+                @"SELECT DATEPART(minute, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_second_component()
+        {
+            base.Select_datetime_second_component();
+
+            AssertSql(
+                @"SELECT DATEPART(second, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+        public override void Select_datetime_millisecond_component()
+        {
+            base.Select_datetime_millisecond_component();
+
+            AssertSql(
+                @"SELECT DATEPART(millisecond, [o].[OrderDate])
+FROM [Orders] AS [o]");
+        }
+
+#if !Test20
+        public override void Select_byte_constant()
+        {
+            base.Select_byte_constant();
+
+            AssertSql(
+                @"SELECT CASE
+    WHEN [c].[CustomerID] = N'ALFKI'
+    THEN CAST(1 AS tinyint) ELSE CAST(2 AS tinyint)
+END
+FROM [Customers] AS [c]");
+        }
+
+        public override void Select_short_constant()
+        {
+            base.Select_short_constant();
+
+            AssertSql(
+                @"SELECT CASE
+    WHEN [c].[CustomerID] = N'ALFKI'
+    THEN CAST(1 AS smallint) ELSE CAST(2 AS smallint)
+END
+FROM [Customers] AS [c]");
+        }
+
+        public override void Select_bool_constant()
+        {
+            base.Select_bool_constant();
+
+            AssertSql(
+                @"SELECT CASE
+    WHEN [c].[CustomerID] = N'ALFKI'
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END
+FROM [Customers] AS [c]");
+        }
+#endif
+
+        public override void Anonymous_projection_AsNoTracking_Selector()
+        {
+            base.Anonymous_projection_AsNoTracking_Selector();
+
+            AssertSql(
+                @"SELECT [o].[CustomerID] AS [A], [o].[OrderDate] AS [B]
+FROM [Orders] AS [o]");
+        }
+
+        public override void Anonymous_projection_with_repeated_property_being_ordered()
+        {
+            base.Anonymous_projection_with_repeated_property_being_ordered();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID] AS [B]
+FROM [Customers] AS [c]
+ORDER BY [B]");
         }
     }
 }

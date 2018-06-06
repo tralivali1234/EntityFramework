@@ -53,7 +53,6 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         private ObservableBackedBindingList<TEntity> _bindingList;
         private ObservableCollection<TEntity> _observable;
         private readonly DbContext _context;
-        private readonly IStateManager _stateManager;
         private int _count;
         private bool _triggeringStateManagerChange;
         private bool _triggeringObservableChange;
@@ -66,13 +65,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         public LocalView([NotNull] DbSet<TEntity> set)
         {
             _context = set.GetService<ICurrentDbContext>().Context;
-            _context.CheckDisposed();
 
-            _stateManager = _context.GetDependencies().StateManager;
+            var stateManager = _context.GetDependencies().StateManager;
 
             set.GetService<ILocalViewListener>().RegisterView(StateManagerChangedHandler);
 
-            _count = _stateManager.Entries
+            _count = stateManager.Entries
                 .Count(e => e.Entity is TEntity && e.EntityState != EntityState.Deleted);
         }
 
@@ -171,14 +169,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         /// <returns> An enumerator for the collection. </returns>
         public virtual IEnumerator<TEntity> GetEnumerator()
-        {
-            _context.CheckDisposed();
-
-            return _stateManager.Entries.Where(e => e.EntityState != EntityState.Deleted)
+            => _context.GetDependencies().StateManager.Entries.Where(e => e.EntityState != EntityState.Deleted)
                 .Select(e => e.Entity)
                 .OfType<TEntity>()
                 .GetEnumerator();
-        }
 
         /// <summary>
         ///     Returns an <see cref="IEnumerator{T}" /> for all tracked entities of type TEntity
@@ -204,9 +198,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             // to Add it again since doing so would change its state to Added, which is probably not what
             // was wanted in this case.
 
-            _context.CheckDisposed();
-
-            var entry = _stateManager.GetOrCreateEntry(item);
+            var entry = _context.GetDependencies().StateManager.GetOrCreateEntry(item);
             if (entry.EntityState == EntityState.Deleted
                 || entry.EntityState == EntityState.Detached)
             {
@@ -245,9 +237,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         public virtual void Clear()
         {
-            _context.CheckDisposed();
-
-            foreach (var entry in _stateManager.Entries
+            foreach (var entry in _context.GetDependencies().StateManager.Entries
                 .Where(e => e.Entity is TEntity && e.EntityState != EntityState.Deleted)
                 .ToList())
             {
@@ -263,9 +253,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <returns> True if the entity is being tracked by the context and has not been marked as Deleted. </returns>
         public virtual bool Contains(TEntity item)
         {
-            _context.CheckDisposed();
-
-            var entry = _stateManager.TryGetEntry(item);
+            var entry = _context.GetDependencies().StateManager.TryGetEntry(item);
 
             return entry != null && entry.EntityState != EntityState.Deleted;
         }
@@ -278,9 +266,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <param name="arrayIndex"> The index into the array to start copying. </param>
         public virtual void CopyTo(TEntity[] array, int arrayIndex)
         {
-            _context.CheckDisposed();
-
-            foreach (var entry in _stateManager.Entries)
+            foreach (var entry in _context.GetDependencies().StateManager.Entries)
             {
                 if (entry.EntityState != EntityState.Deleted)
                 {
@@ -307,9 +293,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// <returns>True if the entity was being tracked and was not already Deleted. </returns>
         public virtual bool Remove(TEntity item)
         {
-            _context.CheckDisposed();
-
-            var entry = _stateManager.TryGetEntry(item);
+            var entry = _context.GetDependencies().StateManager.TryGetEntry(item);
             if (entry != null
                 && entry.EntityState != EntityState.Deleted)
             {

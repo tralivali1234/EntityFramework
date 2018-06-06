@@ -201,7 +201,7 @@ namespace Microsoft.EntityFrameworkCore
         private static readonly MethodInfo _longCount = GetMethod(nameof(Queryable.LongCount));
 
         /// <summary>
-        ///     Asynchronously returns an <see cref="Int64" /> that represents the total number of elements in a sequence.
+        ///     Asynchronously returns an <see cref="long" /> that represents the total number of elements in a sequence.
         /// </summary>
         /// <remarks>
         ///     Multiple active operations on the same context instance are not supported.  Use 'await' to ensure
@@ -232,7 +232,7 @@ namespace Microsoft.EntityFrameworkCore
         private static readonly MethodInfo _longCountPredicate = GetMethod(nameof(Queryable.LongCount), parameterCount: 1);
 
         /// <summary>
-        ///     Asynchronously returns an <see cref="Int64" /> that represents the number of elements in a sequence
+        ///     Asynchronously returns an <see cref="long" /> that represents the number of elements in a sequence
         ///     that satisfy a condition.
         /// </summary>
         /// <remarks>
@@ -2162,17 +2162,11 @@ namespace Microsoft.EntityFrameworkCore
         internal static readonly MethodInfo IncludeMethodInfo
             = typeof(EntityFrameworkQueryableExtensions)
                 .GetTypeInfo().GetDeclaredMethods(nameof(Include))
-                .Single(mi =>
-                    mi.GetGenericArguments().Count() == 2
-                    && mi.GetParameters().Any(
-                        pi => pi.Name == "navigationPropertyPath" && pi.ParameterType != typeof(string)));
-
-        internal static readonly MethodInfo IncludeOnDerivedMethodInfo
-            = typeof(EntityFrameworkQueryableExtensions)
-                .GetTypeInfo().GetDeclaredMethods(nameof(Include))
-                .Single(mi => mi.GetGenericArguments().Count() == 3
-                              && mi.GetParameters().Any(
-                                  pi => pi.Name == "navigationPropertyPath" && pi.ParameterType != typeof(string)));
+                .Single(
+                    mi =>
+                        mi.GetGenericArguments().Count() == 2
+                        && mi.GetParameters().Any(
+                            pi => pi.Name == "navigationPropertyPath" && pi.ParameterType != typeof(string)));
 
         /// <summary>
         ///     Specifies related entities to include in the query results. The navigation property to be included is specified starting with the
@@ -2204,6 +2198,18 @@ namespace Microsoft.EntityFrameworkCore
         ///                 .Include(blog => blog.Contributors);
         ///         </code>
         ///     </para>
+        ///     <para>
+        ///         The following query shows including a single level of related entities on a derived type using casting.
+        ///         <code>
+        ///             context.Blogs.Include(blog => ((SpecialBlog)blog).SpecialPosts);
+        ///         </code>
+        ///     </para>
+        ///     <para>
+        ///         The following query shows including a single level of related entities on a derived type using 'as' operator.
+        ///         <code>
+        ///             context.Blogs.Include(blog => (blog as SpecialBlog).SpecialPosts);
+        ///         </code>
+        ///     </para>
         /// </example>
         /// <typeparam name="TEntity"> The type of entity being queried. </typeparam>
         /// <typeparam name="TProperty"> The type of the related entity to be included. </typeparam>
@@ -2232,74 +2238,15 @@ namespace Microsoft.EntityFrameworkCore
                     : source);
         }
 
-        /// <summary>
-        ///     Specifies related entities to include in the query results. The navigation property to be included is specified starting with the
-        ///     type of entity on which it is declared (<typeparamref name="TDerived" />). If you wish to include additional types based on the navigation
-        ///     properties of the type being included, then chain a call to
-        ///     <see
-        ///         cref="ThenInclude{TEntity, TPreviousProperty, TDerived, TProperty}(IIncludableQueryable{TEntity, IEnumerable{TPreviousProperty}}, Expression{Func{TDerived, TProperty}})" />
-        ///     after this call.
-        /// </summary>
-        /// <example>
-        ///     <para>
-        ///         The following query shows including a single level of related entities on a derived type.
-        ///         <code>
-        ///             context.Blogs.Include((SpecialBlog specialBlog) => specialBlog.SpecialPosts);
-        ///         </code>
-        ///     </para>
-        /// </example>
-        /// <typeparam name="TEntity"> The type of entity being queried. </typeparam>
-        /// <typeparam name="TDerived"> The type of entity when including on a derived type. </typeparam>
-        /// <typeparam name="TProperty"> The type of the related entity to be included. </typeparam>
-        /// <param name="source"> The source query. </param>
-        /// <param name="navigationPropertyPath">
-        ///     A lambda expression representing the navigation property to be included (<c>(Derived t) => t.Property1</c>).
-        /// </param>
-        /// <returns>
-        ///     A new query with the related data included.
-        /// </returns>
-        public static IIncludableQueryable<TEntity, TProperty> Include<TEntity, TDerived, TProperty>(
-            [NotNull] this IQueryable<TEntity> source,
-            [NotNull] Expression<Func<TDerived, TProperty>> navigationPropertyPath)
-            where TEntity : class
-            where TDerived : TEntity
-        {
-            Check.NotNull(source, nameof(source));
-            Check.NotNull(navigationPropertyPath, nameof(navigationPropertyPath));
-
-            return new IncludableQueryable<TEntity, TProperty>(
-                source.Provider is EntityQueryProvider
-                    ? source.Provider.CreateQuery<TEntity>(
-                        Expression.Call(
-                            instance: null,
-                            method: IncludeOnDerivedMethodInfo.MakeGenericMethod(typeof(TEntity), typeof(TDerived), typeof(TProperty)),
-                            arguments: new[] { source.Expression, Expression.Quote(navigationPropertyPath) }))
-                    : source);
-        }
-
         internal static readonly MethodInfo ThenIncludeAfterEnumerableMethodInfo
             = GetThenIncludeMethodInfo(typeof(IEnumerable<>));
 
         private static MethodInfo GetThenIncludeMethodInfo(Type navType)
             => typeof(EntityFrameworkQueryableExtensions)
-                .GetTypeInfo().GetDeclaredMethods(nameof(EntityFrameworkQueryableExtensions.ThenInclude))
+                .GetTypeInfo().GetDeclaredMethods(nameof(ThenInclude))
                 .Where(mi => mi.GetGenericArguments().Count() == 3)
                 .Single(
                     mi =>
-                        {
-                            var typeInfo = mi.GetParameters()[0].ParameterType.GenericTypeArguments[1].GetTypeInfo();
-                            return typeInfo.IsGenericType
-                                   && typeInfo.GetGenericTypeDefinition() == navType;
-                        });
-
-        internal static readonly MethodInfo ThenIncludeOnDerivedAfterEnumerableMethodInfo
-            = GetThenIncludeOnDerivedMethodInfo(typeof(IEnumerable<>));
-
-        private static MethodInfo GetThenIncludeOnDerivedMethodInfo(Type navType)
-            => typeof(EntityFrameworkQueryableExtensions)
-                .GetTypeInfo().GetDeclaredMethods(nameof(EntityFrameworkQueryableExtensions.ThenInclude))
-                .Where(mi => mi.GetGenericArguments().Count() == 4)
-                .Single(mi =>
                     {
                         var typeInfo = mi.GetParameters()[0].ParameterType.GenericTypeArguments[1].GetTypeInfo();
                         return typeInfo.IsGenericType
@@ -2308,15 +2255,10 @@ namespace Microsoft.EntityFrameworkCore
 
         internal static readonly MethodInfo ThenIncludeAfterReferenceMethodInfo
             = typeof(EntityFrameworkQueryableExtensions)
-                .GetTypeInfo().GetDeclaredMethods(nameof(EntityFrameworkQueryableExtensions.ThenInclude))
-                .Single(mi => mi.GetGenericArguments().Count() == 3
-                              && mi.GetParameters()[0].ParameterType.GenericTypeArguments[1].IsGenericParameter);
-
-        internal static readonly MethodInfo ThenIncludeOnDerivedAfterReferenceMethodInfo
-            = typeof(EntityFrameworkQueryableExtensions)
-                .GetTypeInfo().GetDeclaredMethods(nameof(EntityFrameworkQueryableExtensions.ThenInclude))
-                .Single(mi => mi.GetGenericArguments().Count() == 4
-                              && mi.GetParameters()[0].ParameterType.GenericTypeArguments[1].IsGenericParameter);
+                .GetTypeInfo().GetDeclaredMethods(nameof(ThenInclude))
+                .Single(
+                    mi => mi.GetGenericArguments().Count() == 3
+                          && mi.GetParameters()[0].ParameterType.GenericTypeArguments[1].IsGenericParameter);
 
         /// <summary>
         ///     Specifies additional related data to be further included based on a related type that was just included.
@@ -2341,6 +2283,21 @@ namespace Microsoft.EntityFrameworkCore
         ///             context.Blogs
         ///                 .Include(blog => blog.Posts).ThenInclude(post => post.Tags).ThenInclude(tag => tag.TagInfo)
         ///                 .Include(blog => blog.Contributors);
+        ///         </code>
+        ///     </para>
+        ///     <para>
+        ///         The following query shows including two levels of entities on the same branch, second one being on derived type using casting.
+        ///         <code>
+        ///             context.Blogs
+        ///                 .Include(blog => blog.Posts).ThenInclude(post => ((SpecialPost)post).SpecialTags);
+        ///         </code>
+        ///     </para>
+        ///     <para>
+        ///         The following query shows including two levels of entities on the same branch, second one being on derived type using 'as'
+        ///         operator.
+        ///         <code>
+        ///             context.Blogs
+        ///                 .Include(blog => blog.Posts).ThenInclude(post => (post as SpecialPost).SpecialTags);
         ///         </code>
         ///     </para>
         /// </example>
@@ -2372,43 +2329,6 @@ namespace Microsoft.EntityFrameworkCore
         /// </summary>
         /// <example>
         ///     <para>
-        ///         The following query shows including two levels of entities on the same branch, second one being on derived type.
-        ///         <code>
-        ///             context.Blogs
-        ///                 .Include(blog => blog.Posts).ThenInclude((SpecialPost specialPost) => specialPost.SpecialTags);
-        ///         </code>
-        ///     </para>
-        /// </example>
-        /// <typeparam name="TEntity"> The type of entity being queried. </typeparam>
-        /// <typeparam name="TPreviousProperty"> The type of the entity that was just included. </typeparam>
-        /// <typeparam name="TDerived"> The type of entity when including on a derived type. </typeparam>
-        /// <typeparam name="TProperty"> The type of the related entity to be included. </typeparam>
-        /// <param name="source"> The source query. </param>
-        /// <param name="navigationPropertyPath">
-        ///     A lambda expression representing the navigation property to be included (<c>(Derived t) => t.Property1</c>).
-        /// </param>
-        /// <returns>
-        ///     A new query with the related data included.
-        /// </returns>
-        public static IIncludableQueryable<TEntity, TProperty> ThenInclude<TEntity, TPreviousProperty, TDerived, TProperty>(
-            [NotNull] this IIncludableQueryable<TEntity, IEnumerable<TPreviousProperty>> source,
-            [NotNull] Expression<Func<TDerived, TProperty>> navigationPropertyPath)
-            where TEntity : class
-            where TDerived : TPreviousProperty
-            => new IncludableQueryable<TEntity, TProperty>(
-                source.Provider is EntityQueryProvider
-                    ? source.Provider.CreateQuery<TEntity>(
-                        Expression.Call(
-                            instance: null,
-                            method: ThenIncludeOnDerivedAfterEnumerableMethodInfo.MakeGenericMethod(typeof(TEntity), typeof(TPreviousProperty), typeof(TDerived), typeof(TProperty)),
-                            arguments: new[] { source.Expression, Expression.Quote(navigationPropertyPath) }))
-                    : source);
-
-        /// <summary>
-        ///     Specifies additional related data to be further included based on a related type that was just included.
-        /// </summary>
-        /// <example>
-        ///     <para>
         ///         The following query shows including a single level of related entities.
         ///         <code>
         ///             context.Blogs.Include(blog => blog.Posts);
@@ -2427,6 +2347,21 @@ namespace Microsoft.EntityFrameworkCore
         ///             context.Blogs
         ///                 .Include(blog => blog.Posts).ThenInclude(post => post.Tags).ThenInclude(tag => tag.TagInfo)
         ///                 .Include(blog => blog.Contributors);
+        ///         </code>
+        ///     </para>
+        ///     <para>
+        ///         The following query shows including two levels of entities on the same branch, second one being on derived type.
+        ///         <code>
+        ///             context.Blogs
+        ///                 .Include(blog => blog.Posts).ThenInclude(post => ((SpecialPost)post).SpecialTags);
+        ///         </code>
+        ///     </para>
+        ///     <para>
+        ///         The following query shows including two levels of entities on the same branch, second one being on derived type using alternative
+        ///         method.
+        ///         <code>
+        ///             context.Blogs
+        ///                 .Include(blog => blog.Posts).ThenInclude(post => (post as SpecialPost).SpecialTags);
         ///         </code>
         ///     </para>
         /// </example>
@@ -2450,43 +2385,6 @@ namespace Microsoft.EntityFrameworkCore
                         Expression.Call(
                             instance: null,
                             method: ThenIncludeAfterReferenceMethodInfo.MakeGenericMethod(typeof(TEntity), typeof(TPreviousProperty), typeof(TProperty)),
-                            arguments: new[] { source.Expression, Expression.Quote(navigationPropertyPath) }))
-                    : source);
-
-        /// <summary>
-        ///     Specifies additional related data to be further included based on a related type that was just included.
-        /// </summary>
-        /// <example>
-        ///     <para>
-        ///         The following query shows including two levels of entities on the same branch, second one being on derived type.
-        ///         <code>
-        ///             context.Blogs
-        ///                 .Include(blog => blog.Posts).ThenInclude((SpecialPost specialPost) => specialPost.SpecialTags);
-        ///         </code>
-        ///     </para>
-        /// </example>
-        /// <typeparam name="TEntity"> The type of entity being queried. </typeparam>
-        /// <typeparam name="TPreviousProperty"> The type of the entity that was just included. </typeparam>
-        /// <typeparam name="TDerived"> The type of entity when including on a derived type. </typeparam>
-        /// <typeparam name="TProperty"> The type of the related entity to be included. </typeparam>
-        /// <param name="source"> The source query. </param>
-        /// <param name="navigationPropertyPath">
-        ///     A lambda expression representing the navigation property to be included (<c>(Derived t) => t.Property1</c>).
-        /// </param>
-        /// <returns>
-        ///     A new query with the related data included.
-        /// </returns>
-        public static IIncludableQueryable<TEntity, TProperty> ThenInclude<TEntity, TPreviousProperty, TDerived, TProperty>(
-            [NotNull] this IIncludableQueryable<TEntity, TPreviousProperty> source,
-            [NotNull] Expression<Func<TDerived, TProperty>> navigationPropertyPath)
-            where TEntity : class
-            where TDerived : TPreviousProperty
-            => new IncludableQueryable<TEntity, TProperty>(
-                source.Provider is EntityQueryProvider
-                    ? source.Provider.CreateQuery<TEntity>(
-                        Expression.Call(
-                            instance: null,
-                            method: ThenIncludeOnDerivedAfterReferenceMethodInfo.MakeGenericMethod(typeof(TEntity), typeof(TPreviousProperty), typeof(TDerived), typeof(TProperty)),
                             arguments: new[] { source.Expression, Expression.Quote(navigationPropertyPath) }))
                     : source);
 
@@ -2682,6 +2580,42 @@ namespace Microsoft.EntityFrameworkCore
                             instance: null,
                             method: AsTrackingMethodInfo.MakeGenericMethod(typeof(TEntity)),
                             arguments: source.Expression))
+                    : source;
+        }
+
+        #endregion
+
+        #region Tagging
+
+        internal static readonly MethodInfo WithTagMethodInfo
+            = typeof(EntityFrameworkQueryableExtensions)
+                .GetTypeInfo().GetDeclaredMethod(nameof(WithTag));
+
+        /// <summary>
+        ///     Adds a tag to the collection of tags associated with an EF LINQ query. Tags are query annotations
+        ///     that can provide contextual tracing information at different points in the query pipeline.
+        /// </summary>
+        /// <typeparam name="TEntity"> The type of entity being queried. </typeparam>
+        /// <param name="source"> The source query. </param>
+        /// <param name="tag"> The tag. </param>
+        /// <returns>
+        ///     A new query annotated with the given tag.
+        /// </returns>
+        public static IQueryable<TEntity> WithTag<TEntity>(
+            [NotNull] this IQueryable<TEntity> source, [NotNull] [NotParameterized] string tag)
+            where TEntity : class
+        {
+            Check.NotNull(source, nameof(source));
+            Check.NotEmpty(tag, nameof(tag));
+
+            return
+                source.Provider is EntityQueryProvider
+                    ? source.Provider.CreateQuery<TEntity>(
+                        Expression.Call(
+                            instance: null,
+                            method: WithTagMethodInfo.MakeGenericMethod(typeof(TEntity)),
+                            arg0: source.Expression,
+                            arg1: Expression.Constant(tag)))
                     : source;
         }
 

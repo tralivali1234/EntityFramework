@@ -4,8 +4,9 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Query.ExpressionTranslators.Internal
 {
     public class OracleContainsOptimizedTranslator : IMethodCallTranslator
     {
@@ -19,7 +20,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                 var patternExpression = methodCallExpression.Arguments[0];
 
                 if (patternExpression is ConstantExpression patternConstantExpression
-                    && (string)patternConstantExpression.Value == string.Empty)
+                    && ((string)patternConstantExpression.Value)?.Length == 0)
                 {
                     return Expression.Constant(true);
                 }

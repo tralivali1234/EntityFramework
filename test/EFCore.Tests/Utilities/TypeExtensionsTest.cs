@@ -213,7 +213,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
             public new virtual int CherryBlossoms { get; set; }
             public new int ShesGone { get; set; }
             public virtual int VertrauenIII { get; set; }
-            public new static int SleepySong { get; set; }
+            public static new int SleepySong { get; set; }
         }
 
         public class TindersticksIICd : TindersticksIIVinyl
@@ -243,7 +243,7 @@ namespace Microsoft.EntityFrameworkCore.Utilities
             public override int CherryBlossoms { get; set; }
             public override int Mistakes { get; set; }
             public override int VertrauenIII { get; set; }
-            public new static int SleepySong { get; set; }
+            public static new int SleepySong { get; set; }
         }
 
         [Fact]
@@ -473,15 +473,16 @@ namespace Microsoft.EntityFrameworkCore.Utilities
         public void GetNamespaces_works()
         {
             // Predefined Types
-            Assert.Equal(new[] { "System" }, typeof(int).GetNamespaces().ToArray());
-            Assert.Equal(new[] { "System.Collections.Generic", "System" }, typeof(List<int>).GetNamespaces().ToArray());
+            Assert.Empty(typeof(int).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "System" }, typeof(Guid).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "System.Collections.Generic", "System" }, typeof(List<Guid>).GetNamespaces().ToArray());
 
             Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities" }, typeof(A).GetNamespaces().ToArray());
             Assert.Equal(new[] { "System.Collections.Generic", "Microsoft.EntityFrameworkCore.Utilities" }, typeof(List<A>).GetNamespaces().ToArray());
-            Assert.Equal(new[] { "System.Collections.Generic", "System", "System.Collections.Generic", "Microsoft.EntityFrameworkCore.Utilities" }, typeof(Dictionary<string, List<A>>).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "System.Collections.Generic", "System", "System.Collections.Generic", "Microsoft.EntityFrameworkCore.Utilities" }, typeof(Dictionary<Version, List<A>>).GetNamespaces().ToArray());
 
-            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities", "System" }, typeof(Outer<int>).GetNamespaces().ToArray());
-            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities", "System.Collections.Generic", "System" }, typeof(Outer<List<int>>).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities", "System" }, typeof(Outer<Guid>).GetNamespaces().ToArray());
+            Assert.Equal(new[] { "Microsoft.EntityFrameworkCore.Utilities", "System.Collections.Generic", "System" }, typeof(Outer<List<Guid>>).GetNamespaces().ToArray());
         }
 
         private class Outer<T>

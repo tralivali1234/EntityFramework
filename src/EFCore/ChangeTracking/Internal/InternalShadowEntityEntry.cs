@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -45,10 +46,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         public InternalShadowEntityEntry(
             [NotNull] IStateManager stateManager,
             [NotNull] IEntityType entityType,
-            ValueBuffer valueBuffer)
+            in ValueBuffer valueBuffer)
             : base(stateManager, entityType)
         {
-            _propertyValues = entityType.GetShadowValuesFactory()(valueBuffer);
+            _propertyValues = ((EntityType)entityType).ShadowValuesFactory(valueBuffer);
         }
 
         /// <summary>
@@ -64,6 +65,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         protected override object ReadPropertyValue(IPropertyBase propertyBase)
             => _propertyValues[propertyBase.GetShadowIndex()];
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected override bool PropertyHasDefaultValue(IPropertyBase propertyBase)
+            => propertyBase.ClrType.IsDefaultValue(_propertyValues[propertyBase.GetShadowIndex()]);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

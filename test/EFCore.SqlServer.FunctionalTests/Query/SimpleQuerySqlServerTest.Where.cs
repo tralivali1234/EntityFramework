@@ -2,13 +2,21 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
     public partial class SimpleQuerySqlServerTest
     {
+        private const string ConvertParams =
+#if NET461
+            null;
+#elif NETCOREAPP2_0 || NETCOREAPP2_2
+            ", Object";
+#else
+#error target frameworks need to be updated.
+#endif
+
         public override void Where_simple()
         {
             base.Where_simple();
@@ -17,6 +25,23 @@ namespace Microsoft.EntityFrameworkCore.Query
                 @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]
 WHERE [c].[City] = N'London'");
+        }
+
+        public override void Where_as_queryable_expression()
+        {
+            base.Where_as_queryable_expression();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE EXISTS (
+    SELECT 1
+    FROM (
+        SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+        FROM [Orders] AS [o]
+        WHERE [c].[CustomerID] = [o].[CustomerID]
+    ) AS [t]
+    WHERE [t].[CustomerID] = N'ALFKI')");
         }
 
         public override void Where_simple_closure()
@@ -516,7 +541,6 @@ FROM [Employees] AS [e]
 WHERE [e].[EmployeeID] = 1");
         }
 
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
         public override void Where_equals_using_object_overload_on_mismatched_types()
         {
             base.Where_equals_using_object_overload_on_mismatched_types();
@@ -526,9 +550,10 @@ WHERE [e].[EmployeeID] = 1");
 FROM [Employees] AS [e]
 WHERE 0 = 1");
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("e.EmployeeID.Equals(Convert(__longPrm_0))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"e.EmployeeID.Equals(Convert(__longPrm_0{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
         }
 
+#if !Test20
         public override void Where_equals_using_int_overload_on_mismatched_types()
         {
             base.Where_equals_using_int_overload_on_mismatched_types();
@@ -540,8 +565,8 @@ SELECT [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[Report
 FROM [Employees] AS [e]
 WHERE [e].[EmployeeID] = @__shortPrm_0");
         }
+#endif
 
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
         public override void Where_equals_on_mismatched_types_nullable_int_long()
         {
             base.Where_equals_on_mismatched_types_nullable_int_long();
@@ -555,12 +580,11 @@ WHERE 0 = 1",
 FROM [Employees] AS [e]
 WHERE 0 = 1");
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("__longPrm_0.Equals(Convert(e.ReportsTo))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"__longPrm_0.Equals(Convert(e.ReportsTo{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("e.ReportsTo.Equals(Convert(__longPrm_0))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"e.ReportsTo.Equals(Convert(__longPrm_0{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
         }
 
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
         public override void Where_equals_on_mismatched_types_nullable_long_nullable_int()
         {
             base.Where_equals_on_mismatched_types_nullable_long_nullable_int();
@@ -574,9 +598,9 @@ WHERE 0 = 1",
 FROM [Employees] AS [e]
 WHERE 0 = 1");
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("__nullableLongPrm_0.Equals(Convert(e.ReportsTo))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"__nullableLongPrm_0.Equals(Convert(e.ReportsTo{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("e.ReportsTo.Equals(Convert(__nullableLongPrm_0))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"e.ReportsTo.Equals(Convert(__nullableLongPrm_0{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
         }
 
         public override void Where_equals_on_mismatched_types_int_nullable_int()
@@ -659,6 +683,39 @@ FROM [Customers] AS [c]
 WHERE CAST(LEN([c].[City]) AS int) = 6");
         }
 
+#if !Test20
+        public override void Where_string_indexof()
+        {
+            base.Where_string_indexof();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE (CHARINDEX(N'Sea', [c].[City]) - 1) <> -1");
+        }
+#endif
+
+        public override void Where_string_replace()
+        {
+            base.Where_string_replace();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE REPLACE([c].[City], N'Sea', N'Rea') = N'Reattle'");
+        }
+
+        public override void Where_string_substring()
+        {
+            base.Where_string_substring();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE SUBSTRING([c].[City], 2, 2) = N'ea'");
+        }
+
+#if !Test20
         public override void Where_datetime_now()
         {
             base.Where_datetime_now();
@@ -683,12 +740,22 @@ FROM [Customers] AS [c]
 WHERE GETUTCDATE() <> @__myDatetime_0");
         }
 
+        public override void Where_datetime_today()
+        {
+            base.Where_datetime_today();
+
+            AssertSql(
+                @"SELECT [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
+FROM [Employees] AS [e]
+WHERE CONVERT(date, GETDATE()) = CONVERT(date, GETDATE())");
+        }
+
         public override void Where_datetime_date_component()
         {
             base.Where_datetime_date_component();
 
             AssertSql(
-                @"@__myDatetime_0='1998-05-04T00:00:00'
+                @"@__myDatetime_0='1998-05-04T00:00:00' (DbType = DateTime)
 
 SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
 FROM [Orders] AS [o]
@@ -784,6 +851,25 @@ WHERE DATEPART(second, [o].[OrderDate]) = 44");
 FROM [Orders] AS [o]
 WHERE DATEPART(millisecond, [o].[OrderDate]) = 88");
         }
+
+        public override void Where_datetimeoffset_now_component()
+        {
+            base.Where_datetimeoffset_now_component();
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderDate] = SYSDATETIMEOFFSET()");
+        }
+
+        public override void Where_datetimeoffset_utcnow_component()
+        {
+            base.Where_datetimeoffset_utcnow_component();
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderDate] = CAST(SYSUTCDATETIME() AS datetimeoffset)");
+        }
+#endif
 
         public override void Where_simple_reversed()
         {
@@ -1151,6 +1237,7 @@ FROM [Products] AS [p]
 WHERE (([p].[Discontinued] = 0) AND ([p].[ProductID] < 60)) AND ([p].[ProductID] > 30)");
         }
 
+#if !Test20
         public override void Where_short_member_comparison()
         {
             base.Where_short_member_comparison();
@@ -1158,8 +1245,9 @@ WHERE (([p].[Discontinued] = 0) AND ([p].[ProductID] < 60)) AND ([p].[ProductID]
             AssertSql(
                 @"SELECT [p].[ProductID], [p].[Discontinued], [p].[ProductName], [p].[SupplierID], [p].[UnitPrice], [p].[UnitsInStock]
 FROM [Products] AS [p]
-WHERE [p].[UnitsInStock] > 10");
+WHERE [p].[UnitsInStock] > CAST(10 AS smallint)");
         }
+#endif
 
         public override void Where_comparison_to_nullable_bool()
         {
@@ -1247,6 +1335,7 @@ FROM [Customers] AS [c]
 WHERE (((CAST(@__i_0 + 20 AS nvarchar(max)) + [c].[CustomerID]) + CAST(@__j_1 AS nvarchar(max))) + CAST(42 AS nvarchar(max))) = [c].[CompanyName]");
         }
 
+#if !Test20
         public override void Where_ternary_boolean_condition_true()
         {
             base.Where_ternary_boolean_condition_true();
@@ -1256,7 +1345,7 @@ WHERE (((CAST(@__i_0 + 20 AS nvarchar(max)) + [c].[CustomerID]) + CAST(@__j_1 AS
 
 SELECT [p].[ProductID], [p].[Discontinued], [p].[ProductName], [p].[SupplierID], [p].[UnitPrice], [p].[UnitsInStock]
 FROM [Products] AS [p]
-WHERE ((@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)) OR ((@__flag_0 <> 1) AND ([p].[UnitsInStock] < 20))");
+WHERE ((@__flag_0 = 1) AND ([p].[UnitsInStock] >= CAST(20 AS smallint))) OR ((@__flag_0 <> 1) AND ([p].[UnitsInStock] < CAST(20 AS smallint)))");
         }
 
         public override void Where_ternary_boolean_condition_false()
@@ -1268,7 +1357,7 @@ WHERE ((@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)) OR ((@__flag_0 <> 1) AND 
 
 SELECT [p].[ProductID], [p].[Discontinued], [p].[ProductName], [p].[SupplierID], [p].[UnitPrice], [p].[UnitsInStock]
 FROM [Products] AS [p]
-WHERE ((@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)) OR ((@__flag_0 <> 1) AND ([p].[UnitsInStock] < 20))");
+WHERE ((@__flag_0 = 1) AND ([p].[UnitsInStock] >= CAST(20 AS smallint))) OR ((@__flag_0 <> 1) AND ([p].[UnitsInStock] < CAST(20 AS smallint)))");
         }
 
         public override void Where_ternary_boolean_condition_with_another_condition()
@@ -1281,7 +1370,7 @@ WHERE ((@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)) OR ((@__flag_0 <> 1) AND 
 
 SELECT [p].[ProductID], [p].[Discontinued], [p].[ProductName], [p].[SupplierID], [p].[UnitPrice], [p].[UnitsInStock]
 FROM [Products] AS [p]
-WHERE ([p].[ProductID] < @__productId_0) AND (((@__flag_1 = 1) AND ([p].[UnitsInStock] >= 20)) OR ((@__flag_1 <> 1) AND ([p].[UnitsInStock] < 20)))");
+WHERE ([p].[ProductID] < @__productId_0) AND (((@__flag_1 = 1) AND ([p].[UnitsInStock] >= CAST(20 AS smallint))) OR ((@__flag_1 <> 1) AND ([p].[UnitsInStock] < CAST(20 AS smallint))))");
         }
 
         public override void Where_ternary_boolean_condition_with_false_as_result_true()
@@ -1293,7 +1382,7 @@ WHERE ([p].[ProductID] < @__productId_0) AND (((@__flag_1 = 1) AND ([p].[UnitsIn
 
 SELECT [p].[ProductID], [p].[Discontinued], [p].[ProductName], [p].[SupplierID], [p].[UnitPrice], [p].[UnitsInStock]
 FROM [Products] AS [p]
-WHERE (@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)");
+WHERE (@__flag_0 = 1) AND ([p].[UnitsInStock] >= CAST(20 AS smallint))");
         }
 
         public override void Where_ternary_boolean_condition_with_false_as_result_false()
@@ -1305,8 +1394,9 @@ WHERE (@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)");
 
 SELECT [p].[ProductID], [p].[Discontinued], [p].[ProductName], [p].[SupplierID], [p].[UnitPrice], [p].[UnitsInStock]
 FROM [Products] AS [p]
-WHERE (@__flag_0 = 1) AND ([p].[UnitsInStock] >= 20)");
+WHERE (@__flag_0 = 1) AND ([p].[UnitsInStock] >= CAST(20 AS smallint))");
         }
+#endif
 
         public override void Where_compare_constructed_equal()
         {
@@ -1438,9 +1528,103 @@ INNER JOIN (
 ) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
 ORDER BY [t].[CustomerID]",
                 //
-                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice], [od.Order].[OrderID], [od.Order].[CustomerID], [od.Order].[EmployeeID], [od.Order].[OrderDate]
+                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice]
+FROM [Order Details] AS [od]");
+        }
+
+        public override void Where_array_index()
+        {
+            base.Where_array_index();
+
+            AssertSql(
+                @"@__p_0='ALFKI' (Size = 5)
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = @__p_0");
+        }
+
+        public override void Where_multiple_contains_in_subquery_with_or()
+        {
+            base.Where_multiple_contains_in_subquery_with_or();
+
+            AssertSql(
+                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice]
 FROM [Order Details] AS [od]
-INNER JOIN [Orders] AS [od.Order] ON [od].[OrderID] = [od.Order].[OrderID]");
+WHERE [od].[ProductID] IN (
+    SELECT TOP(1) [p].[ProductID]
+    FROM [Products] AS [p]
+    ORDER BY [p].[ProductID]
+) OR [od].[OrderID] IN (
+    SELECT TOP(1) [o].[OrderID]
+    FROM [Orders] AS [o]
+    ORDER BY [o].[OrderID]
+)");
+        }
+
+        public override void Where_multiple_contains_in_subquery_with_and()
+        {
+            base.Where_multiple_contains_in_subquery_with_and();
+
+            AssertSql(
+                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice]
+FROM [Order Details] AS [od]
+WHERE [od].[ProductID] IN (
+    SELECT TOP(20) [p].[ProductID]
+    FROM [Products] AS [p]
+    ORDER BY [p].[ProductID]
+) AND [od].[OrderID] IN (
+    SELECT TOP(10) [o].[OrderID]
+    FROM [Orders] AS [o]
+    ORDER BY [o].[OrderID]
+)");
+        }
+
+        public override void Where_contains_on_navigation()
+        {
+            base.Where_contains_on_navigation();
+
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE EXISTS (
+    SELECT 1
+    FROM [Customers] AS [c]
+    WHERE [o].[OrderID] IN (
+        SELECT [o0].[OrderID]
+        FROM [Orders] AS [o0]
+        WHERE [c].[CustomerID] = [o0].[CustomerID]
+    ))");
+        }
+
+        public override void Where_subquery_FirstOrDefault_is_null()
+        {
+            base.Where_subquery_FirstOrDefault_is_null();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE (
+    SELECT TOP(1) [o].[OrderID]
+    FROM [Orders] AS [o]
+    WHERE [c].[CustomerID] = [o].[CustomerID]
+    ORDER BY [o].[OrderID]
+) IS NULL");
+        }
+
+        public override void Where_subquery_FirstOrDefault_compared_to_entity()
+        {
+            base.Where_subquery_FirstOrDefault_compared_to_entity();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE (
+    SELECT TOP(1) [o].[OrderID]
+    FROM [Orders] AS [o]
+    WHERE [c].[CustomerID] = [o].[CustomerID]
+    ORDER BY [o].[OrderID]
+) = 10243");
         }
     }
 }

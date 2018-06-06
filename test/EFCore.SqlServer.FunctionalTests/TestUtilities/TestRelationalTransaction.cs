@@ -22,9 +22,9 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         private readonly TestSqlServerConnection _testConnection;
 
         public TestRelationalTransaction(
-            IRelationalConnection connection, 
-            DbTransaction transaction, 
-            IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> logger, 
+            IRelationalConnection connection,
+            DbTransaction transaction,
+            IDiagnosticsLogger<DbLoggerCategory.Database.Transaction> logger,
             bool transactionOwned)
             : base(connection, transaction, logger, transactionOwned)
         {
@@ -46,8 +46,9 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                     {
                         this.GetDbTransaction().Commit();
                     }
+
                     _testConnection.DbConnection.Close();
-                    throw SqlExceptionFactory.CreateSqlException(_testConnection.ErrorNumber);
+                    throw SqlExceptionFactory.CreateSqlException(_testConnection.ErrorNumber, _testConnection.ConnectionId);
                 }
             }
 

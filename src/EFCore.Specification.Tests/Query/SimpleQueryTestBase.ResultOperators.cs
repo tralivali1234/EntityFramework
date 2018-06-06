@@ -19,6 +19,42 @@ namespace Microsoft.EntityFrameworkCore.Query
     public abstract partial class SimpleQueryTestBase<TFixture>
     {
         [ConditionalFact]
+        public virtual void Union_with_custom_projection()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.CompanyName.StartsWith("A"))
+                    .Union(cs.Where(c => c.CompanyName.StartsWith("B")))
+                    .Select(
+                        c => new CustomerDeets
+                        {
+                            Id = c.CustomerID
+                        }));
+        }
+
+        public class CustomerDeets
+        {
+            public string Id { get; set; }
+
+            public override bool Equals(object obj)
+            {
+                if (obj is null)
+                {
+                    return false;
+                }
+
+                if (ReferenceEquals(this, obj))
+                {
+                    return true;
+                }
+
+                return obj.GetType() == GetType()
+                       && string.Equals(Id, ((CustomerDeets)obj).Id);
+            }
+
+            public override int GetHashCode() => Id != null ? Id.GetHashCode() : 0;
+        }
+
+        [ConditionalFact]
         public virtual void Select_All()
         {
             using (var context = CreateContext())
@@ -50,6 +86,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 {
                     return false;
                 }
+
                 if (ReferenceEquals(this, obj))
                 {
                     return true;
@@ -60,6 +97,19 @@ namespace Microsoft.EntityFrameworkCore.Query
             }
 
             public override int GetHashCode() => Order.GetHashCode();
+        }
+
+        [ConditionalFact]
+        public virtual void GroupBy_tracking_after_dispose()
+        {
+            List<IGrouping<string, Order>> groups;
+
+            using (var context = CreateContext())
+            {
+                groups = context.Orders.GroupBy(o => o.CustomerID).ToList();
+            }
+
+            groups[0].First();
         }
 
         [ConditionalFact]
@@ -136,7 +186,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Sum_on_float_column_in_subquery()
         {
             AssertQuery<Order>(
-                os => os.Where(o => o.OrderID < 10300).Select(o => new { o.OrderID, Sum = o.OrderDetails.Sum(od => od.Discount) }),
+                os => os.Where(o => o.OrderID < 10300).Select(
+                    o => new
+                    {
+                        o.OrderID,
+                        Sum = o.OrderDetails.Sum(od => od.Discount)
+                    }),
                 e => e.OrderID);
         }
 
@@ -204,7 +259,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Average_on_float_column_in_subquery()
         {
             AssertQuery<Order>(
-                os => os.Where(o => o.OrderID < 10300).Select(o => new { o.OrderID, Sum = o.OrderDetails.Average(od => od.Discount) }),
+                os => os.Where(o => o.OrderID < 10300).Select(
+                    o => new
+                    {
+                        o.OrderID,
+                        Sum = o.OrderDetails.Average(od => od.Discount)
+                    }),
                 e => e.OrderID);
         }
 
@@ -213,7 +273,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<Order>(
                 os => os.Where(o => o.OrderID < 10300)
-                    .Select(o => new { o.OrderID, Sum = o.OrderDetails.Average(od => (float?)od.Discount) }),
+                    .Select(
+                        o => new
+                        {
+                            o.OrderID,
+                            Sum = o.OrderDetails.Average(od => (float?)od.Discount)
+                        }),
                 e => e.OrderID);
         }
 
@@ -427,7 +492,11 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         private static int ClientEvalSelectorStateless() => 42;
 
+#if Test20
+        protected internal int ClientEvalSelector(Order order) => order.EmployeeID % 10 ?? 0;
+#else
         protected internal uint ClientEvalSelector(Order order) => order.EmployeeID % 10 ?? 0;
+#endif
 
         [ConditionalFact]
         public virtual void Distinct()
@@ -473,8 +542,16 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Distinct_OrderBy3()
         {
             AssertQuery<Customer>(
-                cs => cs.Select(c => new { c.CustomerID }).Distinct().OrderBy(a => a.CustomerID),
-                cs => cs.Select(c => new { c.CustomerID }).Distinct().OrderBy(a => a.CustomerID, StringComparer.Ordinal),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.CustomerID
+                    }).Distinct().OrderBy(a => a.CustomerID),
+                cs => cs.Select(
+                    c => new
+                    {
+                        c.CustomerID
+                    }).Distinct().OrderBy(a => a.CustomerID, StringComparer.Ordinal),
                 assertOrder: true);
         }
 
@@ -717,13 +794,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_int_array_closure()
         {
+#if Test20
+            var ids = new int[] { 0, 1 };
+#else
             var ids = new uint[] { 0, 1 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
                     es.Where(e => ids.Contains(e.EmployeeID)), entryCount: 1);
 
+#if Test20
+            ids = new int[] { 0 };
+#else
             ids = new uint[] { 0 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
@@ -733,13 +818,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_nullable_int_array_closure()
         {
+#if Test20
+            var ids = new int?[] { 0, 1 };
+#else
             var ids = new uint?[] { 0, 1 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
                     es.Where(e => ids.Contains(e.EmployeeID)), entryCount: 1);
 
+#if Test20
+            ids = new int?[] { 0 };
+#else
             ids = new uint?[] { 0 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
@@ -757,10 +850,27 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_list_closure()
         {
-            var ids = new List<string> { "ABCDE", "ALFKI" };
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI"
+            };
             AssertQuery<Customer>(
                 cs =>
                     cs.Where(c => ids.Contains(c.CustomerID)), entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_with_local_list_closure_all_null()
+        {
+            var ids = new List<string>
+            {
+                null,
+                null
+            };
+            AssertQuery<Customer>(
+                cs =>
+                    cs.Where(c => ids.Contains(c.CustomerID)));
         }
 
         [ConditionalFact]
@@ -768,7 +878,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<Customer>(
                 cs =>
-                    cs.Where(c => new List<string> { "ABCDE", "ALFKI" }.Contains(c.CustomerID)), entryCount: 1);
+                    cs.Where(
+                        c => new List<string>
+                        {
+                            "ABCDE",
+                            "ALFKI"
+                        }.Contains(c.CustomerID)), entryCount: 1);
         }
 
         [ConditionalFact]
@@ -778,13 +893,23 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             AssertQuery<Customer>(
                 cs =>
-                    cs.Where(c => new List<string> { "ABCDE", id }.Contains(c.CustomerID)), entryCount: 1);
+                    cs.Where(
+                        c => new List<string>
+                        {
+                            "ABCDE",
+                            id
+                        }.Contains(c.CustomerID)), entryCount: 1);
 
             id = "ANATR";
 
             AssertQuery<Customer>(
                 cs =>
-                    cs.Where(c => new List<string> { "ABCDE", id }.Contains(c.CustomerID)), entryCount: 1);
+                    cs.Where(
+                        c => new List<string>
+                        {
+                            "ABCDE",
+                            id
+                        }.Contains(c.CustomerID)), entryCount: 1);
         }
 
         [ConditionalFact]
@@ -850,7 +975,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_collection_empty_closure()
         {
-            var ids = new string[0];
+            var ids = Array.Empty<string>();
 
             AssertQuery<Customer>(
                 cs =>
@@ -888,15 +1013,46 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_anonymous_type_array_closure()
         {
-            var ids = new[] { new { Id1 = 1, Id2 = 2 }, new { Id1 = 10248, Id2 = 11 } };
+            var ids = new[]
+            {
+                new
+                {
+                    Id1 = 1,
+                    Id2 = 2
+                },
+                new
+                {
+                    Id1 = 10248,
+                    Id2 = 11
+                }
+            };
 
             AssertQuery<OrderDetail>(
-                od => od.Where(o => ids.Contains(new { Id1 = o.OrderID, Id2 = o.ProductID})), entryCount: 1);
+                od => od.Where(
+                    o => ids.Contains(
+                        new
+                        {
+                            Id1 = o.OrderID,
+                            Id2 = o.ProductID
+                        })), entryCount: 1);
 
-            ids = new[] { new { Id1 = 1, Id2 = 2 } };
+            ids = new[]
+            {
+                new
+                {
+                    Id1 = 1,
+                    Id2 = 2
+                }
+            };
 
             AssertQuery<OrderDetail>(
-                od => od.Where(o => ids.Contains(new { Id1 = o.OrderID, Id2 = o.ProductID })));
+                od => od.Where(
+                    o => ids.Contains(
+                        new
+                        {
+                            Id1 = o.OrderID,
+                            Id2 = o.ProductID
+                        })));
         }
 
         [ConditionalFact]
@@ -1131,6 +1287,205 @@ namespace Microsoft.EntityFrameworkCore.Query
                     .Where(o => o.CustomerID.StartsWith("A"))
                     .OrderBy(o => o.OrderID)
                     .Select(o => (long)o.OrderID).Average());
+        }
+
+        [ConditionalFact]
+        public virtual void Max_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            AssertSingleResult<Order>(
+                os => os
+                    .Where(o => o.CustomerID.StartsWith("A"))
+                    .OrderBy(o => o.OrderID)
+                    .Select(o => (long)o.OrderID).Max());
+        }
+
+        [ConditionalFact]
+        public virtual void Min_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            AssertSingleResult<Order>(
+                os => os
+                    .Where(o => o.CustomerID.StartsWith("A"))
+                    .Select(o => (long)o.OrderID).Min());
+        }
+
+        [ConditionalFact]
+        public virtual void OrderBy_Take_Last_gives_correct_result()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.OrderBy(c => c.CustomerID)
+                    .Take(20)
+                    .Last(),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void OrderBy_Skip_Last_gives_correct_result()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.OrderBy(c => c.CustomerID)
+                    .Skip(20)
+                    .Last(),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_over_entityType_should_rewrite_to_identity_equality()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = context.Orders.Where(o => o.CustomerID == "VINET")
+                        .Contains(context.Orders.Single(o => o.OrderID == 10248));
+
+                Assert.True(query);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_over_entityType_should_materialize_when_composite()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = context.OrderDetails.Where(o => o.ProductID == 42)
+                        .Contains(context.OrderDetails.First(o => o.OrderID == 10248 && o.ProductID == 42));
+
+                Assert.True(query);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Paging_operation_on_string_doesnt_issue_warning()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Customers.Select(c => c.CustomerID.FirstOrDefault()).ToList();
+                Assert.Equal(91, query.Count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Project_constant_Sum()
+        {
+            AssertSingleResult<Employee>(es => es.Sum(e => 1));
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_any_equals_operator()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => ids.Any(li => li == c.CustomerID)),
+                entryCount: 2);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_any_equals()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => ids.Any(li => li.Equals(c.CustomerID))),
+                entryCount: 2);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_any_equals_static()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => ids.Any(li => Equals(li, c.CustomerID))),
+                entryCount: 2);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_where_any()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City == "México D.F.").Where(c => ids.Any(li => li == c.CustomerID)),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_all_not_equals_operator()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => ids.All(li => li != c.CustomerID)),
+                entryCount: 89);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_all_not_equals()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => ids.All(li => !li.Equals(c.CustomerID))),
+                entryCount: 89);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_all_not_equals_static()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => ids.All(li => !Equals(li, c.CustomerID))),
+                entryCount: 89);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_subquery_where_all()
+        {
+            var ids = new List<string>
+            {
+                "ABCDE",
+                "ALFKI",
+                "ANATR"
+            };
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City == "México D.F.").Where(c => ids.All(li => li != c.CustomerID)),
+                entryCount: 4);
+        }
+
+        [ConditionalFact]
+        public virtual void Cast_to_same_Type_Count_works()
+        {
+            AssertSingleResult<Customer>(cs => cs.Cast<Customer>().Count());
         }
     }
 }

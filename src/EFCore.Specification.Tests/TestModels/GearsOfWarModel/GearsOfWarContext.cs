@@ -1,9 +1,11 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using Microsoft.EntityFrameworkCore.TestUtilities;
+
 namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
 {
-    public class GearsOfWarContext : DbContext
+    public class GearsOfWarContext : PoolableDbContext
     {
         public static readonly string StoreName = "GearsOfWar";
 
@@ -21,6 +23,7 @@ namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
         public DbSet<SquadMission> SquadMissions { get; set; }
         public DbSet<Faction> Factions { get; set; }
         public DbSet<LocustLeader> LocustLeaders { get; set; }
+        public DbSet<LocustHighCommand> LocustHighCommands { get; set; }
 
         public static void Seed(GearsOfWarContext context)
         {
@@ -33,8 +36,9 @@ namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
             var gears = GearsOfWarData.CreateGears();
             var locustLeaders = GearsOfWarData.CreateLocustLeaders();
             var factions = GearsOfWarData.CreateFactions();
+            var locustHighCommands = GearsOfWarData.CreateHighCommands();
 
-            GearsOfWarData.WireUp(squads, missions, squadMissions, cities, weapons, tags, gears, locustLeaders, factions);
+            GearsOfWarData.WireUp(squads, missions, squadMissions, cities, weapons, tags, gears, locustLeaders, factions, locustHighCommands);
 
             context.Squads.AddRange(squads);
             context.Missions.AddRange(missions);
@@ -45,6 +49,7 @@ namespace Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel
             context.Gears.AddRange(gears);
             context.LocustLeaders.AddRange(locustLeaders);
             context.Factions.AddRange(factions);
+            context.LocustHighCommands.AddRange(locustHighCommands);
             context.SaveChanges();
 
             GearsOfWarData.WireUp2(locustLeaders, factions);

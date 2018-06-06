@@ -11,6 +11,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
     [DebuggerDisplay("{Metadata,nq}")]
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class InternalIndexBuilder : InternalMetadataItemBuilder<Index>
     {
         /// <summary>
@@ -42,22 +43,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual InternalIndexBuilder Attach(ConfigurationSource configurationSource)
+        public virtual InternalIndexBuilder Attach([NotNull] InternalEntityTypeBuilder entityTypeBuilder)
         {
-            var entityTypeBuilder = Metadata.DeclaringEntityType.Builder;
             var properties = entityTypeBuilder.GetActualProperties(Metadata.Properties, null);
             if (properties == null)
             {
                 return null;
             }
-            var newIndexBuilder = entityTypeBuilder.HasIndex(properties, configurationSource);
 
-            newIndexBuilder.MergeAnnotationsFrom(Metadata);
+            var newIndexBuilder = entityTypeBuilder.HasIndex(properties, Metadata.GetConfigurationSource());
+            newIndexBuilder?.MergeAnnotationsFrom(Metadata);
 
             var isUniqueConfigurationSource = Metadata.GetIsUniqueConfigurationSource();
             if (isUniqueConfigurationSource.HasValue)
             {
-                newIndexBuilder.IsUnique(Metadata.IsUnique, isUniqueConfigurationSource.Value);
+                newIndexBuilder?.IsUnique(Metadata.IsUnique, isUniqueConfigurationSource.Value);
             }
 
             return newIndexBuilder;

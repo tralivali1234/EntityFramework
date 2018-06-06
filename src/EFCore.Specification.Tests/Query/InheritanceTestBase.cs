@@ -1,8 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestModels.Inheritance;
 using Microsoft.EntityFrameworkCore.TestUtilities;
@@ -152,7 +154,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var animals
                     = context.Set<Animal>()
                         .OfType<Bird>()
-                        .Select(b => new { b.EagleId })
+                        .Select(
+                            b => new
+                            {
+                                b.EagleId
+                            })
                         .ToList();
 
                 Assert.Equal(2, animals.Count);
@@ -209,6 +215,19 @@ namespace Microsoft.EntityFrameworkCore.Query
                 Assert.Equal(2, animals.Count);
                 Assert.IsType<Kiwi>(animals[0]);
                 Assert.IsType<Eagle>(animals[1]);
+            }
+        }
+
+        [Fact]
+        public virtual void Can_query_all_animal_views()
+        {
+            using (var context = CreateContext())
+            {
+                var animalQueries = context.Query<AnimalQuery>().OrderBy(av => av.CountryId).ToList();
+
+                Assert.Equal(2, animalQueries.Count);
+                Assert.IsType<KiwiQuery>(animalQueries[0]);
+                Assert.IsType<EagleQuery>(animalQueries[1]);
             }
         }
 
@@ -362,7 +381,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 var birds
                     = context.Set<Bird>()
-                        .Select(b => new { b.IsFlightless, Discriminator = EF.Property<string>(b, "Discriminator") })
+                        .Select(
+                            b => new
+                            {
+                                b.IsFlightless,
+                                Discriminator = EF.Property<string>(b, "Discriminator")
+                            })
                         .ToArray();
 
                 Assert.Equal(2, birds.Length);
@@ -377,7 +401,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var preditors
                     = context.Set<Animal>()
                         .Where(b => "Kiwi" == EF.Property<string>(b, "Discriminator"))
-                        .Select(k => new { Preditor = EF.Property<string>((Bird)k, "EagleId") })
+                        .Select(
+                            k => new
+                            {
+                                Preditor = EF.Property<string>((Bird)k, "EagleId")
+                            })
                         .ToArray();
 
                 Assert.Equal(1, preditors.Length);
@@ -406,45 +434,45 @@ namespace Microsoft.EntityFrameworkCore.Query
                 CreateContext,
                 UseTransaction,
                 context =>
+                {
+                    var kiwi = new Kiwi
                     {
-                        var kiwi = new Kiwi
-                        {
-                            Species = "Apteryx owenii",
-                            Name = "Little spotted kiwi",
-                            IsFlightless = true,
-                            FoundOn = Island.North
-                        };
+                        Species = "Apteryx owenii",
+                        Name = "Little spotted kiwi",
+                        IsFlightless = true,
+                        FoundOn = Island.North
+                    };
 
-                        var nz = context.Set<Country>().Single(c => c.Id == 1);
+                    var nz = context.Set<Country>().Single(c => c.Id == 1);
 
-                        nz.Animals.Add(kiwi);
+                    nz.Animals.Add(kiwi);
 
-                        context.SaveChanges();
-                    },
+                    context.SaveChanges();
+                },
                 context =>
-                    {
-                        var kiwi = context.Set<Kiwi>().Single(k => k.Species.EndsWith("owenii"));
+                {
+                    var kiwi = context.Set<Kiwi>().Single(k => k.Species.EndsWith("owenii"));
 
-                        kiwi.EagleId = "Aquila chrysaetos canadensis";
+                    kiwi.EagleId = "Aquila chrysaetos canadensis";
 
-                        context.SaveChanges();
-                    },
+                    context.SaveChanges();
+                },
                 context =>
-                    {
-                        var kiwi = context.Set<Kiwi>().Single(k => k.Species.EndsWith("owenii"));
+                {
+                    var kiwi = context.Set<Kiwi>().Single(k => k.Species.EndsWith("owenii"));
 
-                        Assert.Equal("Aquila chrysaetos canadensis", kiwi.EagleId);
+                    Assert.Equal("Aquila chrysaetos canadensis", kiwi.EagleId);
 
-                        context.Set<Bird>().Remove(kiwi);
+                    context.Set<Bird>().Remove(kiwi);
 
-                        context.SaveChanges();
-                    },
+                    context.SaveChanges();
+                },
                 context =>
-                    {
-                        var count = context.Set<Kiwi>().Count(k => k.Species.EndsWith("owenii"));
+                {
+                    var count = context.Set<Kiwi>().Count(k => k.Species.EndsWith("owenii"));
 
-                        Assert.Equal(0, count);
-                    });
+                    Assert.Equal(0, count);
+                });
         }
 
         protected virtual void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)
@@ -508,6 +536,45 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var concat = kiwis.Cast<Bird>().Union(eagles).ToList();
 
                 Assert.Equal(2, concat.Count);
+            }
+        }
+
+        [Fact]
+        public virtual void Setting_foreign_key_to_a_different_type_throws()
+        {
+            using (var context = CreateContext())
+            {
+                var kiwi = context.Set<Kiwi>().Single();
+
+                var eagle = new Eagle
+                {
+                    Species = "Haliaeetus leucocephalus",
+                    Name = "Bald eagle",
+                    Group = EagleGroup.Booted,
+                    EagleId = kiwi.Species
+                };
+
+                Assert.Equal(
+                    CoreStrings.IncompatiblePrincipalEntrySensitive(
+                        "{EagleId: Apteryx haastii}",
+                        nameof(Eagle),
+                        "{Species: Haliaeetus leucocephalus}",
+                        nameof(Kiwi),
+                        nameof(Eagle)),
+                    Assert.Throws<InvalidOperationException>(() => context.Add(eagle)).Message);
+            }
+        }
+
+        [Fact]
+        public virtual void Byte_enum_value_constant_used_in_projection()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Set<Kiwi>().Select(k => k.IsFlightless ? Island.North : Island.South);
+                var result = query.ToList();
+
+                Assert.Equal(1, result.Count);
+                Assert.Equal(Island.North, result[0]);
             }
         }
 

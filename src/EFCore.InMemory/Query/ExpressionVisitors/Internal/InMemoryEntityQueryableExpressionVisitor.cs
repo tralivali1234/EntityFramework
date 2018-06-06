@@ -4,12 +4,14 @@
 using System;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.InMemory.Query.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Query.Internal;
+using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
+namespace Microsoft.EntityFrameworkCore.InMemory.Query.ExpressionVisitors.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -18,7 +20,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
     public class InMemoryEntityQueryableExpressionVisitor : EntityQueryableExpressionVisitor
     {
         private readonly IModel _model;
-        private readonly IMaterializerFactory _materializerFactory;
+        private readonly IInMemoryMaterializerFactory _materializerFactory;
         private readonly IQuerySource _querySource;
 
         /// <summary>
@@ -27,13 +29,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         /// </summary>
         public InMemoryEntityQueryableExpressionVisitor(
             [NotNull] IModel model,
-            [NotNull] IMaterializerFactory materializerFactory,
+            [NotNull] IInMemoryMaterializerFactory materializerFactory,
             [NotNull] EntityQueryModelVisitor entityQueryModelVisitor,
             [CanBeNull] IQuerySource querySource)
             : base(Check.NotNull(entityQueryModelVisitor, nameof(entityQueryModelVisitor)))
         {
             Check.NotNull(model, nameof(model));
             Check.NotNull(materializerFactory, nameof(materializerFactory));
+            Check.NotNull(entityQueryModelVisitor, nameof(entityQueryModelVisitor));
 
             _model = model;
             _materializerFactory = materializerFactory;
@@ -65,7 +68,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     Expression.Constant(entityType),
                     Expression.Constant(entityType.FindPrimaryKey()),
                     materializer,
-                    Expression.Constant(QueryModelVisitor.QueryCompilationContext.IsTrackingQuery));
+                    Expression.Constant(
+                        QueryModelVisitor.QueryCompilationContext.IsTrackingQuery
+                        && !entityType.IsQueryType));
             }
 
             return Expression.Call(

@@ -8,6 +8,7 @@ using System.Reflection;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
+using Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
@@ -82,6 +83,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             queryModel.TransformExpressions(new ConditionalOptimizingExpressionVisitor().Visit);
             queryModel.TransformExpressions(new EntityEqualityRewritingExpressionVisitor(queryCompilationContext).Visit);
             queryModel.TransformExpressions(new SubQueryMemberPushDownExpressionVisitor(queryCompilationContext).Visit);
+            queryModel.TransformExpressions(new ExistsToAnyRewritingExpressionVisitor().Visit);
+            queryModel.TransformExpressions(new AllAnyToContainsRewritingExpressionVisitor().Visit);
         }
 
         /// <summary>
@@ -181,15 +184,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 = !queryModel.BodyClauses.Any()
                   && subQueryModel.ResultOperators.All(
                       ro => ro is CastResultOperator
-                            || ro is ConcatResultOperator
                             || ro is DefaultIfEmptyResultOperator
                             || ro is ExceptResultOperator
-                            || ro is IntersectResultOperator
                             || ro is OfTypeResultOperator
                             || ro is ReverseResultOperator
                             || ro is SkipResultOperator
-                            || ro is TakeResultOperator
-                            || ro is UnionResultOperator);
+                            || ro is TakeResultOperator);
 
             // we can lift distinct however if the outer query has result operator that doesn't care about having correct element count
             var emptyQueryModelWithResultOperatorThatIgnoresElementCountAndDistinctInSubquery
@@ -210,6 +210,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             if (subQueryModel.ResultOperators.All(ro => ro is CastResultOperator)
                 && !subQueryModel.BodyClauses.Any(bc => bc is OrderByClause)
+                && subQueryModel.SelectClause.Selector.NodeType != ExpressionType.MemberInit
+                && subQueryModel.SelectClause.Selector.NodeType != ExpressionType.New
                 || queryModel.IsIdentityQuery()
                 && !queryModel.ResultOperators.Any()
                 || emptyQueryModelWithFlattenableResultOperatorInSubquery
@@ -218,7 +220,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             {
                 string itemName;
 
-                var innerMainFromClause = subQueryExpression.QueryModel.MainFromClause;
+                var querySourceMapping = new QuerySourceMapping();
+                var clonedSubQueryModel = subQueryModel.Clone(querySourceMapping);
+                UpdateQueryAnnotations(subQueryModel, querySourceMapping);
+
+                var innerMainFromClause = clonedSubQueryModel.MainFromClause;
                 var isGeneratedNameOuter = fromClause.HasGeneratedItemName();
 
                 if (innerMainFromClause.HasGeneratedItemName()
@@ -237,10 +243,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 fromClause.CopyFromSource(fromClauseData);
 
-                var newExpression = subQueryExpression.QueryModel.SelectClause.Selector;
+                var newExpression = clonedSubQueryModel.SelectClause.Selector;
                 var newExpressionTypeInfo = newExpression.Type.GetTypeInfo();
-                var castResultOperatorTypes = subQueryModel.ResultOperators.OfType<CastResultOperator>().Select(cre => cre.CastItemType).ToList();
+                var castResultOperatorTypes = clonedSubQueryModel.ResultOperators.OfType<CastResultOperator>().Select(cre => cre.CastItemType).ToList();
                 var type = castResultOperatorTypes.LastOrDefault(t => newExpressionTypeInfo.IsAssignableFrom(t.GetTypeInfo()));
+
                 if (type != null
                     && type != newExpression.Type)
                 {
@@ -252,9 +259,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     fromClause,
                     newExpression);
 
-                InsertBodyClauses(subQueryExpression.QueryModel.BodyClauses, queryModel, destinationIndex);
+                InsertBodyClauses(clonedSubQueryModel.BodyClauses, queryModel, destinationIndex);
 
-                foreach (var resultOperator in subQueryModel.ResultOperators.Where(ro => !(ro is CastResultOperator)).Reverse())
+                foreach (var resultOperator in clonedSubQueryModel.ResultOperators.Where(ro => !(ro is CastResultOperator)).Reverse())
                 {
                     queryModel.ResultOperators.Insert(0, resultOperator);
                 }
@@ -273,7 +280,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         public override void VisitResultOperator(ResultOperatorBase resultOperator, QueryModel queryModel, int index)
         {
             if (resultOperator is ValueFromSequenceResultOperatorBase
-                && !(resultOperator is ChoiceResultOperatorBase)
+                && !(resultOperator is FirstResultOperator)
+                && !(resultOperator is SingleResultOperator)
+                && !(resultOperator is LastResultOperator)
                 && !queryModel.ResultOperators
                     .Any(r => r is TakeResultOperator || r is SkipResultOperator))
             {
@@ -325,7 +334,67 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             ProcessSetResultOperator(resultOperator);
 
+            TryOptimizeContains(resultOperator, queryModel);
+
             base.VisitResultOperator(resultOperator, queryModel, index);
+        }
+
+        private void TryOptimizeContains(ResultOperatorBase resultOperator, QueryModel queryModel)
+        {
+            if (resultOperator is ContainsResultOperator containsResultOperator
+                && queryModel.SelectClause.Selector is QuerySourceReferenceExpression querySourceReferenceExpression)
+            {
+                // Contains with entity instance to simple key contains expansion
+
+                var projectedEntityType
+                    = _queryCompilationContext.Model
+                        .FindEntityType(querySourceReferenceExpression.Type);
+
+                if (projectedEntityType != null)
+                {
+                    var valueEntityType
+                        = _queryCompilationContext.Model
+                            .FindEntityType(containsResultOperator.Item.Type);
+
+                    if (valueEntityType != null
+                        && valueEntityType.BaseType == projectedEntityType.BaseType)
+                    {
+                        var primaryKey = projectedEntityType.FindPrimaryKey();
+
+                        if (primaryKey.Properties.Count == 1)
+                        {
+                            queryModel.SelectClause.Selector
+                                = querySourceReferenceExpression
+                                    .CreateEFPropertyExpression(primaryKey.Properties[0], makeNullable: false);
+
+                            containsResultOperator.Item
+                                = containsResultOperator.Item
+                                    .CreateEFPropertyExpression(primaryKey.Properties[0], makeNullable: false);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void UpdateQueryAnnotations(QueryModel queryModel, QuerySourceMapping querySourceMapping)
+        {
+            foreach (var queryAnnotation in _queryCompilationContext.QueryAnnotations)
+            {
+                if (querySourceMapping.ContainsMapping(queryAnnotation.QuerySource))
+                {
+                    queryAnnotation.QuerySource = querySourceMapping.GetExpression(queryAnnotation.QuerySource)
+                        .TryGetReferencedQuerySource();
+                    queryAnnotation.QueryModel = queryModel;
+
+                    if (queryAnnotation is IncludeResultOperator includeAnnotation
+                        && includeAnnotation.PathFromQuerySource != null)
+                    {
+                        includeAnnotation.PathFromQuerySource
+                            = ReferenceReplacingExpressionVisitor
+                                .ReplaceClauseReferences(includeAnnotation.PathFromQuerySource, querySourceMapping, throwOnUnmappedReferences: false);
+                    }
+                }
+            }
         }
 
         private void UpdateQuerySourceMapping(
@@ -348,6 +417,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 {
                     queryAnnotation.QuerySource = newQuerySource;
                     queryAnnotation.QueryModel = queryModel;
+
+                    if (queryAnnotation is IncludeResultOperator includeAnnotation
+                        && includeAnnotation.PathFromQuerySource != null)
+                    {
+                        includeAnnotation.PathFromQuerySource
+                            = ReferenceReplacingExpressionVisitor
+                                .ReplaceClauseReferences(includeAnnotation.PathFromQuerySource, querySourceMapping, throwOnUnmappedReferences: false);
+                    }
                 }
             }
         }

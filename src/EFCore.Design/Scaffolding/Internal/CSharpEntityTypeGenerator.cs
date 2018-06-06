@@ -7,6 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Design.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -22,7 +23,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
     /// </summary>
     public class CSharpEntityTypeGenerator : ICSharpEntityTypeGenerator
     {
-        private ICSharpUtilities CSharpUtilities { get; }
+        private readonly ICSharpHelper _code;
 
         private IndentedStringBuilder _sb;
         private bool _useDataAnnotations;
@@ -32,11 +33,11 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public CSharpEntityTypeGenerator(
-            [NotNull] ICSharpUtilities cSharpUtilities)
+            [NotNull] ICSharpHelper cSharpHelper)
         {
-            Check.NotNull(cSharpUtilities, nameof(cSharpUtilities));
+            Check.NotNull(cSharpHelper, nameof(cSharpHelper));
 
-            CSharpUtilities = cSharpUtilities;
+            _code = cSharpHelper;
         }
 
         /// <summary>
@@ -136,11 +137,11 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             {
                 var tableAttribute = new AttributeWriter(nameof(TableAttribute));
 
-                tableAttribute.AddParameter(CSharpUtilities.DelimitString(tableName));
+                tableAttribute.AddParameter(_code.Literal(tableName));
 
                 if (schemaParameterNeeded)
                 {
-                    tableAttribute.AddParameter($"{nameof(TableAttribute.Schema)} = {CSharpUtilities.DelimitString(schema)}");
+                    tableAttribute.AddParameter($"{nameof(TableAttribute.Schema)} = {_code.Literal(schema)}");
                 }
 
                 _sb.AppendLine(tableAttribute.ToString());
@@ -192,7 +193,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                     GeneratePropertyDataAnnotations(property);
                 }
 
-                _sb.AppendLine($"public {CSharpUtilities.GetTypeName(property.ClrType)} {property.Name} {{ get; set; }}");
+                _sb.AppendLine($"public {_code.Reference(property.ClrType)} {property.Name} {{ get; set; }}");
             }
         }
 
@@ -218,7 +219,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             if (key?.Properties.Count == 1)
             {
                 if (key is Key concreteKey
-                    && key.Properties.SequenceEqual(new KeyDiscoveryConvention().DiscoverKeyProperties(concreteKey.DeclaringEntityType, concreteKey.DeclaringEntityType.GetProperties().ToList())))
+                    && key.Properties.SequenceEqual(new KeyDiscoveryConvention(null).DiscoverKeyProperties(concreteKey.DeclaringEntityType, concreteKey.DeclaringEntityType.GetProperties().ToList())))
                 {
                     return;
                 }
@@ -237,8 +238,8 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             var columnName = property.Relational().ColumnName;
             var columnType = property.GetConfiguredColumnType();
 
-            var delimitedColumnName = columnName != null && columnName != property.Name ? CSharpUtilities.DelimitString(columnName) : null;
-            var delimitedColumnType = columnType != null ? CSharpUtilities.DelimitString(columnType) : null;
+            var delimitedColumnName = columnName != null && columnName != property.Name ? _code.Literal(columnName) : null;
+            var delimitedColumnType = columnType != null ? _code.Literal(columnType) : null;
 
             if ((delimitedColumnName ?? delimitedColumnType) != null)
             {
@@ -269,7 +270,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                         ? nameof(StringLengthAttribute)
                         : nameof(MaxLengthAttribute));
 
-                lengthAttribute.AddParameter(CSharpUtilities.GenerateLiteral(maxLength.Value));
+                lengthAttribute.AddParameter(_code.Literal(maxLength.Value));
 
                 _sb.AppendLine(lengthAttribute.ToString());
             }
@@ -311,7 +312,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
 
                     var referencedTypeName = navigation.GetTargetType().Name;
                     var navigationType = navigation.IsCollection() ? $"ICollection<{referencedTypeName}>" : referencedTypeName;
-                    _sb.AppendLine($"public {navigationType} {navigation.Name} {{ get; set; }}");
+                    _sb.AppendLine($"public virtual {navigationType} {navigation.Name} {{ get; set; }}");
                 }
             }
         }
@@ -331,7 +332,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                     var foreignKeyAttribute = new AttributeWriter(nameof(ForeignKeyAttribute));
 
                     foreignKeyAttribute.AddParameter(
-                        CSharpUtilities.DelimitString(
+                        _code.Literal(
                             string.Join(",", navigation.ForeignKey.Properties.Select(p => p.Name))));
 
                     _sb.AppendLine(foreignKeyAttribute.ToString());
@@ -349,7 +350,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 {
                     var inversePropertyAttribute = new AttributeWriter(nameof(InversePropertyAttribute));
 
-                    inversePropertyAttribute.AddParameter(CSharpUtilities.DelimitString(inverseNavigation.Name));
+                    inversePropertyAttribute.AddParameter(_code.Literal(inverseNavigation.Name));
 
                     _sb.AppendLine(inversePropertyAttribute.ToString());
                 }

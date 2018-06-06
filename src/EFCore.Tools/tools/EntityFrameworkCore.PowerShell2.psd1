@@ -3,7 +3,7 @@
     ModuleToProcess = 'EntityFrameworkCore.PowerShell2.psm1'
 
     # Version number of this module.
-    ModuleVersion = '2.1.0'
+    ModuleVersion = '2.2.0'
 
     # ID used to uniquely identify this module
     GUID = '2de7c7fd-c848-41d7-8634-37fed4d3bb36'
@@ -21,7 +21,7 @@
     Description = 'Entity Framework Core Package Manager Console Tools'
 
     # Minimum version of the Windows PowerShell engine required by this module
-    PowerShellVersion = '1.0'
+    PowerShellVersion = '2.0'
 
     # Name of the Windows PowerShell host required by this module
     PowerShellHostName = 'Package Manager Host'
@@ -39,7 +39,7 @@
     ProcessorArchitecture = ''
 
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules = 'NuGet'
+    RequiredModules = @()
 
     # Assemblies that must be loaded prior to importing this module
     RequiredAssemblies = @()

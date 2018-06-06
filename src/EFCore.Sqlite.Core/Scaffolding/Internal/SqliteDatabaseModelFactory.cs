@@ -14,10 +14,12 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Scaffolding;
 using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
+namespace Microsoft.EntityFrameworkCore.Sqlite.Scaffolding.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -26,16 +28,21 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
     public class SqliteDatabaseModelFactory : IDatabaseModelFactory
     {
         private readonly IDiagnosticsLogger<DbLoggerCategory.Scaffolding> _logger;
+        private readonly IRelationalTypeMappingSource _typeMappingSource;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public SqliteDatabaseModelFactory([NotNull] IDiagnosticsLogger<DbLoggerCategory.Scaffolding> logger)
+        public SqliteDatabaseModelFactory(
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.Scaffolding> logger,
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
         {
             Check.NotNull(logger, nameof(logger));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
 
             _logger = logger;
+            _typeMappingSource = typeMappingSource;
         }
 
         /// <summary>
@@ -76,6 +83,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             {
                 connection.Open();
             }
+
             try
             {
                 databaseModel.DatabaseName = GetDatabaseName(connection);
@@ -155,7 +163,10 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
 
                         _logger.TableFound(name);
 
-                        var table = new DatabaseTable { Name = name };
+                        var table = new DatabaseTable
+                        {
+                            Name = name
+                        };
 
                         foreach (var column in GetColumns(connection, name))
                         {
@@ -193,7 +204,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             }
         }
 
-        private bool AllowsTable(HashSet<string> tables, HashSet<string> selectedTables, string name)
+        private static bool AllowsTable(HashSet<string> tables, HashSet<string> selectedTables, string name)
         {
             if (tables.Count == 0)
             {
@@ -232,7 +243,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                         var dataType = reader.GetString(1);
                         var notNull = reader.GetBoolean(2);
                         var defaultValue = !reader.IsDBNull(3)
-                            ? reader.GetString(3)
+                            ? FilterClrDefaults(dataType, notNull, reader.GetString(3))
                             : null;
 
                         _logger.ColumnFound(table, columnName, dataType, notNull, defaultValue);
@@ -247,6 +258,26 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                     }
                 }
             }
+        }
+
+        private string FilterClrDefaults(string dataType, bool notNull, string defaultValue)
+        {
+            if (string.Equals(defaultValue, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            if (notNull && defaultValue == "0")
+            {
+                var normalizedType = _typeMappingSource.FindMapping(dataType).StoreType;
+                if (normalizedType == "INTEGER"
+                    || normalizedType == "REAL")
+                {
+                    return null;
+                }
+            }
+
+            return defaultValue;
         }
 
         private DatabasePrimaryKey GetPrimaryKey(DbConnection connection, string table, IList<DatabaseColumn> columns)
@@ -272,6 +303,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 {
                     return GetRowidPrimaryKey(connection, table, columns);
                 }
+
                 if (!name.StartsWith("sqlite_", StringComparison.Ordinal))
                 {
                     primaryKey.Name = name;
@@ -337,7 +369,13 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
 
                     Debug.Assert(!reader.Read(), "Unexpected composite primary key.");
 
-                    return new DatabasePrimaryKey { Columns = { column } };
+                    return new DatabasePrimaryKey
+                    {
+                        Columns =
+                        {
+                            column
+                        }
+                    };
                 }
             }
         }

@@ -2,12 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Design.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Design.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -33,10 +34,14 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
             Check.NotNull(model, nameof(model));
             Check.NotNull(annotation, nameof(annotation));
 
-            if (annotation.Name == RelationalAnnotationNames.DefaultSchema
-                && string.Equals("dbo", (string)annotation.Value))
+            if (annotation.Name == RelationalAnnotationNames.DefaultSchema)
             {
-                return true;
+                return string.Equals("dbo", (string)annotation.Value);
+            }
+
+            if (annotation.Name == SqlServerAnnotationNames.ValueGenerationStrategy)
+            {
+                return (SqlServerValueGenerationStrategy)annotation.Value == SqlServerValueGenerationStrategy.IdentityColumn;
             }
 
             return false;
@@ -46,30 +51,32 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override string GenerateFluentApi(IKey key, IAnnotation annotation, string language)
+        public override MethodCallCodeFragment GenerateFluentApi(IKey key, IAnnotation annotation)
         {
-            Check.NotNull(key, nameof(key));
-            Check.NotNull(annotation, nameof(annotation));
-            Check.NotNull(language, nameof(language));
+            if (annotation.Name == SqlServerAnnotationNames.Clustered)
+            {
+                return (bool)annotation.Value == false
+                    ? new MethodCallCodeFragment(nameof(SqlServerIndexBuilderExtensions.ForSqlServerIsClustered), false)
+                    : new MethodCallCodeFragment(nameof(SqlServerIndexBuilderExtensions.ForSqlServerIsClustered));
+            }
 
-            return annotation.Name == SqlServerAnnotationNames.Clustered && language == "CSharp"
-                ? $".{nameof(SqlServerIndexBuilderExtensions.ForSqlServerIsClustered)}({((bool)annotation.Value == false ? "false" : "")})"
-                : null;
+            return null;
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override string GenerateFluentApi(IIndex index, IAnnotation annotation, string language)
+        public override MethodCallCodeFragment GenerateFluentApi(IIndex index, IAnnotation annotation)
         {
-            Check.NotNull(index, nameof(index));
-            Check.NotNull(annotation, nameof(annotation));
-            Check.NotNull(language, nameof(language));
+            if (annotation.Name == SqlServerAnnotationNames.Clustered)
+            {
+                return (bool)annotation.Value == false
+                    ? new MethodCallCodeFragment(nameof(SqlServerIndexBuilderExtensions.ForSqlServerIsClustered), false)
+                    : new MethodCallCodeFragment(nameof(SqlServerIndexBuilderExtensions.ForSqlServerIsClustered));
+            }
 
-            return annotation.Name == SqlServerAnnotationNames.Clustered && language == "CSharp"
-                ? $".{nameof(SqlServerIndexBuilderExtensions.ForSqlServerIsClustered)}({((bool)annotation.Value == false ? "false" : "")})"
-                : null;
+            return null;
         }
     }
 }

@@ -3,20 +3,21 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.InMemory.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+using IsolationLevel = System.Data.IsolationLevel;
 
 namespace Microsoft.EntityFrameworkCore
 {
@@ -164,8 +165,9 @@ namespace Microsoft.EntityFrameworkCore
 
             public IDbContextTransaction CurrentTransaction { get; }
 
-            public System.Transactions.Transaction EnlistedTransaction { get; }
-            public void EnlistTransaction(System.Transactions.Transaction transaction)
+            public Transaction EnlistedTransaction { get; }
+
+            public void EnlistTransaction(Transaction transaction)
             {
             }
         }

@@ -1,10 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
@@ -12,6 +15,61 @@ namespace Microsoft.EntityFrameworkCore.Extensions
 {
     public class PropertyExtensionsTest
     {
+        [Fact]
+        public virtual void Properties_can_have_store_type_set()
+        {
+            var model = CreateModel();
+
+            var entityType = model.AddEntityType("Entity");
+            var property = entityType.AddProperty("Property", typeof(int));
+
+            Assert.Null(property.GetProviderClrType());
+
+            property.SetProviderClrType(typeof(long));
+            Assert.Same(typeof(long), property.GetProviderClrType());
+
+            property.SetProviderClrType(null);
+            Assert.Null(property.GetProviderClrType());
+        }
+
+        [Fact]
+        public virtual void Properties_can_have_value_converter_set()
+        {
+            var model = CreateModel();
+
+            var entityType = model.AddEntityType("Entity");
+            var property = entityType.AddProperty("Property", typeof(int));
+            var converter = CastingConverter<int, decimal>.DefaultInfo.Create();
+
+            Assert.Null(property.GetValueConverter());
+
+            property.SetValueConverter(converter);
+            Assert.Same(converter, property.GetValueConverter());
+
+            property.SetValueConverter(null);
+            Assert.Null(property.GetValueConverter());
+        }
+
+        [Fact]
+        public virtual void Value_converter_type_is_checked()
+        {
+            var model = CreateModel();
+
+            var entityType = model.AddEntityType("Entity");
+            var property1 = entityType.AddProperty("Property1", typeof(int));
+            var property2 = entityType.AddProperty("Property2", typeof(int?));
+
+            property1.SetValueConverter(new CastingConverter<int, decimal>());
+            property1.SetValueConverter(new CastingConverter<int?, decimal>());
+            property2.SetValueConverter(new CastingConverter<int, decimal>());
+            property2.SetValueConverter(new CastingConverter<int?, decimal>());
+
+            Assert.Equal(
+                CoreStrings.ConverterPropertyMismatch("long", "Entity", "Property1", "int"),
+                Assert.Throws<ArgumentException>(
+                    () => property1.SetValueConverter(new CastingConverter<long, decimal>())).Message);
+        }
+
         [Fact]
         public void Get_generation_property_returns_null_for_property_without_generator()
         {
@@ -231,42 +289,66 @@ namespace Microsoft.EntityFrameworkCore.Extensions
             modelBuilder
                 .Entity<ProductDetailsTag>(
                     b =>
-                        {
-                            b.HasKey(e => new { e.Id1, e.Id2 });
-                            b.HasOne(e => e.TagDetails)
-                                .WithOne(e => e.Tag)
-                                .HasPrincipalKey<ProductDetailsTag>(e => e.Id2)
-                                .HasForeignKey<ProductDetailsTagDetails>(e => e.Id);
-                        });
+                    {
+                        b.HasKey(
+                            e => new
+                            {
+                                e.Id1,
+                                e.Id2
+                            });
+                        b.HasOne(e => e.TagDetails)
+                            .WithOne(e => e.Tag)
+                            .HasPrincipalKey<ProductDetailsTag>(e => e.Id2)
+                            .HasForeignKey<ProductDetailsTagDetails>(e => e.Id);
+                    });
 
             modelBuilder
                 .Entity<ProductDetails>(
                     b =>
-                        {
-                            b.HasKey(e => new { e.Id1, e.Id2 });
-                            b.Property(e => e.Id2).ValueGeneratedOnAdd();
-                            b.HasOne(e => e.Tag)
-                                .WithOne(e => e.Details)
-                                .HasForeignKey<ProductDetailsTag>(e => new { e.Id1, e.Id2 });
-                        });
+                    {
+                        b.HasKey(
+                            e => new
+                            {
+                                e.Id1,
+                                e.Id2
+                            });
+                        b.Property(e => e.Id2).ValueGeneratedOnAdd();
+                        b.HasOne(e => e.Tag)
+                            .WithOne(e => e.Details)
+                            .HasForeignKey<ProductDetailsTag>(
+                                e => new
+                                {
+                                    e.Id1,
+                                    e.Id2
+                                });
+                    });
 
             modelBuilder
                 .Entity<Product>()
                 .HasOne(e => e.Details)
                 .WithOne(e => e.Product)
-                .HasForeignKey<ProductDetails>(e => new { e.Id1 });
+                .HasForeignKey<ProductDetails>(
+                    e => new
+                    {
+                        e.Id1
+                    });
 
             modelBuilder.Entity<OrderDetails>(
                 b =>
-                    {
-                        b.HasKey(e => new { e.OrderId, e.ProductId });
-                        b.HasOne(e => e.Order)
-                            .WithMany(e => e.OrderDetails)
-                            .HasForeignKey(e => e.OrderId);
-                        b.HasOne(e => e.Product)
-                            .WithMany(e => e.OrderDetails)
-                            .HasForeignKey(e => e.ProductId);
-                    });
+                {
+                    b.HasKey(
+                        e => new
+                        {
+                            e.OrderId,
+                            e.ProductId
+                        });
+                    b.HasOne(e => e.Order)
+                        .WithMany(e => e.OrderDetails)
+                        .HasForeignKey(e => e.OrderId);
+                    b.HasOne(e => e.Product)
+                        .WithMany(e => e.OrderDetails)
+                        .HasForeignKey(e => e.ProductId);
+                });
 
             return modelBuilder.Model;
         }

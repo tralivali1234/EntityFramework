@@ -50,6 +50,7 @@ namespace Microsoft.EntityFrameworkCore
         IInfrastructure<IServiceProvider>,
         IDbContextDependencies,
         IDbSetCache,
+        IDbQueryCache,
         IDbContextPoolable
     {
         private readonly IDictionary<Type, object> _sets = new Dictionary<Type, object>();
@@ -132,13 +133,22 @@ namespace Microsoft.EntityFrameworkCore
         /// <summary>
         ///     The metadata about the shape of entities, the relationships between them, and how they map to the database.
         /// </summary>
-        public virtual IModel Model => DbContextDependencies.Model;
+        public virtual IModel Model
+        {
+            [DebuggerStepThrough] get => DbContextDependencies.Model;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         IDbSetSource IDbContextDependencies.SetSource => DbContextDependencies.SetSource;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IDbQuerySource IDbContextDependencies.QuerySource => DbContextDependencies.QuerySource;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -200,6 +210,23 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        object IDbQueryCache.GetOrAddQuery(IDbQuerySource source, Type type)
+        {
+            CheckDisposed();
+
+            if (!_sets.TryGetValue(type, out var set))
+            {
+                set = source.CreateQuery(this, type);
+                _sets[type] = set;
+            }
+
+            return set;
+        }
+
+        /// <summary>
         ///     Creates a <see cref="DbSet{TEntity}" /> that can be used to query and save instances of <typeparamref name="TEntity" />.
         /// </summary>
         /// <typeparam name="TEntity"> The type of entity for which a set should be returned. </typeparam>
@@ -208,12 +235,31 @@ namespace Microsoft.EntityFrameworkCore
             where TEntity : class
             => (DbSet<TEntity>)((IDbSetCache)this).GetOrAddSet(DbContextDependencies.SetSource, typeof(TEntity));
 
+        /// <summary>
+        ///     Creates a <see cref="DbQuery{TQuery}" /> that can be used to query instances of <typeparamref name="TQuery" />.
+        /// </summary>
+        /// <typeparam name="TQuery"> The type of query for which a DbQuery should be returned. </typeparam>
+        /// <returns> A DbQuery for the given query type. </returns>
+        public virtual DbQuery<TQuery> Query<TQuery>()
+            where TQuery : class
+            => (DbQuery<TQuery>)((IDbQueryCache)this).GetOrAddQuery(DbContextDependencies.QuerySource, typeof(TQuery));
+
         private IEntityFinder Finder(Type type)
         {
             var entityType = Model.FindEntityType(type);
             if (entityType == null)
             {
+                if (Model.HasEntityTypeWithDefiningNavigation(type))
+                {
+                    throw new InvalidOperationException(CoreStrings.InvalidSetTypeWeak(type.ShortDisplayName()));
+                }
+
                 throw new InvalidOperationException(CoreStrings.InvalidSetType(type.ShortDisplayName()));
+            }
+
+            if (entityType.IsQueryType)
+            {
+                throw new InvalidOperationException(CoreStrings.InvalidSetTypeQuery(type.ShortDisplayName()));
             }
 
             return DbContextDependencies.EntityFinderFactory.Create(entityType);
@@ -275,10 +321,18 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         private IDbContextDependencies DbContextDependencies
-            => _dbContextDependencies ?? (_dbContextDependencies = InternalServiceProvider.GetRequiredService<IDbContextDependencies>());
+        {
+            [DebuggerStepThrough]
+            get
+            {
+                CheckDisposed();
+
+                return _dbContextDependencies ?? (_dbContextDependencies = InternalServiceProvider.GetRequiredService<IDbContextDependencies>());
+            }
+        }
 
         [DebuggerStepThrough]
-        internal void CheckDisposed()
+        private void CheckDisposed()
         {
             if (_disposed)
             {
@@ -344,7 +398,6 @@ namespace Microsoft.EntityFrameworkCore
         ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
         ///     This is usually because the data in the database has been modified since it was loaded into memory.
         /// </exception>
-        [DebuggerStepThrough]
         public virtual int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
         /// <summary>
@@ -370,16 +423,21 @@ namespace Microsoft.EntityFrameworkCore
         ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
         ///     This is usually because the data in the database has been modified since it was loaded into memory.
         /// </exception>
-        [DebuggerStepThrough]
         public virtual int SaveChanges(bool acceptAllChangesOnSuccess)
         {
             CheckDisposed();
+
+            DbContextDependencies.UpdateLogger.SaveChangesStarting(this);
 
             TryDetectChanges();
 
             try
             {
-                return DbContextDependencies.StateManager.SaveChanges(acceptAllChangesOnSuccess);
+                var entitiesSaved = DbContextDependencies.StateManager.SaveChanges(acceptAllChangesOnSuccess);
+
+                DbContextDependencies.UpdateLogger.SaveChangesCompleted(this, entitiesSaved);
+
+                return entitiesSaved;
             }
             catch (Exception exception)
             {
@@ -464,11 +522,17 @@ namespace Microsoft.EntityFrameworkCore
         {
             CheckDisposed();
 
+            DbContextDependencies.UpdateLogger.SaveChangesStarting(this);
+
             TryDetectChanges();
 
             try
             {
-                return await DbContextDependencies.StateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+                var entitiesSaved = await DbContextDependencies.StateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+                DbContextDependencies.UpdateLogger.SaveChangesCompleted(this, entitiesSaved);
+
+                return entitiesSaved;
             }
             catch (Exception exception)
             {
@@ -534,6 +598,8 @@ namespace Microsoft.EntityFrameworkCore
             if (_dbContextPool == null
                 && !_disposed)
             {
+                _dbContextDependencies?.InfrastructureLogger.ContextDisposed(this);
+
                 _disposed = true;
 
                 _dbContextDependencies?.StateManager.Unsubscribe();
@@ -604,7 +670,7 @@ namespace Microsoft.EntityFrameworkCore
                 entry.SetEntityState(
                     entityState,
                     acceptChanges: true,
-                    forceStateWhenUnknownKey: true);
+                    forceStateWhenUnknownKey: entityState);
             }
         }
 
@@ -626,15 +692,20 @@ namespace Microsoft.EntityFrameworkCore
                 await entry.SetEntityStateAsync(
                     entityState,
                     acceptChanges: true,
-                    forceStateWhenUnknownKey: true,
+                    forceStateWhenUnknownKey: entityState,
                     cancellationToken: cancellationToken);
             }
         }
 
         /// <summary>
-        ///     Begins tracking the given entity, and any other reachable entities that are
-        ///     not already being tracked, in the <see cref="EntityState.Added" /> state such that
-        ///     they will be inserted into the database when <see cref="SaveChanges()" /> is called.
+        ///     <para>
+        ///         Begins tracking the given entity, and any other reachable entities that are
+        ///         not already being tracked, in the <see cref="EntityState.Added" /> state such that
+        ///         they will be inserted into the database when <see cref="SaveChanges()" /> is called.
+        ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to add. </param>
@@ -699,6 +770,9 @@ namespace Microsoft.EntityFrameworkCore
         ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to attach. </param>
@@ -733,6 +807,9 @@ namespace Microsoft.EntityFrameworkCore
         ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to update. </param>
@@ -762,6 +839,9 @@ namespace Microsoft.EntityFrameworkCore
         ///         Any other reachable entities that are not already being tracked will be tracked in the same way that
         ///         they would be if <see cref="Attach{TEntity}(TEntity)" /> was called before calling this method.
         ///         This allows any cascading actions to be applied when <see cref="SaveChanges()" /> is called.
+        ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
         ///     </para>
         /// </remarks>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
@@ -807,9 +887,17 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         /// <summary>
-        ///     Begins tracking the given entity, and any other reachable entities that are
-        ///     not already being tracked, in the <see cref="EntityState.Added" /> state such that they will
-        ///     be inserted into the database when <see cref="SaveChanges()" /> is called.
+        ///     <para>
+        ///         Begins tracking the given entity, and any other reachable entities that are
+        ///         not already being tracked, in the <see cref="EntityState.Added" /> state such that they will
+        ///         be inserted into the database when <see cref="SaveChanges()" /> is called.
+        ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
         /// </summary>
         /// <param name="entity"> The entity to add. </param>
         /// <returns>
@@ -830,9 +918,15 @@ namespace Microsoft.EntityFrameworkCore
         ///         be inserted into the database when <see cref="SaveChanges()" /> is called.
         ///     </para>
         ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
+        ///     <para>
         ///         This method is async only to allow special value generators, such as the one used by
         ///         'Microsoft.EntityFrameworkCore.Metadata.SqlServerValueGenerationStrategy.SequenceHiLo',
         ///         to access the database asynchronously. For all other cases the non async method should be used.
+        ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
         ///     </para>
         /// </summary>
         /// <param name="entity"> The entity to add. </param>
@@ -870,6 +964,9 @@ namespace Microsoft.EntityFrameworkCore
         ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
         /// </summary>
         /// <param name="entity"> The entity to attach. </param>
         /// <returns>
@@ -902,6 +999,9 @@ namespace Microsoft.EntityFrameworkCore
         ///         An entity is considered to have its primary key value set if the primary key property is set
         ///         to anything other than the CLR default for the property type.
         ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
+        ///     </para>
         /// </summary>
         /// <param name="entity"> The entity to update. </param>
         /// <returns>
@@ -929,6 +1029,9 @@ namespace Microsoft.EntityFrameworkCore
         ///         Any other reachable entities that are not already being tracked will be tracked in the same way that
         ///         they would be if <see cref="Attach(object)" /> was called before calling this method.
         ///         This allows any cascading actions to be applied when <see cref="SaveChanges()" /> is called.
+        ///     </para>
+        ///     <para>
+        ///         Use <see cref="EntityEntry.State" /> to set the state of only a single entity.
         ///     </para>
         /// </remarks>
         /// <param name="entity"> The entity to remove. </param>
@@ -1240,7 +1343,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="entityType"> The type of entity to find. </param>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual object Find([NotNull] Type entityType, [NotNull] params object[] keyValues)
+        public virtual object Find([NotNull] Type entityType, [CanBeNull] params object[] keyValues)
         {
             CheckDisposed();
 
@@ -1257,7 +1360,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="entityType"> The type of entity to find. </param>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<object> FindAsync([NotNull] Type entityType, [NotNull] params object[] keyValues)
+        public virtual Task<object> FindAsync([NotNull] Type entityType, [CanBeNull] params object[] keyValues)
         {
             CheckDisposed();
 
@@ -1275,7 +1378,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<object> FindAsync([NotNull] Type entityType, [NotNull] object[] keyValues, CancellationToken cancellationToken)
+        public virtual Task<object> FindAsync([NotNull] Type entityType, [CanBeNull] object[] keyValues, CancellationToken cancellationToken)
         {
             CheckDisposed();
 
@@ -1292,7 +1395,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="TEntity"> The type of entity to find. </typeparam>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual TEntity Find<TEntity>([NotNull] params object[] keyValues)
+        public virtual TEntity Find<TEntity>([CanBeNull] params object[] keyValues)
             where TEntity : class
         {
             CheckDisposed();
@@ -1310,7 +1413,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <typeparam name="TEntity"> The type of entity to find. </typeparam>
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<TEntity> FindAsync<TEntity>([NotNull] params object[] keyValues)
+        public virtual Task<TEntity> FindAsync<TEntity>([CanBeNull] params object[] keyValues)
             where TEntity : class
         {
             CheckDisposed();
@@ -1329,7 +1432,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <param name="keyValues">The values of the primary key for the entity to be found.</param>
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>The entity found, or null.</returns>
-        public virtual Task<TEntity> FindAsync<TEntity>([NotNull] object[] keyValues, CancellationToken cancellationToken)
+        public virtual Task<TEntity> FindAsync<TEntity>([CanBeNull] object[] keyValues, CancellationToken cancellationToken)
             where TEntity : class
         {
             CheckDisposed();

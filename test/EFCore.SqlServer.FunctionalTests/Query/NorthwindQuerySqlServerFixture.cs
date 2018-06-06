@@ -22,14 +22,17 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             modelBuilder.Entity<Employee>(
                 b =>
-                    {
-                        b.Property(c => c.EmployeeID).HasColumnType("int");
-                        b.Property(c => c.ReportsTo).HasColumnType("int");
-                    });
+                {
+                    b.Property(c => c.EmployeeID).HasColumnType("int");
+                    b.Property(c => c.ReportsTo).HasColumnType("int");
+                });
 
-            modelBuilder.Entity<Order>()
-                .Property(o => o.EmployeeID)
-                .HasColumnType("int");
+            modelBuilder.Entity<Order>(
+                b =>
+                {
+                    b.Property(o => o.EmployeeID).HasColumnType("int");
+                    b.Property(o => o.OrderDate).HasColumnType("datetime");
+                });
 
             modelBuilder.Entity<OrderDetail>()
                 .Property(od => od.UnitPrice)
@@ -37,10 +40,10 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             modelBuilder.Entity<Product>(
                 b =>
-                    {
-                        b.Property(p => p.UnitPrice).HasColumnType("money");
-                        b.Property(p => p.UnitsInStock).HasColumnType("smallint");
-                    });
+                {
+                    b.Property(p => p.UnitPrice).HasColumnType("money");
+                    b.Property(p => p.UnitsInStock).HasColumnType("smallint");
+                });
 
             modelBuilder.Entity<MostExpensiveProduct>()
                 .Property(p => p.UnitPrice)

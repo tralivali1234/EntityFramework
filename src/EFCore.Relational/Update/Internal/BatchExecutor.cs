@@ -59,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             try
             {
                 if (connection.CurrentTransaction == null
-                    && connection.EnlistedTransaction == null
+                    && (connection as ITransactionEnlistmentManager)?.EnlistedTransaction == null
                     && Transaction.Current == null
                     && CurrentContext.Context.Database.AutoTransactionsEnabled)
                 {
@@ -70,10 +70,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     connection.Open();
                 }
 
-                foreach (var commandbatch in commandBatches)
+                foreach (var batch in commandBatches)
                 {
-                    commandbatch.Execute(connection);
-                    rowsAffected += commandbatch.ModificationCommands.Count;
+                    batch.Execute(connection);
+                    rowsAffected += batch.ModificationCommands.Count;
                 }
 
                 startedTransaction?.Commit();
@@ -117,7 +117,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             try
             {
                 if (connection.CurrentTransaction == null
-                    && connection.EnlistedTransaction == null
+                    && (connection as ITransactionEnlistmentManager)?.EnlistedTransaction == null
                     && Transaction.Current == null
                     && CurrentContext.Context.Database.AutoTransactionsEnabled)
                 {
@@ -128,10 +128,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     await connection.OpenAsync(cancellationToken);
                 }
 
-                foreach (var commandbatch in commandBatches)
+                foreach (var batch in commandBatches)
                 {
-                    await commandbatch.ExecuteAsync(connection, cancellationToken);
-                    rowsAffected += commandbatch.ModificationCommands.Count;
+                    await batch.ExecuteAsync(connection, cancellationToken);
+                    rowsAffected += batch.ModificationCommands.Count;
                 }
 
                 startedTransaction?.Commit();

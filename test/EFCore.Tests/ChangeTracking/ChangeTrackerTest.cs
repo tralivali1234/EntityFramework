@@ -4,12 +4,18 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 // ReSharper disable ClassNeverInstantiated.Local
@@ -20,6 +26,831 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 {
     public class ChangeTrackerTest
     {
+        [Fact]
+        public void DetectChanges_is_logged()
+        {
+            Seed();
+
+            using (var context = new LikeAZooContext())
+            {
+                _log.Clear();
+
+                context.SaveChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.DetectChangesStarting.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(CoreStrings.LogDetectChangesStarting.GenerateMessage(nameof(LikeAZooContext)), message);
+
+                (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.DetectChangesCompleted.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(CoreStrings.LogDetectChangesCompleted.GenerateMessage(nameof(LikeAZooContext)), message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Detect_property_change_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Find(1);
+
+                _log.Clear();
+
+                cat.Name = "Smoke-a-doke";
+                context.ChangeTracker.DetectChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.PropertyChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogPropertyChangeDetectedSensitive.GenerateMessage(nameof(Cat), nameof(Cat.Name), "Smokey", "Smoke-a-doke", "{Id: 1}")
+                        : CoreStrings.LogPropertyChangeDetected.GenerateMessage(nameof(Cat), nameof(Cat.Name)),
+                    message);
+
+                _log.Clear();
+
+                cat.Name = "Little Artichoke";
+                context.ChangeTracker.DetectChanges();
+
+                Assert.Empty(_log.Where(e => e.Id.Id == CoreEventId.PropertyChangeDetected.Id));
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Detect_foreign_key_property_change_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Include(e => e.Hats).Single(e => e.Id == 1);
+
+                _log.Clear();
+
+                var hat = cat.Hats.Single(h => h.Id == 77);
+                hat.CatId = 2;
+                context.ChangeTracker.DetectChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.ForeignKeyChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogForeignKeyChangeDetectedSensitive.GenerateMessage(nameof(Hat), nameof(Hat.CatId), 1, 2, "{Id: 77}")
+                        : CoreStrings.LogForeignKeyChangeDetected.GenerateMessage(nameof(Hat), nameof(Hat.CatId)),
+                    message);
+
+                _log.Clear();
+
+                hat.CatId = 1;
+                context.ChangeTracker.DetectChanges();
+
+                (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.ForeignKeyChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogForeignKeyChangeDetectedSensitive.GenerateMessage(nameof(Hat), nameof(Hat.CatId), 2, 1, "{Id: 77}")
+                        : CoreStrings.LogForeignKeyChangeDetected.GenerateMessage(nameof(Hat), nameof(Hat.CatId)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Detect_collection_change_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Include(e => e.Hats).Single(e => e.Id == 1);
+                var hat = cat.Hats.Single(h => h.Id == 77);
+
+                _log.Clear();
+
+                cat.Hats.Clear();
+                context.ChangeTracker.DetectChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.CollectionChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogCollectionChangeDetectedSensitive.GenerateMessage(0, 1, nameof(Cat), nameof(Cat.Hats), "{Id: 1}")
+                        : CoreStrings.LogCollectionChangeDetected.GenerateMessage(0, 1, nameof(Cat), nameof(Cat.Hats)),
+                    message);
+
+                _log.Clear();
+
+                cat.Hats.Add(hat);
+                context.ChangeTracker.DetectChanges();
+
+                (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.CollectionChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogCollectionChangeDetectedSensitive.GenerateMessage(1, 0, nameof(Cat), nameof(Cat.Hats), "{Id: 1}")
+                        : CoreStrings.LogCollectionChangeDetected.GenerateMessage(1, 0, nameof(Cat), nameof(Cat.Hats)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Detect_reference_change_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Include(e => e.Hats).Single(e => e.Id == 1);
+                var hat = cat.Hats.Single(h => h.Id == 77);
+
+                _log.Clear();
+
+                hat.Cat = null;
+                context.ChangeTracker.DetectChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.ReferenceChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogReferenceChangeDetectedSensitive.GenerateMessage(nameof(Hat), nameof(Hat.Cat), "{Id: 77}")
+                        : CoreStrings.LogReferenceChangeDetected.GenerateMessage(nameof(Hat), nameof(Hat.Cat)),
+                    message);
+
+                _log.Clear();
+
+                hat.Cat = cat;
+                context.ChangeTracker.DetectChanges();
+
+                (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.ReferenceChangeDetected.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogReferenceChangeDetectedSensitive.GenerateMessage(nameof(Hat), nameof(Hat.Cat), "{Id: 77}")
+                        : CoreStrings.LogReferenceChangeDetected.GenerateMessage(nameof(Hat), nameof(Hat.Cat)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Start_tracking_is_logged_from_query(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                _log.Clear();
+                context.Cats.Find(1);
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.StartedTracking.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogStartedTrackingSensitive.GenerateMessage(nameof(Cat), "{Id: 1}", nameof(LikeAZooContextSensitive))
+                        : CoreStrings.LogStartedTracking.GenerateMessage(nameof(Cat), nameof(LikeAZooContext)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Start_tracking_is_logged_from_attach(bool sensitive)
+        {
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                _log.Clear();
+                context.Attach(new Hat(88));
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.StartedTracking.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogStartedTrackingSensitive.GenerateMessage(nameof(Hat), "{Id: 88}", nameof(LikeAZooContextSensitive))
+                        : CoreStrings.LogStartedTracking.GenerateMessage(nameof(Hat), nameof(LikeAZooContext)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void State_change_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Find(1);
+
+                _log.Clear();
+
+                context.Entry(cat).State = EntityState.Deleted;
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.StateChanged.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogStateChangedSensitive.GenerateMessage(nameof(Cat), "{Id: 1}", nameof(LikeAZooContextSensitive), EntityState.Unchanged, EntityState.Deleted)
+                        : CoreStrings.LogStateChanged.GenerateMessage(nameof(Cat), nameof(LikeAZooContext), EntityState.Unchanged, EntityState.Deleted),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false, false, false)]
+        [InlineData(true, false, false)]
+        [InlineData(false, true, false)]
+        [InlineData(true, true, false)]
+        [InlineData(false, false, true)]
+        [InlineData(true, false, true)]
+        [InlineData(false, true, true)]
+        [InlineData(true, true, true)]
+        public async Task Value_generation_is_logged(bool sensitive, bool async, bool temporary)
+        {
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                ResetValueGenerator(
+                    context,
+                    context.Model.FindEntityType(typeof(Hat)).FindProperty(nameof(Hat.Id)),
+                    temporary);
+
+                _log.Clear();
+
+                if (async)
+                {
+                    context.Add(new Hat(0));
+                }
+                else
+                {
+                    await context.AddAsync(new Hat(0));
+                }
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.ValueGenerated.Id);
+                Assert.Equal(LogLevel.Debug, level);
+
+                if (temporary)
+                {
+                    Assert.Equal(
+                        sensitive
+                            ? CoreStrings.LogTempValueGeneratedSensitive.GenerateMessage(nameof(LikeAZooContextSensitive), 1, nameof(Hat.Id), nameof(Hat))
+                            : CoreStrings.LogTempValueGenerated.GenerateMessage(nameof(LikeAZooContext), nameof(Hat.Id), nameof(Hat)),
+                        message);
+                }
+                else
+                {
+                    Assert.Equal(
+                        sensitive
+                            ? CoreStrings.LogValueGeneratedSensitive.GenerateMessage(nameof(LikeAZooContextSensitive), 1, nameof(Hat.Id), nameof(Hat))
+                            : CoreStrings.LogValueGenerated.GenerateMessage(nameof(LikeAZooContext), nameof(Hat.Id), nameof(Hat)),
+                        message);
+                }
+            }
+        }
+
+        private static void ResetValueGenerator(DbContext context, IProperty property, bool generateTemporaryValues)
+        {
+            var cache = context.GetService<IValueGeneratorCache>();
+
+            var generator = (ResettableValueGenerator)cache.GetOrAdd(
+                property,
+                property.DeclaringEntityType,
+                (p, e) => new ResettableValueGenerator());
+
+            generator.Reset(generateTemporaryValues);
+        }
+
+        private class ResettableValueGenerator : ValueGenerator<int>
+        {
+            private int _current;
+            private bool _generatesTemporaryValues;
+
+            public override bool GeneratesTemporaryValues => _generatesTemporaryValues;
+
+            public override int Next(EntityEntry entry)
+                => Interlocked.Increment(ref _current);
+
+            public void Reset(bool generateTemporaryValues)
+            {
+                _generatesTemporaryValues = generateTemporaryValues;
+                _current = 0;
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Cascade_delete_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Include(e => e.Hats).Single(e => e.Id == 1);
+
+                context.Entry(cat).State = EntityState.Deleted;
+
+                _log.Clear();
+
+                context.SaveChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.CascadeDelete.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogCascadeDeleteSensitive.GenerateMessage(nameof(Hat), "{Id: 77}", EntityState.Deleted, nameof(Cat), "{Id: 1}")
+                        : CoreStrings.LogCascadeDelete.GenerateMessage(nameof(Hat), EntityState.Deleted, nameof(Cat)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void Cascade_delete_orphan_is_logged(bool sensitive)
+        {
+            Seed(sensitive);
+
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                var cat = context.Cats.Include(e => e.Hats).Single(e => e.Id == 1);
+
+                cat.Hats.Clear();
+
+                _log.Clear();
+
+                context.SaveChanges();
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.CascadeDeleteOrphan.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(
+                    sensitive
+                        ? CoreStrings.LogCascadeDeleteOrphanSensitive.GenerateMessage(nameof(Hat), "{Id: 77}", EntityState.Deleted, nameof(Cat))
+                        : CoreStrings.LogCascadeDeleteOrphan.GenerateMessage(nameof(Hat), EntityState.Deleted, nameof(Cat)),
+                    message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task SaveChanges_is_logged(bool async)
+        {
+            Seed();
+
+            using (var context = new LikeAZooContext())
+            {
+                var cat = context.Cats.Find(1);
+
+                context.Entry(cat).State = EntityState.Deleted;
+
+                _log.Clear();
+
+                if (async)
+                {
+                    await context.SaveChangesAsync();
+                }
+                else
+                {
+                    context.SaveChanges();
+                }
+
+                var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.SaveChangesStarting.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(CoreStrings.LogSaveChangesStarting.GenerateMessage(nameof(LikeAZooContext)), message);
+
+                (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.SaveChangesCompleted.Id);
+                Assert.Equal(LogLevel.Debug, level);
+                Assert.Equal(CoreStrings.LogSaveChangesCompleted.GenerateMessage(nameof(LikeAZooContext), 1), message);
+            }
+        }
+
+        [Fact]
+        public void Context_Dispose_is_logged()
+        {
+            using (var context = new LikeAZooContext())
+            {
+                context.Cats.Find(1);
+
+                _log.Clear();
+            }
+
+            var (level, _, message) = _log.Single(e => e.Id.Id == CoreEventId.ContextDisposed.Id);
+            Assert.Equal(LogLevel.Debug, level);
+            Assert.Equal(CoreStrings.LogContextDisposed.GenerateMessage(nameof(LikeAZooContext)), message);
+        }
+
+        [Fact]
+        public void State_change_events_fire_from_query()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            Seed();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                Assert.Equal(2, context.Cats.OrderBy(e => e.Id).ToList().Count);
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 1, EntityState.Unchanged, tracked[0], fromQuery: true);
+                AssertTrackedEvent(context, 2, EntityState.Unchanged, tracked[1], fromQuery: true);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_fire_from_Attach()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                context.Attach(new Cat(1));
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 1, EntityState.Unchanged, tracked[0], fromQuery: false);
+
+                context.Entry(new Cat(2)).State = EntityState.Unchanged;
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 2, EntityState.Unchanged, tracked[1], fromQuery: false);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_fire_from_Add()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                context.Add(new Cat(1));
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 1, EntityState.Added, tracked[0], fromQuery: false);
+
+                context.Entry(new Cat(2)).State = EntityState.Added;
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 2, EntityState.Added, tracked[1], fromQuery: false);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_fire_from_Update()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                context.Update(new Cat(1));
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 1, EntityState.Modified, tracked[0], fromQuery: false);
+
+                context.Entry(new Cat(2)).State = EntityState.Modified;
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 2, EntityState.Modified, tracked[1], fromQuery: false);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_fire_for_tracked_state_changes()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                context.AddRange(new Cat(1), new Cat(2));
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 1, EntityState.Added, tracked[0], fromQuery: false);
+                AssertTrackedEvent(context, 2, EntityState.Added, tracked[1], fromQuery: false);
+
+                context.Entry(context.Cats.Find(1)).State = EntityState.Unchanged;
+                context.Entry(context.Cats.Find(2)).State = EntityState.Modified;
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(2, changed.Count);
+
+                AssertChangedEvent(context, 1, EntityState.Added, EntityState.Unchanged, changed[0]);
+                AssertChangedEvent(context, 2, EntityState.Added, EntityState.Modified, changed[1]);
+
+                context.Entry(context.Cats.Find(1)).State = EntityState.Added;
+                context.Entry(context.Cats.Find(2)).State = EntityState.Deleted;
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(4, changed.Count);
+
+                AssertChangedEvent(context, 1, EntityState.Unchanged, EntityState.Added, changed[2]);
+                AssertChangedEvent(context, 2, EntityState.Modified, EntityState.Deleted, changed[3]);
+
+                context.Remove(context.Cats.Find(1));
+                context.Entry(context.Cats.Find(2)).State = EntityState.Detached;
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(6, changed.Count);
+
+                AssertChangedEvent(context, null, EntityState.Added, EntityState.Detached, changed[4]);
+                AssertChangedEvent(context, null, EntityState.Deleted, EntityState.Detached, changed[5]);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_fire_when_saving_changes()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            Seed();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                var cat1 = context.Cats.Find(1);
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 1, EntityState.Unchanged, tracked[0], fromQuery: true);
+
+                context.Add(new Cat(3));
+                cat1.Name = "Clippy";
+
+                context.ChangeTracker.DetectChanges();
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(1, changed.Count);
+
+                AssertTrackedEvent(context, 3, EntityState.Added, tracked[1], fromQuery: false);
+                AssertChangedEvent(context, 1, EntityState.Unchanged, EntityState.Modified, changed[0]);
+
+                context.SaveChanges();
+
+                Assert.Equal(2, tracked.Count);
+                Assert.Equal(3, changed.Count);
+
+                AssertChangedEvent(context, 1, EntityState.Modified, EntityState.Unchanged, changed[1]);
+                AssertChangedEvent(context, 3, EntityState.Added, EntityState.Unchanged, changed[2]);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_fire_when_property_modified_flags_cause_state_change()
+        {
+            var tracked = new List<EntityTrackedEventArgs>();
+            var changed = new List<EntityStateChangedEventArgs>();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked, changed);
+
+                var cat = context.Attach(
+                    new Cat(3)
+                    {
+                        Name = "Achilles"
+                    }).Entity;
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(0, changed.Count);
+
+                AssertTrackedEvent(context, 3, EntityState.Unchanged, tracked[0], fromQuery: false);
+
+                context.Entry(cat).Property(e => e.Name).IsModified = true;
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(1, changed.Count);
+
+                AssertChangedEvent(context, 3, EntityState.Unchanged, EntityState.Modified, changed[0]);
+
+                context.Entry(cat).Property(e => e.Name).IsModified = false;
+
+                Assert.Equal(1, tracked.Count);
+                Assert.Equal(2, changed.Count);
+
+                AssertChangedEvent(context, 3, EntityState.Modified, EntityState.Unchanged, changed[1]);
+            }
+        }
+
+        [Fact]
+        public void State_change_events_are_limited_to_the_current_context()
+        {
+            var tracked1 = new List<EntityTrackedEventArgs>();
+            var changed1 = new List<EntityStateChangedEventArgs>();
+            var tracked2 = new List<EntityTrackedEventArgs>();
+            var changed2 = new List<EntityStateChangedEventArgs>();
+
+            Seed();
+
+            using (var context = new LikeAZooContext())
+            {
+                RegisterEvents(context, tracked1, changed1);
+
+                using (var context2 = new LikeAZooContext())
+                {
+                    RegisterEvents(context2, tracked2, changed2);
+
+                    Assert.Equal(2, context2.Cats.OrderBy(e => e.Id).ToList().Count);
+
+                    Assert.Equal(2, tracked2.Count);
+                    Assert.Equal(0, changed2.Count);
+
+                    context2.Entry(context2.Cats.Find(1)).State = EntityState.Modified;
+
+                    Assert.Equal(2, tracked2.Count);
+                    Assert.Equal(1, changed2.Count);
+
+                    Assert.Equal(0, tracked1.Count);
+                    Assert.Equal(0, changed1.Count);
+                }
+
+                Assert.Equal(2, context.Cats.OrderBy(e => e.Id).ToList().Count);
+
+                Assert.Equal(2, tracked1.Count);
+                Assert.Equal(0, changed1.Count);
+
+                context.Entry(context.Cats.Find(1)).State = EntityState.Modified;
+
+                Assert.Equal(2, tracked1.Count);
+                Assert.Equal(1, changed1.Count);
+
+                Assert.Equal(2, tracked2.Count);
+                Assert.Equal(1, changed2.Count);
+            }
+        }
+
+        private static void AssertTrackedEvent(
+            LikeAZooContext context,
+            int id,
+            EntityState newState,
+            EntityTrackedEventArgs tracked,
+            bool fromQuery)
+        {
+            Assert.Equal(newState, tracked.Entry.State);
+            Assert.Equal(fromQuery, tracked.FromQuery);
+            Assert.Same(context.Cats.Find(id), tracked.Entry.Entity);
+        }
+
+        private static void AssertChangedEvent(
+            LikeAZooContext context,
+            int? id,
+            EntityState oldState,
+            EntityState newState,
+            EntityStateChangedEventArgs changed)
+        {
+            Assert.Equal(oldState, changed.OldState);
+            Assert.Equal(newState, changed.NewState);
+            Assert.Equal(newState, changed.Entry.State);
+
+            if (id != null)
+            {
+                Assert.Same(context.Cats.Find(id), changed.Entry.Entity);
+            }
+        }
+
+        private static void RegisterEvents(
+            LikeAZooContext context,
+            IList<EntityTrackedEventArgs> tracked,
+            IList<EntityStateChangedEventArgs> changed)
+        {
+            context.ChangeTracker.Tracked += (s, e) =>
+            {
+                Assert.Same(context.ChangeTracker, s);
+                tracked.Add(e);
+            };
+
+            context.ChangeTracker.StateChanged += (s, e) =>
+            {
+                Assert.Same(context.ChangeTracker, s);
+                Assert.Equal(e.NewState, e.Entry.State);
+                changed.Add(e);
+            };
+        }
+
+        private void ChangeTracker_EnityStateChanging(object arg1, EntityStateChangedEventArgs arg2)
+        {
+            throw new NotImplementedException();
+        }
+
+        private class Cat
+        {
+            public Cat(int id) => Id = id;
+
+            // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
+            public int Id { get; private set; }
+
+            public string Name { get; set; }
+
+            public ICollection<Hat> Hats { get; } = new List<Hat>();
+        }
+
+        private class Hat
+        {
+            public Hat(int id) => Id = id;
+
+            // ReSharper disable once AutoPropertyCanBeMadeGetOnly.Local
+            public int Id { get; private set; }
+
+            public string Color { get; set; }
+
+            public int CatId { get; set; }
+            public Cat Cat { get; set; }
+        }
+
+        private static readonly List<(LogLevel Level, EventId Id, string Message)> _log
+            = new List<(LogLevel, EventId, string)>();
+
+        private static readonly LoggerFactory _loggerFactory
+            = new LoggerFactory(new[] { new ListLoggerProvider(_log) });
+
+        private class LikeAZooContext : DbContext
+        {
+            public DbSet<Cat> Cats { get; set; }
+
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                => optionsBuilder
+                    .UseLoggerFactory(_loggerFactory)
+                    .UseInMemoryDatabase(nameof(LikeAZooContext));
+        }
+
+        private class LikeAZooContextSensitive : LikeAZooContext
+        {
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+                => optionsBuilder
+                    .EnableSensitiveDataLogging()
+                    .UseLoggerFactory(_loggerFactory)
+                    .UseInMemoryDatabase(nameof(LikeAZooContextSensitive));
+        }
+
+        private void Seed(bool sensitive = false)
+        {
+            using (var context = sensitive ? new LikeAZooContextSensitive() : new LikeAZooContext())
+            {
+                context.Database.EnsureDeleted();
+
+                var cat1 = new Cat(1)
+                {
+                    Name = "Smokey"
+                };
+                var cat2 = new Cat(2)
+                {
+                    Name = "Sid"
+                };
+
+                cat1.Hats.Add(
+                    new Hat(77)
+                    {
+                        Color = "Pine Green"
+                    });
+
+                context.AddRange(cat1, cat2);
+
+                context.SaveChanges();
+            }
+        }
+
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -29,7 +860,11 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             {
                 var product = new Product();
                 var order = new Order();
-                var orderDetails = new OrderDetails { Order = order, Product = product };
+                var orderDetails = new OrderDetails
+                {
+                    Order = order,
+                    Product = product
+                };
 
                 context.Add(orderDetails);
                 if (saveEntities)
@@ -63,6 +898,47 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                 Assert.Empty(product.OrderDetails);
                 Assert.Empty(order.OrderDetails);
+            }
+        }
+
+        [Fact]
+        public void View_type_negative_cases()
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                var whoAmI = new WhoAmI();
+
+                Assert.Equal(
+                    CoreStrings.QueryTypeNotValid("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Add(whoAmI)).Message);
+
+                Assert.Equal(
+                    CoreStrings.QueryTypeNotValid("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Remove(whoAmI)).Message);
+
+                Assert.Equal(
+                    CoreStrings.QueryTypeNotValid("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Attach(whoAmI)).Message);
+
+                Assert.Equal(
+                    CoreStrings.QueryTypeNotValid("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Update(whoAmI)).Message);
+
+                Assert.Equal(
+                    CoreStrings.InvalidSetTypeQuery("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Find<WhoAmI>(1)).Message);
+
+                Assert.Equal(
+                    CoreStrings.InvalidSetTypeQuery("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Set<WhoAmI>().ToList()).Message);
+
+                Assert.Equal(
+                    CoreStrings.InvalidSetTypeEntity("Sweet"),
+                    Assert.Throws<InvalidOperationException>(() => context.Query<Sweet>().ToList()).Message);
+
+                Assert.Equal(
+                    CoreStrings.QueryTypeNotValid("WhoAmI"),
+                    Assert.Throws<InvalidOperationException>(() => context.Entry(whoAmI)).Message);
             }
         }
 
@@ -170,10 +1046,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                     context.ChangeTracker.TrackGraph(
                         category, e =>
-                            {
-                                e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
-                                traversal.Add(NodeString(e));
-                            });
+                        {
+                            e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
+                            traversal.Add(NodeString(e));
+                        });
 
                     Assert.Equal(
                         new List<string>
@@ -221,7 +1097,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var category = new NullbileCategory { Info = new NullbileCategoryInfo() };
+                var category = new NullbileCategory
+                {
+                    Info = new NullbileCategoryInfo()
+                };
 
                 if (setKeys)
                 {
@@ -239,10 +1118,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                     context.ChangeTracker.TrackGraph(
                         category, e =>
-                            {
-                                e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
-                                traversal.Add(NodeString(e));
-                            });
+                        {
+                            e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
+                            traversal.Add(NodeString(e));
+                        });
 
                     Assert.Equal(
                         new List<string>
@@ -276,7 +1155,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var sweet = new Sweet { Dreams = new Dreams { AreMade = new AreMadeOfThis(), OfThis = new AreMadeOfThis() } };
+                var sweet = new Sweet
+                {
+                    Dreams = new Dreams
+                    {
+                        AreMade = new AreMadeOfThis(),
+                        OfThis = new AreMadeOfThis()
+                    }
+                };
 
                 if (setPrincipalKey)
                 {
@@ -301,26 +1187,26 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                     context.ChangeTracker.TrackGraph(
                         sweet, e =>
+                        {
+                            if (e.Entry.Metadata.IsOwned())
                             {
-                                if (e.Entry.Metadata.IsOwned())
-                                {
-                                    e.Entry.State = e.SourceEntry.State;
-                                }
-                                else
-                                {
-                                    e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
-                                }
+                                e.Entry.State = e.SourceEntry.State;
+                            }
+                            else
+                            {
+                                e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
+                            }
 
-                                traversal.Add(NodeString(e));
-                            });
+                            traversal.Add(NodeString(e));
+                        });
 
                     Assert.Equal(
                         new List<string>
                         {
                             "<None> -----> Sweet:1",
-                            "Sweet:1 ---Dreams--> Sweet.Dreams#Dreams:1",
-                            "Sweet.Dreams#Dreams:1 ---AreMade--> Sweet.Dreams#Dreams.AreMade#AreMadeOfThis:1",
-                            "Sweet.Dreams#Dreams:1 ---OfThis--> Sweet.Dreams#Dreams.OfThis#AreMadeOfThis:1"
+                            "Sweet:1 ---Dreams--> Dreams:1",
+                            "Dreams:1 ---AreMade--> Dreams.AreMade#AreMadeOfThis:1",
+                            "Dreams:1 ---OfThis--> Dreams.OfThis#AreMadeOfThis:1"
                         },
                         traversal);
                 }
@@ -346,6 +1232,81 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             }
         }
 
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public void Can_attach_owned_dependent_with_reference_to_parent(bool useAttach, bool setDependentKey)
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                var dreams = new Dreams
+                {
+                    Sweet = new Sweet
+                    {
+                        Id = 1
+                    },
+                    AreMade = new AreMadeOfThis(),
+                    OfThis = new AreMadeOfThis()
+                };
+
+                if (setDependentKey)
+                {
+                    var dreamsEntry = context.Entry(dreams);
+                    dreamsEntry.Property("SweetId").CurrentValue = 1;
+                    dreamsEntry.Reference(e => e.AreMade).TargetEntry.Property("DreamsSweetId").CurrentValue = 1;
+                    dreamsEntry.Reference(e => e.OfThis).TargetEntry.Property("DreamsSweetId").CurrentValue = 1;
+                }
+
+                if (useAttach)
+                {
+                    context.Attach(dreams);
+                }
+                else
+                {
+                    var traversal = new List<string>();
+
+                    context.ChangeTracker.TrackGraph(
+                        dreams, e =>
+                        {
+                            e.Entry.State = e.Entry.IsKeySet ? EntityState.Unchanged : EntityState.Added;
+
+                            traversal.Add(NodeString(e));
+                        });
+
+                    Assert.Equal(
+                        new List<string>
+                        {
+                            "<None> -----> Dreams:1",
+                            "Dreams:1 ---AreMade--> Dreams.AreMade#AreMadeOfThis:1",
+                            "Dreams:1 ---OfThis--> Dreams.OfThis#AreMadeOfThis:1",
+                            "Dreams:1 ---Sweet--> Sweet:1"
+                        },
+                        traversal);
+                }
+
+                Assert.Equal(4, context.ChangeTracker.Entries().Count());
+
+                var dependentEntry = context.Entry(dreams);
+                var dependentEntry2a = context.Entry(dreams.AreMade);
+                var dependentEntry2b = context.Entry(dreams.OfThis);
+
+                var expectedPrincipalState = EntityState.Unchanged;
+                var expectedDependentState = setDependentKey ? EntityState.Unchanged : EntityState.Added;
+
+                Assert.Equal(expectedPrincipalState, context.Entry(dreams.Sweet).State);
+                Assert.Equal(expectedDependentState, dependentEntry.State);
+                Assert.Equal(expectedDependentState, dependentEntry2a.State);
+                Assert.Equal(expectedDependentState, dependentEntry2b.State);
+
+                Assert.Equal(1, dreams.Sweet.Id);
+                Assert.Equal(1, dependentEntry.Property(dependentEntry.Metadata.FindPrimaryKey().Properties[0].Name).CurrentValue);
+                Assert.Equal(1, dependentEntry2a.Property(dependentEntry2a.Metadata.FindPrimaryKey().Properties[0].Name).CurrentValue);
+                Assert.Equal(1, dependentEntry2b.Property(dependentEntry2b.Metadata.FindPrimaryKey().Properties[0].Name).CurrentValue);
+            }
+        }
+
         [Fact]
         public void Can_attach_parent_with_child_collection()
         {
@@ -356,9 +1317,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Id = 1,
                     Products = new List<Product>
                     {
-                        new Product { Id = 1 },
-                        new Product { Id = 2 },
-                        new Product { Id = 3 }
+                        new Product
+                        {
+                            Id = 1
+                        },
+                        new Product
+                        {
+                            Id = 2
+                        },
+                        new Product
+                        {
+                            Id = 3
+                        }
                     }
                 };
 
@@ -366,10 +1336,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                 context.ChangeTracker.TrackGraph(
                     category, e =>
-                        {
-                            traversal.Add(NodeString(e));
-                            e.Entry.State = EntityState.Modified;
-                        });
+                    {
+                        traversal.Add(NodeString(e));
+                        e.Entry.State = EntityState.Modified;
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -403,16 +1373,23 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var product = new Product { Id = 1, Category = new Category { Id = 1 } };
+                var product = new Product
+                {
+                    Id = 1,
+                    Category = new Category
+                    {
+                        Id = 1
+                    }
+                };
 
                 var traversal = new List<string>();
 
                 context.ChangeTracker.TrackGraph(
                     product, e =>
-                        {
-                            traversal.Add(NodeString(e));
-                            e.Entry.State = EntityState.Modified;
-                        });
+                    {
+                        traversal.Add(NodeString(e));
+                        e.Entry.State = EntityState.Modified;
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -437,16 +1414,27 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var product = new Product { Id = 1, Details = new ProductDetails { Id = 1, Tag = new ProductDetailsTag { Id = 1 } } };
+                var product = new Product
+                {
+                    Id = 1,
+                    Details = new ProductDetails
+                    {
+                        Id = 1,
+                        Tag = new ProductDetailsTag
+                        {
+                            Id = 1
+                        }
+                    }
+                };
 
                 var traversal = new List<string>();
 
                 context.ChangeTracker.TrackGraph(
                     product, e =>
-                        {
-                            traversal.Add(NodeString(e));
-                            e.Entry.State = EntityState.Unchanged;
-                        });
+                    {
+                        traversal.Add(NodeString(e));
+                        e.Entry.State = EntityState.Unchanged;
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -473,16 +1461,27 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var tag = new ProductDetailsTag { Id = 1, Details = new ProductDetails { Id = 1, Product = new Product { Id = 1 } } };
+                var tag = new ProductDetailsTag
+                {
+                    Id = 1,
+                    Details = new ProductDetails
+                    {
+                        Id = 1,
+                        Product = new Product
+                        {
+                            Id = 1
+                        }
+                    }
+                };
 
                 var traversal = new List<string>();
 
                 context.ChangeTracker.TrackGraph(
                     tag, e =>
-                        {
-                            traversal.Add(NodeString(e));
-                            e.Entry.State = EntityState.Unchanged;
-                        });
+                    {
+                        traversal.Add(NodeString(e));
+                        e.Entry.State = EntityState.Unchanged;
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -509,16 +1508,27 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var details = new ProductDetails { Id = 1, Product = new Product { Id = 1 }, Tag = new ProductDetailsTag { Id = 1 } };
+                var details = new ProductDetails
+                {
+                    Id = 1,
+                    Product = new Product
+                    {
+                        Id = 1
+                    },
+                    Tag = new ProductDetailsTag
+                    {
+                        Id = 1
+                    }
+                };
 
                 var traversal = new List<string>();
 
                 context.ChangeTracker.TrackGraph(
                     details, e =>
-                        {
-                            traversal.Add(NodeString(e));
-                            e.Entry.State = EntityState.Unchanged;
-                        });
+                    {
+                        traversal.Add(NodeString(e));
+                        e.Entry.State = EntityState.Unchanged;
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -545,16 +1555,27 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var existingProduct = context.Attach(new Product { Id = 2, CategoryId = 1 }).Entity;
+                var existingProduct = context.Attach(
+                    new Product
+                    {
+                        Id = 2,
+                        CategoryId = 1
+                    }).Entity;
 
                 var category = new Category
                 {
                     Id = 1,
                     Products = new List<Product>
                     {
-                        new Product { Id = 1 },
+                        new Product
+                        {
+                            Id = 1
+                        },
                         existingProduct,
-                        new Product { Id = 3 }
+                        new Product
+                        {
+                            Id = 3
+                        }
                     }
                 };
 
@@ -562,10 +1583,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                 context.ChangeTracker.TrackGraph(
                     category, e =>
-                        {
-                            traversal.Add(NodeString(e));
-                            e.Entry.State = EntityState.Modified;
-                        });
+                    {
+                        traversal.Add(NodeString(e));
+                        e.Entry.State = EntityState.Modified;
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -603,9 +1624,33 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Id = 1,
                     Products = new List<Product>
                     {
-                        new Product { Id = 1, CategoryId = 1, Details = new ProductDetails { Id = 1 } },
-                        new Product { Id = 2, CategoryId = 1, Details = new ProductDetails { Id = 2 } },
-                        new Product { Id = 3, CategoryId = 1, Details = new ProductDetails { Id = 3 } }
+                        new Product
+                        {
+                            Id = 1,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 1
+                            }
+                        },
+                        new Product
+                        {
+                            Id = 2,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 2
+                            }
+                        },
+                        new Product
+                        {
+                            Id = 3,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 3
+                            }
+                        }
                     }
                 };
 
@@ -613,14 +1658,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                 context.ChangeTracker.TrackGraph(
                     category, e =>
+                    {
+                        traversal.Add(NodeString(e));
+                        if (!(e.Entry.Entity is Product product)
+                            || product.Id != 2)
                         {
-                            traversal.Add(NodeString(e));
-                            if (!(e.Entry.Entity is Product product)
-                                || product.Id != 2)
-                            {
-                                e.Entry.State = EntityState.Unchanged;
-                            }
-                        });
+                            e.Entry.State = EntityState.Unchanged;
+                        }
+                    });
 
                 Assert.Equal(
                     new List<string>
@@ -663,7 +1708,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var details = new ProductDetails { Id = 1, Product = new Product { Id = 1 } };
+                var details = new ProductDetails
+                {
+                    Id = 1,
+                    Product = new Product
+                    {
+                        Id = 1
+                    }
+                };
                 details.Product.Details = details;
 
                 var traversal = new List<string>();
@@ -686,28 +1738,29 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             KeyValueAttachTest(
                 (category, changeTracker) =>
-                    {
-                        var traversal = new List<string>();
+                {
+                    var traversal = new List<string>();
 
-                        changeTracker.TrackGraph(
-                            category,
-                            e =>
-                                {
-                                    traversal.Add(NodeString(e));
-                                    e.Entry.State = e.Entry.Entity is Product product && product.Id == 0
-                                        ? EntityState.Added : EntityState.Unchanged;
-                                });
+                    changeTracker.TrackGraph(
+                        category,
+                        e =>
+                        {
+                            traversal.Add(NodeString(e));
+                            e.Entry.State = e.Entry.Entity is Product product && product.Id == 0
+                                ? EntityState.Added
+                                : EntityState.Unchanged;
+                        });
 
-                        Assert.Equal(
-                            new List<string>
-                            {
-                                "<None> -----> Category:77",
-                                "Category:77 ---Products--> Product:77",
-                                "Category:77 ---Products--> Product:0",
-                                "Category:77 ---Products--> Product:78"
-                            },
-                            traversal);
-                    });
+                    Assert.Equal(
+                        new List<string>
+                        {
+                            "<None> -----> Category:77",
+                            "Category:77 ---Products--> Product:77",
+                            "Category:77 ---Products--> Product:0",
+                            "Category:77 ---Products--> Product:78"
+                        },
+                        traversal);
+                });
         }
 
         [Fact]
@@ -735,9 +1788,21 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Id = 77,
                     Products = new List<Product>
                     {
-                        new Product { Id = 77, CategoryId = expectModified ? 0 : 77 },
-                        new Product { Id = 0, CategoryId = expectModified ? 0 : 77 },
-                        new Product { Id = 78, CategoryId = expectModified ? 0 : 77 }
+                        new Product
+                        {
+                            Id = 77,
+                            CategoryId = expectModified ? 0 : 77
+                        },
+                        new Product
+                        {
+                            Id = 0,
+                            CategoryId = expectModified ? 0 : 77
+                        },
+                        new Product
+                        {
+                            Id = 78,
+                            CategoryId = expectModified ? 0 : 77
+                        }
                     }
                 };
 
@@ -778,9 +1843,21 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Id = 77,
                     Products = new List<Product>
                     {
-                        new Product { Id = 77, CategoryId = 77 },
-                        new Product { Id = 0, CategoryId = 77 },
-                        new Product { Id = 78, CategoryId = 77 }
+                        new Product
+                        {
+                            Id = 77,
+                            CategoryId = 77
+                        },
+                        new Product
+                        {
+                            Id = 0,
+                            CategoryId = 77
+                        },
+                        new Product
+                        {
+                            Id = 78,
+                            CategoryId = 77
+                        }
                     }
                 };
 
@@ -823,6 +1900,84 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 }
 
                 return base.DetermineState(entry);
+            }
+        }
+
+        [Theory]
+        [InlineData(false, false)]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        [InlineData(true, true)]
+        public void Can_add_owned_dependent_with_reference_to_parent(bool useAdd, bool setDependentKey)
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                var dreams = new Dreams
+                {
+                    Sweet = new Sweet
+                    {
+                        Id = 1
+                    },
+                    AreMade = new AreMadeOfThis(),
+                    OfThis = new AreMadeOfThis()
+                };
+
+                context.Entry(dreams.Sweet).State = EntityState.Unchanged;
+
+                if (setDependentKey)
+                {
+                    var dreamsEntry = context.Entry(dreams);
+                    dreamsEntry.Property("SweetId").CurrentValue = 1;
+                    dreamsEntry.Reference(e => e.AreMade).TargetEntry.Property("DreamsSweetId").CurrentValue = 1;
+                    dreamsEntry.Reference(e => e.OfThis).TargetEntry.Property("DreamsSweetId").CurrentValue = 1;
+                }
+
+                if (useAdd)
+                {
+                    context.Add(dreams);
+                }
+                else
+                {
+                    var traversal = new List<string>();
+
+                    context.ChangeTracker.TrackGraph(
+                        dreams, e =>
+                        {
+                            e.Entry.State = e.Entry.IsKeySet && !e.Entry.Metadata.IsOwned()
+                                ? EntityState.Unchanged
+                                : EntityState.Added;
+
+                            traversal.Add(NodeString(e));
+                        });
+
+                    Assert.Equal(
+                        new List<string>
+                        {
+                            "<None> -----> Dreams:1",
+                            "Dreams:1 ---AreMade--> Dreams.AreMade#AreMadeOfThis:1",
+                            "Dreams:1 ---OfThis--> Dreams.OfThis#AreMadeOfThis:1"
+                        },
+                        traversal);
+                }
+
+                Assert.Equal(4, context.ChangeTracker.Entries().Count());
+
+                var dependentEntry = context.Entry(dreams);
+                var dependentEntry2a = context.Entry(dreams.AreMade);
+                var dependentEntry2b = context.Entry(dreams.OfThis);
+
+                var expectedPrincipalState = EntityState.Unchanged;
+                var expectedDependentState = EntityState.Added;
+
+                Assert.Equal(expectedPrincipalState, context.Entry(dreams.Sweet).State);
+                Assert.Equal(expectedDependentState, dependentEntry.State);
+                Assert.Equal(expectedDependentState, dependentEntry2a.State);
+                Assert.Equal(expectedDependentState, dependentEntry2b.State);
+
+                Assert.Equal(1, dreams.Sweet.Id);
+                Assert.Equal(1, dependentEntry.Property(dependentEntry.Metadata.FindPrimaryKey().Properties[0].Name).CurrentValue);
+                Assert.Equal(1, dependentEntry2a.Property(dependentEntry2a.Metadata.FindPrimaryKey().Properties[0].Name).CurrentValue);
+                Assert.Equal(1, dependentEntry2b.Property(dependentEntry2b.Metadata.FindPrimaryKey().Properties[0].Name).CurrentValue);
             }
         }
 
@@ -875,7 +2030,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Tag = new ProductDetailsTag
                     {
                         Details = new ProductDetails
-                            { Product = new Product() }
+                        {
+                            Product = new Product()
+                        }
                     }
                 };
 
@@ -884,7 +2041,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Tag = new ProductDetailsTag
                     {
                         Details = new ProductDetails
-                            { Product = new Product() }
+                        {
+                            Product = new Product()
+                        }
                     }
                 };
 
@@ -911,7 +2070,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Tag = new ProductDetailsTag
                     {
                         Details = new ProductDetails
-                            { Product = new Product() }
+                        {
+                            Product = new Product()
+                        }
                     }
                 };
 
@@ -920,7 +2081,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Tag = new ProductDetailsTag
                     {
                         Details = new ProductDetails
-                            { Product = new Product() }
+                        {
+                            Product = new Product()
+                        }
                     }
                 };
 
@@ -947,7 +2110,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Tag = new ProductDetailsTag
                     {
                         Details = new ProductDetails
-                            { Product = new Product() }
+                        {
+                            Product = new Product()
+                        }
                     }
                 };
 
@@ -956,7 +2121,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     Tag = new ProductDetailsTag
                     {
                         Details = new ProductDetails
-                            { Product = new Product() }
+                        {
+                            Product = new Product()
+                        }
                     }
                 };
 
@@ -1145,10 +2312,26 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 var order1 = new Order();
                 var order2 = new Order();
 
-                var orderDetails1a = new OrderDetails { Order = order1, Product = product1 };
-                var orderDetails1b = new OrderDetails { Order = order1, Product = product2 };
-                var orderDetails2a = new OrderDetails { Order = order2, Product = product1 };
-                var orderDetails2b = new OrderDetails { Order = order2, Product = product2 };
+                var orderDetails1a = new OrderDetails
+                {
+                    Order = order1,
+                    Product = product1
+                };
+                var orderDetails1b = new OrderDetails
+                {
+                    Order = order1,
+                    Product = product2
+                };
+                var orderDetails2a = new OrderDetails
+                {
+                    Order = order2,
+                    Product = product1
+                };
+                var orderDetails2b = new OrderDetails
+                {
+                    Order = order2,
+                    Product = product2
+                };
 
                 context.Add(product1);
                 context.Add(order1);
@@ -1174,10 +2357,26 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 var order1 = new Order();
                 var order2 = new Order();
 
-                var orderDetails1a = new OrderDetails { Order = order1, Product = product1 };
-                var orderDetails1b = new OrderDetails { Order = order1, Product = product2 };
-                var orderDetails2a = new OrderDetails { Order = order2, Product = product1 };
-                var orderDetails2b = new OrderDetails { Order = order2, Product = product2 };
+                var orderDetails1a = new OrderDetails
+                {
+                    Order = order1,
+                    Product = product1
+                };
+                var orderDetails1b = new OrderDetails
+                {
+                    Order = order1,
+                    Product = product2
+                };
+                var orderDetails2a = new OrderDetails
+                {
+                    Order = order2,
+                    Product = product1
+                };
+                var orderDetails2b = new OrderDetails
+                {
+                    Order = order2,
+                    Product = product2
+                };
 
                 context.Add(orderDetails1a);
                 context.Add(orderDetails2a);
@@ -1259,7 +2458,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         {
             using (var context = new EarlyLearningCenter())
             {
-                var entry = context.Attach(new Product { Id = 1, CategoryId = 66 });
+                var entry = context.Attach(
+                    new Product
+                    {
+                        Id = 1,
+                        CategoryId = 66
+                    });
 
                 entry.Entity.CategoryId = 77;
 
@@ -1287,7 +2491,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             {
                 context.ChangeTracker.AutoDetectChangesEnabled = false;
 
-                var entry = context.Attach(new Product { Id = 1, CategoryId = 66 });
+                var entry = context.Attach(
+                    new Product
+                    {
+                        Id = 1,
+                        CategoryId = 66
+                    });
 
                 entry.Entity.CategoryId = 77;
 
@@ -1313,7 +2522,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             {
                 context.ChangeTracker.AutoDetectChangesEnabled = false;
 
-                var entry = context.Attach(new Product { Id = 1, CategoryId = 66 });
+                var entry = context.Attach(
+                    new Product
+                    {
+                        Id = 1,
+                        CategoryId = 66
+                    });
 
                 entry.Entity.CategoryId = 77;
 
@@ -1345,14 +2559,173 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             }
         }
 
-        [Fact] // Issue #743
-        public void Throws_when_instance_of_unmapped_derived_type_is_used()
+        [Fact]
+        public void TrackGraph_overload_can_visit_an_already_attached_graph()
         {
             using (var context = new EarlyLearningCenter())
             {
+                var category = new Category
+                {
+                    Id = 1,
+                    Products = new List<Product>
+                    {
+                        new Product
+                        {
+                            Id = 1,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 1
+                            }
+                        },
+                        new Product
+                        {
+                            Id = 2,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 2
+                            }
+                        },
+                        new Product
+                        {
+                            Id = 3,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 3
+                            }
+                        }
+                    }
+                };
+
+                context.Attach(category);
+
+                var visited = new HashSet<object>();
+                var traversal = new List<string>();
+
+                context.ChangeTracker.TrackGraph(
+                    category, visited, (e, v) =>
+                    {
+                        if (v.Contains(e.Entry.Entity))
+                        {
+                            return false;
+                        }
+
+                        v.Add(e.Entry.Entity);
+
+                        traversal.Add(NodeString(e));
+
+                        return true;
+                    });
+
                 Assert.Equal(
-                    CoreStrings.EntityTypeNotFound(typeof(SpecialProduct).Name),
-                    Assert.Throws<InvalidOperationException>(() => context.Add(new SpecialProduct())).Message);
+                    new List<string>
+                    {
+                        "<None> -----> Category:1",
+                        "Category:1 ---Products--> Product:1",
+                        "Product:1 ---Details--> ProductDetails:1",
+                        "Category:1 ---Products--> Product:2",
+                        "Product:2 ---Details--> ProductDetails:2",
+                        "Category:1 ---Products--> Product:3",
+                        "Product:3 ---Details--> ProductDetails:3"
+                    },
+                    traversal);
+
+                Assert.Equal(7, visited.Count);
+            }
+        }
+
+        [Fact]
+        public void TrackGraph_overload_can_visit_a_graph_without_attaching()
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                var category = new Category
+                {
+                    Id = 1,
+                    Products = new List<Product>
+                    {
+                        new Product
+                        {
+                            Id = 1,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 1
+                            }
+                        },
+                        new Product
+                        {
+                            Id = 2,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 2
+                            }
+                        },
+                        new Product
+                        {
+                            Id = 3,
+                            CategoryId = 1,
+                            Details = new ProductDetails
+                            {
+                                Id = 3
+                            }
+                        }
+                    }
+                };
+
+                var visited = new HashSet<object>();
+                var traversal = new List<string>();
+
+                context.ChangeTracker.TrackGraph(
+                    category, visited, (e, v) =>
+                    {
+                        if (v.Contains(e.Entry.Entity))
+                        {
+                            return false;
+                        }
+
+                        v.Add(e.Entry.Entity);
+
+                        traversal.Add(NodeString(e));
+
+                        return true;
+                    });
+
+                Assert.Equal(
+                    new List<string>
+                    {
+                        "<None> -----> Category:1",
+                        "Category:1 ---Products--> Product:1",
+                        "Product:1 ---Details--> ProductDetails:1",
+                        "Category:1 ---Products--> Product:2",
+                        "Product:2 ---Details--> ProductDetails:2",
+                        "Category:1 ---Products--> Product:3",
+                        "Product:3 ---Details--> ProductDetails:3"
+                    },
+                    traversal);
+
+                Assert.Equal(7, visited.Count);
+
+                foreach (var entity in new object[] { category }
+                    .Concat(category.Products)
+                    .Concat(category.Products.Select(e => e.Details)))
+                {
+                    Assert.Equal(EntityState.Detached, context.Entry(entity).State);
+                }
+            }
+        }
+
+        [Fact]
+        public void Does_not_throw_when_instance_of_unmapped_derived_type_is_used()
+        {
+            using (var context = new EarlyLearningCenter())
+            {
+                Assert.Same(
+                    context.Model.FindEntityType(typeof(Product)),
+                    context.Add(new SpecialProduct()).Metadata);
             }
         }
 
@@ -1432,11 +2805,11 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
             protected internal override void OnModelCreating(ModelBuilder modelBuilder)
                 => modelBuilder.Entity<Dark>(
                     b =>
-                        {
-                            b.Property<int>("Id").ValueGeneratedOnAdd();
-                            b.Property<int>("SomeInt");
-                            b.Property<string>("SomeString");
-                        });
+                    {
+                        b.Property<int>("Id").ValueGeneratedOnAdd();
+                        b.Property<int>("SomeInt");
+                        b.Property<string>("SomeString");
+                    });
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder.UseInMemoryDatabase(nameof(TheShadows));
@@ -1447,10 +2820,24 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         }
 
         private static Product CreateSimpleGraph(int id)
-            => new Product { Id = id, Category = new Category { Id = id } };
+            => new Product
+            {
+                Id = id,
+                Category = new Category
+                {
+                    Id = id
+                }
+            };
 
         private class ChangeDetectorProxy : ChangeDetector
         {
+            public ChangeDetectorProxy(
+                IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> logger,
+                ILoggingOptions loggingOptions)
+                : base(logger, loggingOptions)
+            {
+            }
+
             public bool DetectChangesCalled { get; set; }
 
             public override void DetectChanges(InternalEntityEntry entry)
@@ -1562,12 +2949,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
         private class Dreams
         {
+            public Sweet Sweet { get; set; }
             public AreMadeOfThis AreMade { get; set; }
             public AreMadeOfThis OfThis { get; set; }
         }
 
         private class AreMadeOfThis
         {
+        }
+
+        private class WhoAmI
+        {
+            public string ToDisagree { get; set; }
         }
 
         private class EarlyLearningCenter : DbContext
@@ -1589,37 +2982,40 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 modelBuilder
                     .Entity<NullbileProduct>(
                         b =>
-                            {
-                                b.Property<int?>("Id");
-                                b.Property<int?>("CategoryId");
-                                b.HasKey("Id");
-                            });
+                        {
+                            b.Property<int?>("Id");
+                            b.Property<int?>("CategoryId");
+                            b.HasKey("Id");
+                        });
 
                 modelBuilder
                     .Entity<NullbileCategoryInfo>(
                         b =>
-                            {
-                                b.Property<int?>("Id");
-                                b.Property<int?>("CategoryId");
-                                b.HasKey("Id");
-                            });
+                        {
+                            b.Property<int?>("Id");
+                            b.Property<int?>("CategoryId");
+                            b.HasKey("Id");
+                        });
 
                 modelBuilder
                     .Entity<NullbileCategory>(
                         b =>
-                            {
-                                b.Property<int?>("Id");
-                                b.HasKey("Id");
-                                b.HasMany(e => e.Products).WithOne(e => e.Category).HasForeignKey("CategoryId");
-                                b.HasOne(e => e.Info).WithOne(e => e.Category).HasForeignKey<NullbileCategoryInfo>("CategoryId");
-                            });
+                        {
+                            b.Property<int?>("Id");
+                            b.HasKey("Id");
+                            b.HasMany(e => e.Products).WithOne(e => e.Category).HasForeignKey("CategoryId");
+                            b.HasOne(e => e.Info).WithOne(e => e.Category).HasForeignKey<NullbileCategoryInfo>("CategoryId");
+                        });
 
                 modelBuilder.Entity<Sweet>().OwnsOne(
                     e => e.Dreams, b =>
-                        {
-                            b.OwnsOne(e => e.AreMade);
-                            b.OwnsOne(e => e.OfThis);
-                        });
+                    {
+                        b.HasOne(e => e.Sweet).WithOne(e => e.Dreams);
+                        b.OwnsOne(e => e.AreMade);
+                        b.OwnsOne(e => e.OfThis);
+                    });
+
+                modelBuilder.Query<WhoAmI>();
 
                 modelBuilder
                     .Entity<Category>().HasMany(e => e.Products).WithOne(e => e.Category);
@@ -1638,11 +3034,16 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
                 modelBuilder.Entity<OrderDetails>(
                     b =>
-                        {
-                            b.HasKey(e => new { e.OrderId, e.ProductId });
-                            b.HasOne(e => e.Order).WithMany(e => e.OrderDetails).HasForeignKey(e => e.OrderId);
-                            b.HasOne(e => e.Product).WithMany(e => e.OrderDetails).HasForeignKey(e => e.ProductId);
-                        });
+                    {
+                        b.HasKey(
+                            e => new
+                            {
+                                e.OrderId,
+                                e.ProductId
+                            });
+                        b.HasOne(e => e.Order).WithMany(e => e.OrderDetails).HasForeignKey(e => e.OrderId);
+                        b.HasOne(e => e.Product).WithMany(e => e.OrderDetails).HasForeignKey(e => e.ProductId);
+                    });
             }
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

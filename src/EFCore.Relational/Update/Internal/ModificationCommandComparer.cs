@@ -50,27 +50,47 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                 return result;
             }
 
-            result = (int)x.EntityState - (int)y.EntityState;
+            var xState = x.EntityState;
+            result = (int)xState - (int)y.EntityState;
             if (0 != result)
             {
                 return result;
             }
 
-            if (x.EntityState != EntityState.Added
+            if (xState != EntityState.Added
                 && x.Entries.Count > 0
                 && y.Entries.Count > 0)
             {
                 var xEntry = x.Entries[0];
                 var yEntry = y.Entries[0];
 
-                var key = xEntry.EntityType.FindPrimaryKey();
-
-                for (var i = 0; i < key.Properties.Count; i++)
+                var xEntityType = xEntry.EntityType;
+                var yEntityType = yEntry.EntityType;
+                var xKey = xEntry.EntityType.FindPrimaryKey();
+                var yKey = xKey;
+                if (xEntityType != yEntityType)
                 {
-                    var keyProperty = key.Properties[i];
-                    var compare = GetComparer(keyProperty.ClrType);
+                    result = StringComparer.Ordinal.Compare(xEntityType.Name, yEntityType.Name);
+                    if (0 != result)
+                    {
+                        return result;
+                    }
 
-                    result = compare(xEntry.GetCurrentValue(keyProperty), yEntry.GetCurrentValue(keyProperty));
+                    result = StringComparer.Ordinal.Compare(xEntityType.DefiningNavigationName, yEntityType.DefiningNavigationName);
+                    if (0 != result)
+                    {
+                        return result;
+                    }
+
+                    yKey = yEntry.EntityType.FindPrimaryKey();
+                }
+
+                for (var i = 0; i < xKey.Properties.Count; i++)
+                {
+                    var xKeyProperty = xKey.Properties[i];
+                    var compare = GetComparer(xKeyProperty.ClrType);
+
+                    result = compare(xEntry.GetCurrentValue(xKeyProperty), yEntry.GetCurrentValue(yKey.Properties[i]));
                     if (0 != result)
                     {
                         return result;
@@ -91,18 +111,18 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         protected virtual Func<object, object, int> GetComparer([NotNull] Type type)
             => _comparers.GetOrAdd(
                 type, t =>
-                    {
-                        var xParameter = Expression.Parameter(typeof(object), name: "x");
-                        var yParameter = Expression.Parameter(typeof(object), name: "y");
-                        return Expression.Lambda<Func<object, object, int>>(
-                                Expression.Call(
-                                    null, _compareMethod.MakeGenericMethod(t),
-                                    Expression.Convert(xParameter, t),
-                                    Expression.Convert(yParameter, t)),
-                                xParameter,
-                                yParameter)
-                            .Compile();
-                    });
+                {
+                    var xParameter = Expression.Parameter(typeof(object), name: "x");
+                    var yParameter = Expression.Parameter(typeof(object), name: "y");
+                    return Expression.Lambda<Func<object, object, int>>(
+                            Expression.Call(
+                                null, _compareMethod.MakeGenericMethod(t),
+                                Expression.Convert(xParameter, t),
+                                Expression.Convert(yParameter, t)),
+                            xParameter,
+                            yParameter)
+                        .Compile();
+                });
 
         private static readonly MethodInfo _compareMethod
             = typeof(ModificationCommandComparer).GetTypeInfo().GetDeclaredMethod(nameof(CompareValue));

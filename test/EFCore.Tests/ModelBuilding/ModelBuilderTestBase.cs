@@ -3,14 +3,22 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public abstract partial class ModelBuilderTest
@@ -96,8 +104,18 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             {
                 var builder = CreateModelBuilder();
 
-                builder.Entity<Hob>().HasKey(e => new { e.Id1, e.Id2 });
-                builder.Entity<Nob>().HasKey(e => new { e.Id1, e.Id2 });
+                builder.Entity<Hob>().HasKey(
+                    e => new
+                    {
+                        e.Id1,
+                        e.Id2
+                    });
+                builder.Entity<Nob>().HasKey(
+                    e => new
+                    {
+                        e.Id1,
+                        e.Id2
+                    });
 
                 return builder;
             }
@@ -109,13 +127,34 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
         {
             protected TestModelBuilder(TestHelpers testHelpers)
             {
-                ModelBuilder = testHelpers.CreateConventionBuilder();
-                ModelValidator = testHelpers.CreateModelValidator();
+                Log = new List<(LogLevel, EventId, string)>();
+                var options = new LoggingOptions();
+                options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(false).Options);
+                var validationLogger = new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
+                    new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
+                    options,
+                    new DiagnosticListener("Fake"));
+                var modelLogger = new DiagnosticsLogger<DbLoggerCategory.Model>(
+                    new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Name),
+                    options,
+                    new DiagnosticListener("Fake"));
+
+                var contextServices = testHelpers.CreateContextServices();
+
+                ModelBuilder = new ModelBuilder(
+                    new CompositeConventionSetBuilder(contextServices.GetRequiredService<IEnumerable<IConventionSetBuilder>>().ToList())
+                        .AddConventions(
+                            new CoreConventionSetBuilder(
+                                    contextServices.GetRequiredService<CoreConventionSetBuilderDependencies>().With(modelLogger))
+                                .CreateConventionSet()));
+
+                ModelValidator = new ModelValidator(new ModelValidatorDependencies(validationLogger, modelLogger));
             }
 
             public virtual IMutableModel Model => ModelBuilder.Model;
             protected ModelBuilder ModelBuilder { get; }
             protected IModelValidator ModelValidator { get; }
+            public List<(LogLevel Level, EventId Id, string Message)> Log { get; }
 
             public TestModelBuilder HasAnnotation(string annotation, object value)
             {
@@ -126,8 +165,14 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public abstract TestEntityTypeBuilder<TEntity> Entity<TEntity>()
                 where TEntity : class;
 
+            public abstract TestOwnedEntityTypeBuilder<TEntity> Owned<TEntity>()
+                where TEntity : class;
+
             public abstract TestModelBuilder Entity<TEntity>(Action<TestEntityTypeBuilder<TEntity>> buildAction)
                 where TEntity : class;
+
+            public abstract TestQueryTypeBuilder<TQuery> Query<TQuery>()
+                where TQuery : class;
 
             public abstract TestModelBuilder Ignore<TEntity>()
                 where TEntity : class;
@@ -142,8 +187,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public virtual string GetDisplayName(Type entityType) => entityType.Name;
 
-            public virtual ModelBuilder UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
-                => ModelBuilder.UsePropertyAccessMode(propertyAccessMode);
+            public virtual TestModelBuilder UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
+            {
+                ModelBuilder.UsePropertyAccessMode(propertyAccessMode);
+
+                return this;
+            }
         }
 
         public abstract class TestEntityTypeBuilder<TEntity>
@@ -191,9 +240,48 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 Expression<Func<TEntity, IEnumerable<TRelatedEntity>>> navigationExpression = null)
                 where TRelatedEntity : class;
 
+            public abstract TestEntityTypeBuilder<TEntity> HasQueryFilter(Expression<Func<TEntity, bool>> filter);
+
             public abstract TestEntityTypeBuilder<TEntity> HasChangeTrackingStrategy(ChangeTrackingStrategy changeTrackingStrategy);
 
             public abstract TestEntityTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode);
+
+            public abstract DataBuilder<TEntity> HasData(params TEntity[] data);
+        }
+
+        public abstract class TestOwnedEntityTypeBuilder<TEntity>
+            where TEntity : class
+        {
+        }
+
+        public abstract class TestQueryTypeBuilder<TEntity>
+            where TEntity : class
+        {
+            public abstract IMutableEntityType Metadata { get; }
+            public abstract TestQueryTypeBuilder<TEntity> HasAnnotation(string annotation, object value);
+
+            public abstract TestQueryTypeBuilder<TEntity> HasBaseType<TBaseEntity>()
+                where TBaseEntity : class;
+
+            public abstract TestQueryTypeBuilder<TEntity> HasBaseType(string baseEntityTypeName);
+
+            public abstract TestPropertyBuilder<TProperty> Property<TProperty>(
+                Expression<Func<TEntity, TProperty>> propertyExpression);
+
+            public abstract TestPropertyBuilder<TProperty> Property<TProperty>(string propertyName);
+
+            public abstract TestQueryTypeBuilder<TEntity> Ignore(
+                Expression<Func<TEntity, object>> propertyExpression);
+
+            public abstract TestQueryTypeBuilder<TEntity> Ignore(string propertyName);
+
+            public abstract TestReferenceNavigationBuilder<TEntity, TRelatedEntity> HasOne<TRelatedEntity>(
+                Expression<Func<TEntity, TRelatedEntity>> navigationExpression = null)
+                where TRelatedEntity : class;
+
+            public abstract TestQueryTypeBuilder<TEntity> HasQueryFilter(Expression<Func<TEntity, bool>> filter);
+
+            public abstract TestQueryTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode);
         }
 
         public class TestKeyBuilder
@@ -252,6 +340,16 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public abstract TestPropertyBuilder<TProperty> HasField(string fieldName);
             public abstract TestPropertyBuilder<TProperty> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode);
+
+            public abstract TestPropertyBuilder<TProperty> HasConversion<TProvider>();
+            public abstract TestPropertyBuilder<TProperty> HasConversion(Type providerClrType);
+
+            public abstract TestPropertyBuilder<TProperty> HasConversion<TProvider>(
+                Expression<Func<TProperty, TProvider>> convertToProviderExpression,
+                Expression<Func<TProvider, TProperty>> convertFromProviderExpression);
+
+            public abstract TestPropertyBuilder<TProperty> HasConversion<TProvider>(ValueConverter<TProperty, TProvider> converter);
+            public abstract TestPropertyBuilder<TProperty> HasConversion(ValueConverter converter);
         }
 
         public abstract class TestCollectionNavigationBuilder<TEntity, TRelatedEntity>

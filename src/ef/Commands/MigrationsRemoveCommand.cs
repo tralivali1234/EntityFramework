@@ -10,7 +10,7 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
     {
         protected override int Execute()
         {
-            var result = CreateExecutor().RemoveMigration(Context.Value(), _force.HasValue(), _revert.HasValue());
+            var result = CreateExecutor().RemoveMigration(Context.Value(), _force.HasValue());
             if (_json.HasValue())
             {
                 ReportJsonResults(result);
@@ -19,7 +19,7 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
             return base.Execute();
         }
 
-        private void ReportJsonResults(IDictionary result)
+        private static void ReportJsonResults(IDictionary result)
         {
             Reporter.WriteData("{");
             Reporter.WriteData("  \"migrationFile\": " + Json.Literal(result["MigrationFile"] as string) + ",");

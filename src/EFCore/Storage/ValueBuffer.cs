@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 
 namespace Microsoft.EntityFrameworkCore.Storage
@@ -17,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
     ///         not used in application code.
     ///     </para>
     /// </summary>
-    public struct ValueBuffer
+    public readonly struct ValueBuffer
     {
         /// <summary>
         ///     A buffer with no values in it.
@@ -59,8 +60,10 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <returns> The value at the requested index. </returns>
         public object this[int index]
         {
-            get { return _values[_offset + index]; }
-            [param: CanBeNull] set { _values[_offset + index] = value; }
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _values[_offset + index];
+
+            [param: CanBeNull] set => _values[_offset + index] = value;
         }
 
         internal static readonly MethodInfo GetValueMethod
@@ -108,8 +111,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
                 return false;
             }
 
-            return obj is ValueBuffer
-                   && Equals((ValueBuffer)obj);
+            return obj is ValueBuffer buffer
+                   && Equals(buffer);
         }
 
         private bool Equals(ValueBuffer other)

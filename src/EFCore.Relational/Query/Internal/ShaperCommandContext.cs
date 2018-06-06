@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Data.Common;
+using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Sql;
@@ -20,27 +21,26 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
     public class ShaperCommandContext
     {
         private readonly ConcurrentDictionary<CommandCacheKey, IRelationalCommand> _commandCache
-            = new ConcurrentDictionary<CommandCacheKey, IRelationalCommand>();
+            = new ConcurrentDictionary<CommandCacheKey, IRelationalCommand>(CommandCacheKeyComparer.Instance);
 
-        private struct CommandCacheKey
+        private sealed class CommandCacheKeyComparer : IEqualityComparer<CommandCacheKey>
         {
-            private readonly IReadOnlyDictionary<string, object> _parameterValues;
+            public static readonly CommandCacheKeyComparer Instance = new CommandCacheKeyComparer();
 
-            public CommandCacheKey(IReadOnlyDictionary<string, object> parameterValues)
-                => _parameterValues = parameterValues;
-
-            public override bool Equals(object obj)
+            private CommandCacheKeyComparer()
             {
-                if (_parameterValues.Count > 0)
-                {
-                    var other = (CommandCacheKey)obj;
+            }
 
-                    // ReSharper disable once LoopCanBeConvertedToQuery
-                    foreach (var parameterValue in _parameterValues)
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public bool Equals(CommandCacheKey x, CommandCacheKey y)
+            {
+                if (x.ParameterValues.Count > 0)
+                {
+                    foreach (var parameterValue in x.ParameterValues)
                     {
                         var value = parameterValue.Value;
 
-                        if (!other._parameterValues.TryGetValue(parameterValue.Key, out var otherValue))
+                        if (!y.ParameterValues.TryGetValue(parameterValue.Key, out var otherValue))
                         {
                             return false;
                         }
@@ -63,13 +63,20 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 return true;
             }
 
-            public override int GetHashCode() => 0;
-
-            public CommandCacheKey Clone() => new CommandCacheKey(
-                new Dictionary<string, object>((Dictionary<string, object>)_parameterValues));
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            public int GetHashCode(CommandCacheKey obj) => 0;
         }
 
-        private readonly IRelationalValueBufferFactoryFactory _valueBufferFactoryFactory;
+        private readonly struct CommandCacheKey
+        {
+            public readonly IReadOnlyDictionary<string, object> ParameterValues;
+
+            public CommandCacheKey(IReadOnlyDictionary<string, object> parameterValues)
+                => ParameterValues = parameterValues;
+
+            public CommandCacheKey Clone() => new CommandCacheKey(
+                new Dictionary<string, object>((Dictionary<string, object>)ParameterValues));
+        }
 
         private IRelationalValueBufferFactory _valueBufferFactory;
 
@@ -81,7 +88,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             [NotNull] IRelationalValueBufferFactoryFactory valueBufferFactoryFactory,
             [NotNull] Func<IQuerySqlGenerator> querySqlGeneratorFactory)
         {
-            _valueBufferFactoryFactory = valueBufferFactoryFactory;
+            ValueBufferFactoryFactory = valueBufferFactoryFactory;
             QuerySqlGeneratorFactory = querySqlGeneratorFactory;
         }
 
@@ -101,6 +108,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual IRelationalValueBufferFactoryFactory ValueBufferFactoryFactory { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual IRelationalCommand GetRelationalCommand(
             [NotNull] IReadOnlyDictionary<string, object> parameters)
         {
@@ -112,6 +125,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
 
             var generator = QuerySqlGeneratorFactory();
+
             relationalCommand = generator.GenerateSql(parameters);
 
             if (generator.IsCacheable)
@@ -130,11 +144,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             => NonCapturingLazyInitializer
                 .EnsureInitialized(
                     ref _valueBufferFactory,
-                    new FactoryAndReader(_valueBufferFactoryFactory, dataReader),
-                    s => QuerySqlGeneratorFactory()
-                        .CreateValueBufferFactory(s.Factory, s.Reader));
+                    new FactoryAndReader(ValueBufferFactoryFactory, dataReader),
+                    s => QuerySqlGeneratorFactory().CreateValueBufferFactory(s.Factory, s.Reader));
 
-        private struct FactoryAndReader
+        private readonly struct FactoryAndReader
         {
             public readonly IRelationalValueBufferFactoryFactory Factory;
             public readonly DbDataReader Reader;

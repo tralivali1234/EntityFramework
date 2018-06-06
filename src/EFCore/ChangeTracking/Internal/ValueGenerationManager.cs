@@ -2,10 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -21,6 +21,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
     {
         private readonly IValueGeneratorSelector _valueGeneratorSelector;
         private readonly IKeyPropagator _keyPropagator;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> _logger;
+        private readonly ILoggingOptions _loggingOptions;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -28,10 +30,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public ValueGenerationManager(
             [NotNull] IValueGeneratorSelector valueGeneratorSelector,
-            [NotNull] IKeyPropagator keyPropagator)
+            [NotNull] IKeyPropagator keyPropagator,
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> logger,
+            [NotNull] ILoggingOptions loggingOptions)
         {
             _valueGeneratorSelector = valueGeneratorSelector;
             _keyPropagator = keyPropagator;
+            _logger = logger;
+            _loggingOptions = loggingOptions;
         }
 
         /// <summary>
@@ -49,6 +55,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     chosenPrincipal = principalEntry;
                 }
             }
+
             return chosenPrincipal;
         }
 
@@ -63,11 +70,29 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             foreach (var property in FindGeneratingProperties(entry))
             {
                 var valueGenerator = GetValueGenerator(entry, property);
+
+                var generatedValue = valueGenerator.Next(entityEntry);
+                var temporary = valueGenerator.GeneratesTemporaryValues;
+
+                Log(entry, property, generatedValue, temporary);
+
                 SetGeneratedValue(
                     entry,
                     property,
-                    valueGenerator.Next(entityEntry),
-                    valueGenerator.GeneratesTemporaryValues);
+                    generatedValue,
+                    temporary);
+            }
+        }
+
+        private void Log(InternalEntityEntry entry, IProperty property, object generatedValue, bool temporary)
+        {
+            if (_loggingOptions.IsSensitiveDataLoggingEnabled)
+            {
+                _logger.ValueGeneratedSensitive(entry, property, generatedValue, temporary);
+            }
+            else
+            {
+                _logger.ValueGenerated(entry, property, generatedValue, temporary);
             }
         }
 
@@ -84,23 +109,42 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             foreach (var property in FindGeneratingProperties(entry))
             {
                 var valueGenerator = GetValueGenerator(entry, property);
+                var generatedValue = await valueGenerator.NextAsync(entityEntry, cancellationToken);
+                var temporary = valueGenerator.GeneratesTemporaryValues;
+
+                Log(entry, property, generatedValue, temporary);
+
                 SetGeneratedValue(
                     entry,
                     property,
-                    await valueGenerator.NextAsync(entityEntry, cancellationToken),
-                    valueGenerator.GeneratesTemporaryValues);
+                    generatedValue,
+                    temporary);
             }
         }
 
         private static IEnumerable<IProperty> FindPropagatingProperties(InternalEntityEntry entry)
-            => entry.EntityType.GetProperties().Where(
-                property => property.IsForeignKey()
-                            && property.ClrType.IsDefaultValue(entry[property]));
+        {
+            foreach (var property in ((EntityType)entry.EntityType).GetProperties())
+            {
+                if (property.IsForeignKey()
+                    && entry.HasDefaultValue(property))
+                {
+                    yield return property;
+                }
+            }
+        }
 
         private static IEnumerable<IProperty> FindGeneratingProperties(InternalEntityEntry entry)
-            => entry.EntityType.GetProperties().Where(
-                property => property.RequiresValueGenerator()
-                            && property.ClrType.IsDefaultValue(entry[property]));
+        {
+            foreach (var property in ((EntityType)entry.EntityType).GetProperties())
+            {
+                if (property.RequiresValueGenerator()
+                    && entry.HasDefaultValue(property))
+                {
+                    yield return property;
+                }
+            }
+        }
 
         private ValueGenerator GetValueGenerator(InternalEntityEntry entry, IProperty property)
             => _valueGeneratorSelector.Select(

@@ -3,13 +3,17 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Xunit;
+#if Test20
+using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
+#else
+using Microsoft.EntityFrameworkCore.SqlServer.Infrastructure.Internal;
+#endif
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
-    public class LoggingSqlServerTest : LoggingRelationalTest<SqlServerDbContextOptionsBuilder, SqlServerOptionsExtension>
+    public class LoggingSqlServerTest : LoggingRelationalTestBase<SqlServerDbContextOptionsBuilder, SqlServerOptionsExtension>
     {
         [Fact]
         public void Logs_context_initialization_row_number_paging()

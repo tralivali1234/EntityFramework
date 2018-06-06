@@ -14,6 +14,8 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
@@ -67,18 +69,18 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public MigrationsModelDiffer(
-            [NotNull] IRelationalTypeMapper typeMapper,
+            [NotNull] IRelationalTypeMappingSource typeMappingSource,
             [NotNull] IMigrationsAnnotationProvider migrationsAnnotations,
             [NotNull] IChangeDetector changeDetector,
             [NotNull] StateManagerDependencies stateManagerDependencies,
             [NotNull] CommandBatchPreparerDependencies commandBatchPreparerDependencies)
         {
-            Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
             Check.NotNull(migrationsAnnotations, nameof(migrationsAnnotations));
             Check.NotNull(stateManagerDependencies, nameof(stateManagerDependencies));
             Check.NotNull(commandBatchPreparerDependencies, nameof(commandBatchPreparerDependencies));
 
-            TypeMapper = typeMapper;
+            TypeMappingSource = typeMappingSource;
             MigrationsAnnotations = migrationsAnnotations;
             ChangeDetector = changeDetector;
             StateManagerDependencies = stateManagerDependencies;
@@ -89,7 +91,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IRelationalTypeMapper TypeMapper { get; }
+        protected virtual IRelationalTypeMappingSource TypeMappingSource { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -237,7 +239,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     sourceDataOperations.Add(operation);
                 }
                 else if (type == typeof(InsertDataOperation)
-                    || type == typeof(UpdateDataOperation))
+                         || type == typeof(UpdateDataOperation))
                 {
                     targetDataOperations.Add(operation);
                 }
@@ -269,17 +271,18 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     }
                 }
             }
+
             createTableOperations = createTableGraph.TopologicalSort(
                 (principalCreateTableOperation, createTableOperation, cyclicAddForeignKeyOperations) =>
+                {
+                    foreach (var cyclicAddForeignKeyOperation in cyclicAddForeignKeyOperations)
                     {
-                        foreach (var cyclicAddForeignKeyOperation in cyclicAddForeignKeyOperations)
-                        {
-                            createTableOperation.ForeignKeys.Remove(cyclicAddForeignKeyOperation);
-                            constraintOperations.Add(cyclicAddForeignKeyOperation);
-                        }
+                        createTableOperation.ForeignKeys.Remove(cyclicAddForeignKeyOperation);
+                        constraintOperations.Add(cyclicAddForeignKeyOperation);
+                    }
 
-                        return true;
-                    }).ToList();
+                    return true;
+                }).ToList();
 
             var dropTableGraph = new Multigraph<DropTableOperation, IForeignKey>();
             dropTableGraph.AddVertices(dropTableOperations);
@@ -297,14 +300,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     }
                 }
             }
+
             var newDiffContext = new DiffContext(null, null);
             dropTableOperations = dropTableGraph.TopologicalSort(
                 (dropTableOperation, principalDropTableOperation, foreignKeys) =>
-                    {
-                        dropForeignKeyOperations.AddRange(foreignKeys.SelectMany(c => Remove(c, newDiffContext)));
+                {
+                    dropForeignKeyOperations.AddRange(foreignKeys.SelectMany(c => Remove(c, newDiffContext)));
 
-                        return true;
-                    }).ToList();
+                    return true;
+                }).ToList();
 
             return dropForeignKeyOperations
                 .Concat(dropTableOperations)
@@ -339,13 +343,13 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             [CanBeNull] IModel target,
             [NotNull] DiffContext diffContext)
         {
-            TrackSeedData(source, target);
+            TrackData(source, target);
 
             var schemaOperations = source != null && target != null
                 ? DiffAnnotations(source, target)
-                    .Concat(Diff(GetSchemas(source), GetSchemas(target)))
+                    .Concat(Diff(GetSchemas(source), GetSchemas(target), diffContext))
                     .Concat(Diff(diffContext.GetSourceTables(), diffContext.GetTargetTables(), diffContext))
-                    .Concat(Diff(source.Relational().Sequences, target.Relational().Sequences))
+                    .Concat(Diff(source.Relational().Sequences, target.Relational().Sequences, diffContext))
                     .Concat(
                         Diff(
                             diffContext.GetSourceTables().SelectMany(s => s.GetForeignKeys()),
@@ -357,7 +361,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                         ? Remove(source, diffContext)
                         : Enumerable.Empty<MigrationOperation>();
 
-            return schemaOperations.Concat(GetSeedDataOperations());
+            return schemaOperations.Concat(GetDataOperations());
         }
 
         private IEnumerable<MigrationOperation> DiffAnnotations(
@@ -376,6 +380,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     alterDatabaseOperation.AddAnnotations(targetMigrationsAnnotations);
                     yield return alterDatabaseOperation;
                 }
+
                 yield break;
             }
 
@@ -388,6 +393,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     alterDatabaseOperation.OldDatabase.AddAnnotations(MigrationsAnnotations.ForRemove(source));
                     yield return alterDatabaseOperation;
                 }
+
                 yield break;
             }
 
@@ -406,9 +412,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         /// </summary>
         protected virtual IEnumerable<MigrationOperation> Add([NotNull] IModel target, [NotNull] DiffContext diffContext)
             => DiffAnnotations(null, target)
-                .Concat(GetSchemas(target).SelectMany(Add))
+                .Concat(GetSchemas(target).SelectMany(t => Add(t, diffContext)))
                 .Concat(diffContext.GetTargetTables().SelectMany(t => Add(t, diffContext)))
-                .Concat(target.Relational().Sequences.SelectMany(Add))
+                .Concat(target.Relational().Sequences.SelectMany(t => Add(t, diffContext)))
                 .Concat(diffContext.GetTargetTables().SelectMany(t => t.GetForeignKeys()).SelectMany(k => Add(k, diffContext)));
 
         /// <summary>
@@ -418,7 +424,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         protected virtual IEnumerable<MigrationOperation> Remove([NotNull] IModel source, [NotNull] DiffContext diffContext)
             => DiffAnnotations(source, null)
                 .Concat(diffContext.GetSourceTables().SelectMany(t => Remove(t, diffContext)))
-                .Concat(source.Relational().Sequences.SelectMany(Remove));
+                .Concat(source.Relational().Sequences.SelectMany(t => Remove(t, diffContext)));
 
         #endregion
 
@@ -428,36 +434,40 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] IEnumerable<string> source, [NotNull] IEnumerable<string> target)
+        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] IEnumerable<string> source, [NotNull] IEnumerable<string> target, [NotNull] DiffContext diffContext)
             => DiffCollection(
                 source,
                 target,
+                diffContext,
                 Diff,
                 Add,
                 Remove,
-                (s, t) => s == t);
+                (s, t, c) => s == t);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] string source, [NotNull] string target)
+        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] string source, [NotNull] string target, [NotNull] DiffContext diffContext)
             => Enumerable.Empty<MigrationOperation>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Add([NotNull] string target)
+        protected virtual IEnumerable<MigrationOperation> Add([NotNull] string target, [NotNull] DiffContext diffContext)
         {
-            yield return new EnsureSchemaOperation { Name = target };
+            yield return new EnsureSchemaOperation
+            {
+                Name = target
+            };
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] string source)
+        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] string source, [NotNull] DiffContext diffContext)
             => Enumerable.Empty<MigrationOperation>();
 
         #endregion
@@ -475,27 +485,27 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             => DiffCollection(
                 source,
                 target,
-                (s, t) =>
-                    {
-                        diffContext.AddMapping(s, t);
-
-                        return Diff(s, t, diffContext);
-                    },
-                t => Add(t, diffContext),
-                s => Remove(s, diffContext),
-                (s, t) => s.EntityTypes.Any(se => t.EntityTypes.Any(te => string.Equals(se.Name, te.Name, StringComparison.OrdinalIgnoreCase))),
-                (s, t) => string.Equals(
-                              s.Schema,
-                              t.Schema,
-                              StringComparison.OrdinalIgnoreCase)
-                          && string.Equals(
-                              s.Name,
-                              t.Name,
-                              StringComparison.OrdinalIgnoreCase),
-                (s, t) => string.Equals(
+                diffContext,
+                Diff,
+                Add,
+                Remove,
+                (s, t, c) => string.Equals(
+                                 s.Schema,
+                                 t.Schema,
+                                 StringComparison.OrdinalIgnoreCase)
+                             && string.Equals(
+                                 s.Name,
+                                 t.Name,
+                                 StringComparison.OrdinalIgnoreCase),
+                (s, t, c) => string.Equals(
                     s.Name,
                     t.Name,
-                    StringComparison.OrdinalIgnoreCase));
+                    StringComparison.OrdinalIgnoreCase),
+                (s, t, c) => string.Equals(s.GetRootType().Name, t.GetRootType().Name, StringComparison.OrdinalIgnoreCase),
+                (s, t, c) => s.EntityTypes.Any(
+                    se => t.EntityTypes.Any(
+                        te =>
+                            string.Equals(se.Name, te.Name, StringComparison.OrdinalIgnoreCase))));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -506,16 +516,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             [NotNull] TableMapping target,
             [NotNull] DiffContext diffContext)
         {
-            var schemaChanged = source.Schema != target.Schema;
-            var renamed = source.Name != target.Name;
-            if (schemaChanged || renamed)
+            if (source.Schema != target.Schema
+                || source.Name != target.Name)
             {
                 yield return new RenameTableOperation
                 {
                     Schema = source.Schema,
                     Name = source.Name,
-                    NewSchema = schemaChanged ? target.Schema : null,
-                    NewName = renamed ? target.Name : null
+                    NewSchema = target.Schema,
+                    NewName = target.Name
                 };
             }
 
@@ -528,7 +537,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 yield return operation;
             }
 
-            DiffSeedData(source, target, diffContext);
+            DiffData(source, target, diffContext);
         }
 
         private IEnumerable<MigrationOperation> DiffAnnotations(
@@ -607,12 +616,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         }
 
         private static IEnumerable<IProperty> GetSortedProperties(TableMapping target)
-            => target.EntityTypes
-                .Where(
-                    t => t.BaseType == null
-                        && t.FindForeignKeys(t.FindDeclaredPrimaryKey().Properties)
-                            .All(fk => t.Relational().TableName != fk.PrincipalEntityType.Relational().TableName))
-                .SelectMany(GetSortedProperties)
+            => GetSortedProperties(target.GetRootType())
                 .Distinct((x, y) => x.Relational().ColumnName == y.Relational().ColumnName);
 
         private static IEnumerable<IProperty> GetSortedProperties(IEntityType entityType)
@@ -643,12 +647,16 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 }
                 else
                 {
-                    groups.Add(clrProperty, new List<IProperty> { property });
+                    groups.Add(
+                        clrProperty, new List<IProperty>
+                        {
+                            property
+                        });
                 }
 
                 var clrType = clrProperty.DeclaringType;
                 var index = clrType.GetTypeInfo().DeclaredProperties
-                    .IndexOf(clrProperty, new PropertyInfoEuqlityComparer());
+                    .IndexOf(clrProperty, PropertyInfoEqualityComparer.Instance);
 
                 types.GetOrAddNew(clrType)[index] = clrProperty;
             }
@@ -659,13 +667,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             }
 
             foreach (var definingForeignKey in entityType.GetDeclaredReferencingForeignKeys()
-                .Where(fk => fk.DeclaringEntityType.RootType() != entityType.RootType()
-                    && fk.DeclaringEntityType.Relational().TableName == entityType.Relational().TableName
-                    && fk == fk.DeclaringEntityType
-                        .FindForeignKey(
-                            fk.DeclaringEntityType.FindDeclaredPrimaryKey().Properties,
-                            entityType.FindPrimaryKey(),
-                            entityType)))
+                .Where(
+                    fk => fk.DeclaringEntityType.RootType() != entityType.RootType()
+                          && fk.DeclaringEntityType.Relational().TableName == entityType.Relational().TableName
+                          && fk == fk.DeclaringEntityType
+                              .FindForeignKey(
+                                  fk.DeclaringEntityType.FindPrimaryKey().Properties,
+                                  entityType.FindPrimaryKey(),
+                                  entityType)))
             {
                 var clrProperty = definingForeignKey.PrincipalToDependent?.PropertyInfo;
                 var properties = GetSortedProperties(definingForeignKey.DeclaringEntityType).ToList();
@@ -680,7 +689,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
                 var clrType = clrProperty.DeclaringType;
                 var index = clrType.GetTypeInfo().DeclaredProperties
-                    .IndexOf(clrProperty, new PropertyInfoEuqlityComparer());
+                    .IndexOf(clrProperty, PropertyInfoEqualityComparer.Instance);
 
                 types.GetOrAddNew(clrType)[index] = clrProperty;
             }
@@ -717,8 +726,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 .Concat(entityType.GetDirectlyDerivedTypes().SelectMany(GetSortedProperties));
         }
 
-        private class PropertyInfoEuqlityComparer : IEqualityComparer<PropertyInfo>
+        private class PropertyInfoEqualityComparer : IEqualityComparer<PropertyInfo>
         {
+            private PropertyInfoEqualityComparer()
+            {
+            }
+
+            public static readonly PropertyInfoEqualityComparer Instance = new PropertyInfoEqualityComparer();
+
             public bool Equals(PropertyInfo x, PropertyInfo y)
                 => x.IsSameAs(y);
 
@@ -741,41 +756,97 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             => DiffCollection(
                 source,
                 target,
-                (s, t) =>
-                    {
-                        diffContext.AddMapping(s, t);
-
-                        return Diff(s, t);
-                    },
-                t => Add(t, diffContext),
+                diffContext,
+                Diff,
+                (t, c) => Add(t, c),
                 Remove,
-                (s, t) => string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase),
-                (s, t) => string.Equals(
+                (s, t, c) => string.Equals(
                     s.Relational().ColumnName,
                     t.Relational().ColumnName,
                     StringComparison.OrdinalIgnoreCase),
-                (s, t) =>
-                    {
-                        var sAnnotations = s.Relational();
-                        var tAnnotations = t.Relational();
+                (s, t, c) => string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase)
+                             && EntityTypePathEquals(s.DeclaringEntityType, t.DeclaringEntityType, c),
+                (s, t, c) => string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase),
+                (s, t, c) => EntityTypePathEquals(s.DeclaringEntityType, t.DeclaringEntityType, c)
+                             && PropertyStructureEquals(s, t),
+                (s, t, c) => PropertyStructureEquals(s, t));
 
-                        return s.ClrType == t.ClrType
-                               && s.IsConcurrencyToken == t.IsConcurrencyToken
-                               && s.ValueGenerated == t.ValueGenerated
-                               && s.GetMaxLength() == t.GetMaxLength()
-                               && s.IsColumnNullable() == t.IsColumnNullable()
-                               && s.IsUnicode() == t.IsUnicode()
-                               && s.GetConfiguredColumnType() == t.GetConfiguredColumnType()
-                               && sAnnotations.ComputedColumnSql == tAnnotations.ComputedColumnSql
-                               && Equals(sAnnotations.DefaultValue, tAnnotations.DefaultValue)
-                               && sAnnotations.DefaultValueSql == tAnnotations.DefaultValueSql;
-                    });
+        private bool PropertyStructureEquals(IProperty source, IProperty target)
+        {
+            var sourceAnnotations = source.Relational();
+            var targetAnnotations = target.Relational();
+            return source.ClrType == target.ClrType
+                   && source.IsConcurrencyToken == target.IsConcurrencyToken
+                   && source.ValueGenerated == target.ValueGenerated
+                   && source.GetMaxLength() == target.GetMaxLength()
+                   && source.IsColumnNullable() == target.IsColumnNullable()
+                   && source.IsUnicode() == target.IsUnicode()
+                   && sourceAnnotations.IsFixedLength == targetAnnotations.IsFixedLength
+                   && source.GetConfiguredColumnType() == target.GetConfiguredColumnType()
+                   && sourceAnnotations.ComputedColumnSql == targetAnnotations.ComputedColumnSql
+                   && Equals(GetDefaultValue(source), GetDefaultValue(target))
+                   && sourceAnnotations.DefaultValueSql == targetAnnotations.DefaultValueSql;
+        }
+
+        private static bool EntityTypePathEquals(IEntityType source, IEntityType target, DiffContext diffContext)
+        {
+            var sourceTable = diffContext.FindSourceTable(source);
+            var targetTable = diffContext.FindTargetTable(target);
+
+            if (sourceTable.EntityTypes.Count == 1
+                && targetTable.EntityTypes.Count == 1)
+            {
+                return true;
+            }
+
+            if (!string.Equals(
+                GetDefiningNavigationName(source),
+                GetDefiningNavigationName(target),
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var nextSource = source.DefiningEntityType ?? source.BaseType;
+            var nextTarget = target.DefiningEntityType ?? target.BaseType;
+            if (nextSource == null
+                || !sourceTable.EntityTypes.Contains(nextSource)
+                || nextTarget == null
+                || !targetTable.EntityTypes.Contains(nextTarget))
+            {
+                return true;
+            }
+
+            return EntityTypePathEquals(nextSource, nextTarget, diffContext);
+        }
+
+        private static string GetDefiningNavigationName(IEntityType entityType)
+        {
+            if (entityType.DefiningNavigationName != null)
+            {
+                return entityType.DefiningNavigationName;
+            }
+
+            var primaryKey = entityType.FindDeclaredPrimaryKey();
+            if (primaryKey != null)
+            {
+                var definingForeignKey = entityType
+                    .FindForeignKeys(primaryKey.Properties)
+                    .FirstOrDefault(fk => fk.PrincipalEntityType.Relational().TableName == entityType.Relational().TableName);
+                if (definingForeignKey?.DependentToPrincipal != null)
+                {
+                    return definingForeignKey.DependentToPrincipal.Name;
+                }
+            }
+
+            return entityType.Name;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] IProperty source, [NotNull] IProperty target)
+        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] IProperty source, [NotNull] IProperty target, [NotNull] DiffContext diffContext)
         {
             var sourceAnnotations = source.Relational();
             var targetEntityTypeAnnotations = target.DeclaringEntityType.RootType().Relational();
@@ -792,10 +863,13 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 };
             }
 
+            var sourceTypeMapping = TypeMappingSource.GetMapping(source);
+            var targetTypeMapping = TypeMappingSource.GetMapping(target);
+
             var sourceColumnType = sourceAnnotations.ColumnType
-                                   ?? TypeMapper.GetMapping(source).StoreType;
+                                   ?? sourceTypeMapping.StoreType;
             var targetColumnType = targetAnnotations.ColumnType
-                                   ?? TypeMapper.GetMapping(target).StoreType;
+                                   ?? targetTypeMapping.StoreType;
 
             var sourceMigrationsAnnotations = MigrationsAnnotations.For(source).ToList();
             var targetMigrationsAnnotations = MigrationsAnnotations.For(target).ToList();
@@ -809,7 +883,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 || columnTypeChanged
                 || sourceAnnotations.DefaultValueSql != targetAnnotations.DefaultValueSql
                 || sourceAnnotations.ComputedColumnSql != targetAnnotations.ComputedColumnSql
-                || !Equals(sourceAnnotations.DefaultValue, targetAnnotations.DefaultValue)
+                || !Equals(GetDefaultValue(source), GetDefaultValue(target))
                 || HasDifferences(sourceMigrationsAnnotations, targetMigrationsAnnotations))
             {
                 var isDestructiveChange = isNullableChanged && isSourceColumnNullable
@@ -825,10 +899,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 };
 
                 Initialize(
-                    alterColumnOperation, target, isTargetColumnNullable, targetAnnotations, targetMigrationsAnnotations, true);
+                    alterColumnOperation, target, targetTypeMapping,
+                    isTargetColumnNullable, targetAnnotations, targetMigrationsAnnotations, inline: true);
 
                 Initialize(
-                    alterColumnOperation.OldColumn, source, isSourceColumnNullable, sourceAnnotations, sourceMigrationsAnnotations, true);
+                    alterColumnOperation.OldColumn, source, sourceTypeMapping,
+                    isSourceColumnNullable, sourceAnnotations, sourceMigrationsAnnotations, inline: true);
 
                 yield return alterColumnOperation;
             }
@@ -852,7 +928,10 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 Table = targetEntityTypeAnnotations.TableName,
                 Name = targetAnnotations.ColumnName
             };
-            Initialize(operation, target, target.IsColumnNullable(), targetAnnotations, MigrationsAnnotations.For(target), inline);
+
+            Initialize(
+                operation, target, TypeMappingSource.GetMapping(target), target.IsColumnNullable(),
+                targetAnnotations, MigrationsAnnotations.For(target), inline);
 
             yield return operation;
         }
@@ -861,7 +940,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] IProperty source)
+        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] IProperty source, [NotNull] DiffContext diffContext)
         {
             var sourceEntityTypeAnnotations = source.DeclaringEntityType.RootType().Relational();
 
@@ -879,21 +958,26 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         private void Initialize(
             ColumnOperation columnOperation,
             IProperty property,
+            CoreTypeMapping typeMapping,
             bool isNullable,
             IRelationalPropertyAnnotations annotations,
             IEnumerable<IAnnotation> migrationsAnnotations,
             bool inline = false)
         {
-            columnOperation.ClrType = property.ClrType.UnwrapNullableType().UnwrapEnumType();
+            columnOperation.ClrType
+                = (typeMapping.Converter?.ProviderClrType
+                   ?? typeMapping.ClrType).UnwrapNullableType();
+
             columnOperation.ColumnType = property.GetConfiguredColumnType();
             columnOperation.MaxLength = property.GetMaxLength();
             columnOperation.IsUnicode = property.IsUnicode();
+            columnOperation.IsFixedLength = annotations.IsFixedLength;
             columnOperation.IsRowVersion = property.ClrType == typeof(byte[])
                                            && property.IsConcurrencyToken
                                            && property.ValueGenerated == ValueGenerated.OnAddOrUpdate;
             columnOperation.IsNullable = isNullable;
 
-            var defaultValue = annotations.DefaultValue;
+            var defaultValue = GetDefaultValue(property);
             columnOperation.DefaultValue = (defaultValue == DBNull.Value ? null : defaultValue)
                                            ?? (inline || isNullable
                                                ? null
@@ -919,14 +1003,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             => DiffCollection(
                 source,
                 target,
-                (s, t) => Diff(s, t, diffContext),
-                t => Add(t, diffContext),
-                s => Remove(s, diffContext),
-                (s, t) => s.Relational().Name == t.Relational().Name
-                          && s.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
-                              t.Properties.Select(diffContext.FindSourceColumn))
-                          && s.IsPrimaryKey() == t.IsPrimaryKey()
-                          && !HasDifferences(MigrationsAnnotations.For(s), MigrationsAnnotations.For(t)));
+                diffContext,
+                Diff,
+                Add,
+                Remove,
+                (s, t, c) => s.Relational().Name == t.Relational().Name
+                             && s.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
+                                 t.Properties.Select(p => c.FindSource(p)?.Relational().ColumnName))
+                             && s.IsPrimaryKey() == t.IsPrimaryKey()
+                             && !HasDifferences(MigrationsAnnotations.For(s), MigrationsAnnotations.For(t)));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -969,6 +1054,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     Columns = columns
                 };
             }
+
             operation.AddAnnotations(MigrationsAnnotations.For(target));
 
             yield return operation;
@@ -1004,6 +1090,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     Name = sourceAnnotations.Name
                 };
             }
+
             operation.AddAnnotations(MigrationsAnnotations.ForRemove(source));
 
             yield return operation;
@@ -1024,18 +1111,19 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             => DiffCollection(
                 source,
                 target,
-                (s, t) => Diff(s, t, diffContext),
-                t => Add(t, diffContext),
-                s => Remove(s, diffContext),
-                (s, t) => s.Relational().Name == t.Relational().Name
-                          && s.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
-                              t.Properties.Select(diffContext.FindSourceColumn))
-                          && diffContext.FindTarget(diffContext.FindSourceTable(s.PrincipalEntityType))
-                          == diffContext.FindTargetTable(t.PrincipalEntityType)
-                          && s.PrincipalKey.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
-                              t.PrincipalKey.Properties.Select(diffContext.FindSourceColumn))
-                          && s.DeleteBehavior == t.DeleteBehavior
-                          && !HasDifferences(MigrationsAnnotations.For(s), MigrationsAnnotations.For(t)));
+                diffContext,
+                Diff,
+                Add,
+                Remove,
+                (s, t, c) => s.Relational().Name == t.Relational().Name
+                             && s.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
+                                 t.Properties.Select(p => c.FindSource(p)?.Relational().ColumnName))
+                             && c.FindSourceTable(s.PrincipalEntityType)
+                             == c.FindSource(c.FindTargetTable(t.PrincipalEntityType))
+                             && s.PrincipalKey.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
+                                 t.PrincipalKey.Properties.Select(p => c.FindSource(p)?.Relational().ColumnName))
+                             && ToReferentialAction(s.DeleteBehavior) == ToReferentialAction(t.DeleteBehavior)
+                             && !HasDifferences(MigrationsAnnotations.For(s), MigrationsAnnotations.For(t)));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -1064,11 +1152,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 PrincipalSchema = targetPrincipalEntityTypeAnnotations.Schema,
                 PrincipalTable = targetPrincipalEntityTypeAnnotations.TableName,
                 PrincipalColumns = GetColumns(target.PrincipalKey.Properties),
-                OnDelete = target.DeleteBehavior == DeleteBehavior.Cascade
-                    ? ReferentialAction.Cascade
-                    : target.DeleteBehavior == DeleteBehavior.SetNull
-                        ? ReferentialAction.SetNull
-                        : ReferentialAction.Restrict
+                OnDelete = ToReferentialAction(target.DeleteBehavior)
             };
             operation.AddAnnotations(MigrationsAnnotations.For(target));
 
@@ -1122,24 +1206,23 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             => DiffCollection(
                 source,
                 target,
-                (s, t) => Diff(s, t, diffContext),
-                t => Add(t, diffContext),
+                diffContext,
+                Diff,
+                Add,
                 Remove,
-                (s, t) => string.Equals(
-                    s.Relational().Name,
-                    t.Relational().Name,
-                    StringComparison.OrdinalIgnoreCase)
-                          && s.IsUnique == t.IsUnique
-                          && s.Relational().Filter == t.Relational().Filter
-                          && !HasDifferences(MigrationsAnnotations.For(s), MigrationsAnnotations.For(t))
-                          && s.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
-                              t.Properties.Select(diffContext.FindSourceColumn)),
-                // ReSharper disable once ImplicitlyCapturedClosure
-                (s, t) => s.IsUnique == t.IsUnique
-                          && s.Relational().Filter == t.Relational().Filter
-                          && !HasDifferences(MigrationsAnnotations.For(s), MigrationsAnnotations.For(t))
-                          && s.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
-                              t.Properties.Select(diffContext.FindSourceColumn)));
+                (s, t, c) => string.Equals(
+                                 s.Relational().Name,
+                                 t.Relational().Name,
+                                 StringComparison.OrdinalIgnoreCase)
+                             && IndexStructureEquals(s, t, c),
+                (s, t, c) => IndexStructureEquals(s, t, c));
+
+        private bool IndexStructureEquals(IIndex source, IIndex target, DiffContext diffContext)
+            => source.IsUnique == target.IsUnique
+               && source.Relational().Filter == target.Relational().Filter
+               && !HasDifferences(MigrationsAnnotations.For(source), MigrationsAnnotations.For(target))
+               && source.Properties.Select(p => p.Relational().ColumnName).SequenceEqual(
+                   target.Properties.Select(p => diffContext.FindSource(p)?.Relational().ColumnName));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -1194,7 +1277,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] IIndex source)
+        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] IIndex source, [NotNull] DiffContext diffContext)
         {
             var sourceEntityTypeAnnotations = source.DeclaringEntityType.RootType().Relational();
 
@@ -1219,35 +1302,36 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         /// </summary>
         protected virtual IEnumerable<MigrationOperation> Diff(
             [NotNull] IEnumerable<ISequence> source,
-            [NotNull] IEnumerable<ISequence> target)
+            [NotNull] IEnumerable<ISequence> target,
+            [NotNull] DiffContext diffContext)
             => DiffCollection(
                 source,
                 target,
+                diffContext,
                 Diff,
                 Add,
                 Remove,
-                (s, t) => string.Equals(s.Schema, t.Schema, StringComparison.OrdinalIgnoreCase)
-                          && string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase)
-                          && s.ClrType == t.ClrType,
-                (s, t) => string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase)
-                          && s.ClrType == t.ClrType);
+                (s, t, c) => string.Equals(s.Schema, t.Schema, StringComparison.OrdinalIgnoreCase)
+                             && string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase)
+                             && s.ClrType == t.ClrType,
+                (s, t, c) => string.Equals(s.Name, t.Name, StringComparison.OrdinalIgnoreCase)
+                             && s.ClrType == t.ClrType);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] ISequence source, [NotNull] ISequence target)
+        protected virtual IEnumerable<MigrationOperation> Diff([NotNull] ISequence source, [NotNull] ISequence target, [NotNull] DiffContext diffContext)
         {
-            var schemaChanged = source.Schema != target.Schema;
-            var renamed = source.Name != target.Name;
-            if (schemaChanged || renamed)
+            if (source.Schema != target.Schema
+                || source.Name != target.Name)
             {
                 yield return new RenameSequenceOperation
                 {
                     Schema = source.Schema,
                     Name = source.Name,
-                    NewSchema = schemaChanged ? target.Schema : null,
-                    NewName = renamed ? target.Name : null
+                    NewSchema = target.Schema,
+                    NewName = target.Name
                 };
             }
 
@@ -1287,7 +1371,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Add([NotNull] ISequence target)
+        protected virtual IEnumerable<MigrationOperation> Add([NotNull] ISequence target, [NotNull] DiffContext diffContext)
         {
             var operation = new CreateSequenceOperation
             {
@@ -1304,7 +1388,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] ISequence source)
+        protected virtual IEnumerable<MigrationOperation> Remove([NotNull] ISequence source, [NotNull] DiffContext diffContext)
         {
             var operation = new DropSequenceOperation
             {
@@ -1316,7 +1400,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             yield return operation;
         }
 
-        private SequenceOperation Initialize(
+        private static SequenceOperation Initialize(
             SequenceOperation sequenceOperation,
             ISequence sequence,
             IEnumerable<IAnnotation> migrationsAnnotations)
@@ -1332,13 +1416,13 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
         #endregion
 
-        #region SeedData
+        #region Data
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual void TrackSeedData(
+        protected virtual void TrackData(
             [CanBeNull] IModel source,
             [CanBeNull] IModel target)
         {
@@ -1352,7 +1436,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
             foreach (var targetEntityType in target.GetEntityTypes())
             {
-                foreach (var targetSeed in targetEntityType.GetSeedData())
+                foreach (var targetSeed in targetEntityType.GetData())
                 {
                     _targetStateManager.CreateEntry(targetSeed, targetEntityType).SetEntityState(EntityState.Added);
                 }
@@ -1368,7 +1452,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
             foreach (var sourceEntityType in source.GetEntityTypes())
             {
-                foreach (var sourceSeed in sourceEntityType.GetSeedData())
+                foreach (var sourceSeed in sourceEntityType.GetData())
                 {
                     _sourceStateManager.CreateEntry(sourceSeed, sourceEntityType).SetEntityState(EntityState.Added);
                 }
@@ -1379,7 +1463,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual void DiffSeedData(
+        protected virtual void DiffData(
             [NotNull] TableMapping source,
             [NotNull] TableMapping target,
             [NotNull] DiffContext diffContext)
@@ -1389,15 +1473,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             Check.NotNull(diffContext, nameof(diffContext));
 
             var targetTableEntryMappingMap = SharedTableEntryMap<List<InternalEntityEntry>>.CreateSharedTableEntryMapFactory(
-                target.EntityTypes,
-                _targetStateManager,
-                target.Name,
-                target.Schema)
+                    target.EntityTypes,
+                    _targetStateManager,
+                    target.Name,
+                    target.Schema)
                 ((t, s, c) => new List<InternalEntityEntry>());
 
             foreach (var targetEntityType in target.EntityTypes)
             {
-                foreach (var targetSeed in targetEntityType.GetSeedData())
+                foreach (var targetSeed in targetEntityType.GetData())
                 {
                     var targetEntry = GetEntry(targetSeed, targetEntityType, _targetStateManager);
                     var targetEntries = targetTableEntryMappingMap.GetOrAddValue(targetEntry);
@@ -1419,13 +1503,22 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     var keyPropertiesMap = new List<IProperty>();
                     foreach (var keyProperty in targetKey.Properties)
                     {
-                        var sourceProperty = diffContext.FindCompatibleSource(keyProperty, sourceEntityType);
+                        var sourceProperty = diffContext.FindSource(keyProperty);
                         if (sourceProperty == null)
                         {
                             break;
                         }
 
-                        keyPropertiesMap.Add(sourceProperty);
+                        var keySourceProperty = sourceEntityType.GetProperties().FirstOrDefault(
+                            p =>
+                                p.ClrType == keyProperty.ClrType
+                                && p.Relational().ColumnName == sourceProperty.Relational().ColumnName);
+                        if (keySourceProperty == null)
+                        {
+                            break;
+                        }
+
+                        keyPropertiesMap.Add(keySourceProperty);
                     }
 
                     if (keyPropertiesMap.Count == targetKey.Properties.Count)
@@ -1436,15 +1529,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             }
 
             var sourceTableEntryMappingMap = SharedTableEntryMap<EntryMapping>.CreateSharedTableEntryMapFactory(
-                source.EntityTypes,
-                _sourceStateManager,
-                source.Name,
-                source.Schema)
+                    source.EntityTypes,
+                    _sourceStateManager,
+                    source.Name,
+                    source.Schema)
                 ((t, s, c) => new EntryMapping());
 
             foreach (var sourceEntityType in source.EntityTypes)
             {
-                foreach (var sourceSeed in sourceEntityType.GetSeedData())
+                foreach (var sourceSeed in sourceEntityType.GetData())
                 {
                     var sourceEntry = GetEntry(sourceSeed, sourceEntityType, _sourceStateManager);
                     var entryMapping = sourceTableEntryMappingMap.GetOrAddValue(sourceEntry);
@@ -1452,7 +1545,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
                     if (!keyMapping.TryGetValue(sourceEntityType, out var targetKeyMap))
                     {
-                        entryMapping.RebuildRequired = true;
+                        entryMapping.RecreateRow = true;
                         continue;
                     }
 
@@ -1477,36 +1570,90 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
                         foreach (var targetEntry in targetTableEntryMappingMap.GetOrAddValue(entry))
                         {
-                            if (entryMapping.TargetEntries.Add(targetEntry))
+                            if (!entryMapping.TargetEntries.Add(targetEntry))
                             {
-                                foreach (var targetProperty in targetEntry.EntityType.GetProperties())
-                                {
-                                    if (targetProperty.AfterSaveBehavior == PropertySaveBehavior.Save)
-                                    {
-                                        targetEntry.SetOriginalValue(targetProperty, targetProperty.ClrType.GetDefaultValue());
-                                    }
-                                }
-
-                                targetEntry.SetEntityState(EntityState.Unchanged);
+                                continue;
                             }
+
+                            foreach (var targetProperty in targetEntry.EntityType.GetProperties())
+                            {
+                                if (targetProperty.AfterSaveBehavior == PropertySaveBehavior.Save)
+                                {
+                                    targetEntry.SetOriginalValue(targetProperty, targetProperty.ClrType.GetDefaultValue());
+                                }
+                            }
+
+                            targetEntry.SetEntityState(EntityState.Unchanged);
+                        }
+
+                        if (entryMapping.RecreateRow)
+                        {
+                            continue;
                         }
 
                         foreach (var targetProperty in entry.EntityType.GetProperties())
                         {
-                            var sourceProperty = diffContext.FindCompatibleSource(targetProperty, sourceEntityType);
-                            if (targetProperty.AfterSaveBehavior == PropertySaveBehavior.Save)
+                            var sourceProperty = diffContext.FindSource(targetProperty);
+                            if (sourceProperty == null
+                                || !sourceEntityType.GetProperties().Contains(sourceProperty))
                             {
-                                if (sourceProperty != null)
+                                continue;
+                            }
+
+                            var sourceValue = sourceEntry.GetCurrentValue(sourceProperty);
+                            var targetValue = entry.GetCurrentValue(targetProperty);
+                            var comparer = targetProperty.GetValueComparer() ??
+                                           sourceProperty.GetValueComparer() ??
+                                           targetProperty.FindMapping()?.Comparer ??
+                                           sourceProperty.FindMapping()?.Comparer;
+
+                            var modelValuesChanged
+                                = sourceProperty.ClrType.UnwrapNullableType() == targetProperty.ClrType.UnwrapNullableType()
+                                  && comparer != null
+                                  && !comparer.Equals(sourceValue, targetValue);
+
+                            if (!modelValuesChanged)
+                            {
+                                var sourceConverter = GetValueConverter(sourceProperty);
+                                var targetConverter = GetValueConverter(targetProperty);
+
+                                var convertedSourceValue = sourceConverter == null
+                                    ? sourceValue
+                                    : sourceConverter.ConvertToProvider(sourceValue);
+
+                                var convertedTargetValue = targetConverter == null
+                                    ? targetValue
+                                    : targetConverter.ConvertToProvider(targetValue);
+
+                                var convertedType = sourceConverter?.ProviderClrType
+                                                    ?? targetConverter?.ProviderClrType;
+
+                                var storeValuesChanged = convertedSourceValue?.GetType().UnwrapNullableType() != convertedTargetValue?.GetType().UnwrapNullableType();
+
+                                if (!storeValuesChanged
+                                    && convertedType != null)
                                 {
-                                    entry.SetOriginalValue(targetProperty, sourceEntry.GetCurrentValue(sourceProperty));
+                                    comparer = TypeMappingSource.FindMapping(convertedType)?.Comparer;
+
+                                    storeValuesChanged = !comparer?.Equals(convertedSourceValue, convertedTargetValue)
+                                                         ?? !Equals(convertedSourceValue, convertedTargetValue);
+                                }
+
+                                if (!storeValuesChanged)
+                                {
+                                    entry.SetOriginalValue(targetProperty, entry.GetCurrentValue(targetProperty));
+
+                                    continue;
                                 }
                             }
-                            else if (sourceProperty == null
-                                     || !Equals(sourceEntry.GetCurrentValue(sourceProperty), entry.GetCurrentValue(targetProperty)))
+
+                            if (targetProperty.AfterSaveBehavior != PropertySaveBehavior.Save)
                             {
-                                entryMapping.RebuildRequired = true;
+                                entryMapping.RecreateRow = true;
                                 break;
                             }
+
+                            entry.SetPropertyModified(targetProperty);
                         }
                     }
                 }
@@ -1514,13 +1661,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
             foreach (var entryMapping in sourceTableEntryMappingMap.Values)
             {
-                if (entryMapping.RebuildRequired
+                if (entryMapping.RecreateRow
                     || entryMapping.TargetEntries.Count == 0)
                 {
                     foreach (var targetEntry in entryMapping.TargetEntries)
                     {
                         targetEntry.SetEntityState(EntityState.Added);
                     }
+
                     foreach (var sourceEntry in entryMapping.SourceEntries)
                     {
                         sourceEntry.SetEntityState(EntityState.Deleted);
@@ -1536,7 +1684,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             }
         }
 
-        private InternalEntityEntry GetEntry(IDictionary<string, object> sourceSeed, IEntityType sourceEntityType, IStateManager stateManager)
+        private static InternalEntityEntry GetEntry(IDictionary<string, object> sourceSeed, IEntityType sourceEntityType, IStateManager stateManager)
         {
             var key = sourceEntityType.FindPrimaryKey();
             var keyValues = new object[key.Properties.Count];
@@ -1552,7 +1700,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual IEnumerable<MigrationOperation> GetSeedDataOperations()
+        protected virtual IEnumerable<MigrationOperation> GetDataOperations()
         {
             if (_sourceStateManager != null)
             {
@@ -1580,46 +1728,88 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     continue;
                 }
 
-                var batchCommands = new CommandBatchPreparer(CommandBatchPreparerDependencies.With(() => stateManager))
-                    .BatchCommands(entries)
-                    .SelectMany(o => o.ModificationCommands);
+                var commandBatches = new CommandBatchPreparer(CommandBatchPreparerDependencies.With(() => stateManager))
+                    .BatchCommands(entries);
 
-                foreach (var c in batchCommands)
+                foreach (var commandBatch in commandBatches)
                 {
-                    if (c.EntityState == EntityState.Added)
+                    InsertDataOperation batchInsertOperation = null;
+                    foreach (var c in commandBatch.ModificationCommands)
                     {
-                        yield return new InsertDataOperation
+                        if (c.EntityState == EntityState.Added)
                         {
-                            Schema = c.Schema,
-                            Table = c.TableName,
-                            Columns = c.ColumnModifications.Select(col => col.ColumnName).ToArray(),
-                            Values = ToMultidimensionalArray(c.ColumnModifications.Select(col => col.Value).ToList())
-                        };
+                            if (batchInsertOperation != null)
+                            {
+                                if (batchInsertOperation.Table == c.TableName
+                                    && batchInsertOperation.Schema == c.Schema
+                                    && batchInsertOperation.Columns.SequenceEqual(c.ColumnModifications.Select(col => col.ColumnName)))
+                                {
+                                    batchInsertOperation.Values =
+                                        AddToMultidimensionalArray(c.ColumnModifications.Select(GetValue).ToList(), batchInsertOperation.Values);
+                                    continue;
+                                }
+
+                                yield return batchInsertOperation;
+                            }
+
+                            batchInsertOperation = new InsertDataOperation
+                            {
+                                Schema = c.Schema,
+                                Table = c.TableName,
+                                Columns = c.ColumnModifications.Select(col => col.ColumnName).ToArray(),
+                                Values = ToMultidimensionalArray(c.ColumnModifications.Select(GetValue).ToList())
+                            };
+                        }
+                        else if (c.EntityState == EntityState.Modified)
+                        {
+                            if (batchInsertOperation != null)
+                            {
+                                yield return batchInsertOperation;
+                                batchInsertOperation = null;
+                            }
+
+                            yield return new UpdateDataOperation
+                            {
+                                Schema = c.Schema,
+                                Table = c.TableName,
+                                KeyColumns = c.ColumnModifications.Where(col => col.IsKey).Select(col => col.ColumnName).ToArray(),
+                                KeyValues = ToMultidimensionalArray(c.ColumnModifications.Where(col => col.IsKey).Select(GetValue).ToList()),
+                                Columns = c.ColumnModifications.Where(col => !col.IsKey).Select(col => col.ColumnName).ToArray(),
+                                Values = ToMultidimensionalArray(c.ColumnModifications.Where(col => !col.IsKey).Select(GetValue).ToList())
+                            };
+                        }
+                        else
+                        {
+                            if (batchInsertOperation != null)
+                            {
+                                yield return batchInsertOperation;
+                                batchInsertOperation = null;
+                            }
+
+                            yield return new DeleteDataOperation
+                            {
+                                Schema = c.Schema,
+                                Table = c.TableName,
+                                KeyColumns = c.ColumnModifications.Select(col => col.ColumnName).ToArray(),
+                                KeyValues = ToMultidimensionalArray(c.ColumnModifications.Select(GetValue).ToArray())
+                            };
+                        }
                     }
-                    else if (c.EntityState == EntityState.Modified)
+
+                    if (batchInsertOperation != null)
                     {
-                        yield return new UpdateDataOperation
-                        {
-                            Schema = c.Schema,
-                            Table = c.TableName,
-                            KeyColumns = c.ColumnModifications.Where(col => col.IsKey).Select(col => col.ColumnName).ToArray(),
-                            KeyValues = ToMultidimensionalArray(c.ColumnModifications.Where(col => col.IsKey).Select(col => col.Value).ToList()),
-                            Columns = c.ColumnModifications.Where(col => !col.IsKey).Select(col => col.ColumnName).ToArray(),
-                            Values = ToMultidimensionalArray(c.ColumnModifications.Where(col => !col.IsKey).Select(col => col.Value).ToList())
-                        };
-                    }
-                    else
-                    {
-                        yield return new DeleteDataOperation
-                        {
-                            Schema = c.Schema,
-                            Table = c.TableName,
-                            KeyColumns = c.ColumnModifications.Select(col => col.ColumnName).ToArray(),
-                            KeyValues = ToMultidimensionalArray(c.ColumnModifications.Select(col => col.Value).ToArray())
-                        };
+                        yield return batchInsertOperation;
                     }
                 }
             }
+        }
+
+        private object GetValue(ColumnModification columnModification)
+        {
+            var converter = GetValueConverter(columnModification.Property);
+            return converter != null
+                ? converter.ConvertToProvider(columnModification.Value)
+                : columnModification.Value;
         }
 
         #endregion
@@ -1631,13 +1821,15 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         protected virtual IEnumerable<MigrationOperation> DiffCollection<T>(
             [NotNull] IEnumerable<T> sources,
             [NotNull] IEnumerable<T> targets,
-            [NotNull] Func<T, T, IEnumerable<MigrationOperation>> diff,
-            [NotNull] Func<T, IEnumerable<MigrationOperation>> add,
-            [NotNull] Func<T, IEnumerable<MigrationOperation>> remove,
-            [NotNull] params Func<T, T, bool>[] predicates)
+            [NotNull] DiffContext diffContext,
+            [NotNull] Func<T, T, DiffContext, IEnumerable<MigrationOperation>> diff,
+            [NotNull] Func<T, DiffContext, IEnumerable<MigrationOperation>> add,
+            [NotNull] Func<T, DiffContext, IEnumerable<MigrationOperation>> remove,
+            [NotNull] params Func<T, T, DiffContext, bool>[] predicates)
         {
             var sourceList = sources.ToList();
             var targetList = targets.ToList();
+            var pairedList = new List<(T source, T target)>();
 
             foreach (var predicate in predicates)
             {
@@ -1649,15 +1841,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     {
                         var target = targetList[j];
 
-                        if (predicate(source, target))
+                        if (predicate(source, target, diffContext))
                         {
                             sourceList.RemoveAt(i);
                             targetList.RemoveAt(j);
-
-                            foreach (var operation in diff(source, target))
-                            {
-                                yield return operation;
-                            }
+                            pairedList.Add((source, target));
+                            diffContext.AddMapping(source, target);
 
                             break;
                         }
@@ -1665,9 +1854,17 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 }
             }
 
+            foreach (var (source, target) in pairedList)
+            {
+                foreach (var operation in diff(source, target, diffContext))
+                {
+                    yield return operation;
+                }
+            }
+
             foreach (var source in sourceList)
             {
-                foreach (var operation in remove(source))
+                foreach (var operation in remove(source, diffContext))
                 {
                     yield return operation;
                 }
@@ -1675,7 +1872,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
             foreach (var target in targetList)
             {
-                foreach (var operation in add(target))
+                foreach (var operation in add(target, diffContext))
                 {
                     yield return operation;
                 }
@@ -1732,6 +1929,25 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     ? Array.CreateInstance(type.GetElementType(), 0)
                     : type.UnwrapNullableType().GetDefaultValue();
 
+        private object GetDefaultValue(IProperty property)
+        {
+            var value = property.Relational().DefaultValue;
+            var converter = GetValueConverter(property);
+            return converter != null
+                ? converter.ConvertToProvider(value)
+                : value;
+        }
+
+        private ValueConverter GetValueConverter(IProperty property)
+            => TypeMappingSource.GetMapping(property).Converter;
+
+        private static ReferentialAction ToReferentialAction(DeleteBehavior deleteBehavior)
+            => deleteBehavior == DeleteBehavior.Cascade
+                ? ReferentialAction.Cascade
+                : deleteBehavior == DeleteBehavior.SetNull
+                    ? ReferentialAction.SetNull
+                    : ReferentialAction.Restrict;
+
         private static object[,] ToMultidimensionalArray(IReadOnlyList<object> values)
         {
             var result = new object[1, values.Count];
@@ -1739,6 +1955,28 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             {
                 result[0, i] = values[i];
             }
+
+            return result;
+        }
+
+        private static object[,] AddToMultidimensionalArray(IReadOnlyList<object> values, object[,] array)
+        {
+            var width = array.GetLength(0);
+            var height = array.GetLength(1);
+
+            Debug.Assert(height == values.Count);
+
+            var result = new object[width + 1, height];
+            for (var i = 0; i < width; i++)
+            {
+                Array.Copy(array, i * height, result, i * height, height);
+            }
+
+            for (var i = 0; i < values.Count; i++)
+            {
+                result[width, i] = values[i];
+            }
+
             return result;
         }
 
@@ -1746,7 +1984,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         {
             public HashSet<InternalEntityEntry> SourceEntries { get; } = new HashSet<InternalEntityEntry>();
             public HashSet<InternalEntityEntry> TargetEntries { get; } = new HashSet<InternalEntityEntry>();
-            public bool RebuildRequired { get; set; }
+            public bool RecreateRow { get; set; }
         }
 
         /// <summary>
@@ -1764,9 +2002,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             private readonly IDictionary<IEntityType, TableMapping> _targetEntitiesMap
                 = new Dictionary<IEntityType, TableMapping>();
 
-            private readonly IDictionary<TableMapping, TableMapping> _tableMappingMap = new Dictionary<TableMapping, TableMapping>();
-            private readonly IDictionary<string, Dictionary<string, string>> _inverseColumnMap =
-                new Dictionary<string, Dictionary<string, string>>();
+            private readonly IDictionary<object, object> _targetToSource = new Dictionary<object, object>();
 
             private readonly IDictionary<IEntityType, CreateTableOperation> _createTableOperations
                 = new Dictionary<IEntityType, CreateTableOperation>();
@@ -1824,16 +2060,8 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
             ///     directly from your code. This API may change or be removed in future releases.
             /// </summary>
-            public virtual void AddMapping([NotNull] TableMapping source, [NotNull] TableMapping target)
-                => _tableMappingMap.Add(source, target);
-
-            /// <summary>
-            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            public virtual void AddMapping([NotNull] IProperty source, [NotNull] IProperty target)
-                => _inverseColumnMap.GetOrAddNew(target.DeclaringEntityType.Relational().TableName)
-                    .Add(target.Relational().ColumnName, source.Relational().ColumnName);
+            public virtual void AddMapping<T>([NotNull] T source, [NotNull] T target)
+                => _targetToSource.Add(target, source);
 
             /// <summary>
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -1852,6 +2080,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 {
                     _dropTableOperations.Add(sourceEntityType, operation);
                 }
+
                 _removedTables.Add(operation, source);
             }
 
@@ -1877,33 +2106,37 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
             ///     directly from your code. This API may change or be removed in future releases.
             /// </summary>
-            public virtual TableMapping FindTarget([NotNull] TableMapping source)
-                => _tableMappingMap.TryGetValue(source, out var target)
-                    ? target
-                    : null;
+            public virtual T FindSource<T>([NotNull] T target)
+                => _targetToSource.TryGetValue(target, out var source)
+                    ? (T)source
+                    : default;
 
             /// <summary>
             ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
             ///     directly from your code. This API may change or be removed in future releases.
             /// </summary>
-            public virtual string FindSourceColumn([NotNull] IProperty target)
-                => _inverseColumnMap.TryGetValue(target.DeclaringEntityType.Relational().TableName, out var map)
-                    ? map.TryGetValue(target.Relational().ColumnName, out var source)
-                        ? source
-                        : null
-                    : null;
-
-            /// <summary>
-            ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-            ///     directly from your code. This API may change or be removed in future releases.
-            /// </summary>
-            public virtual IProperty FindCompatibleSource([NotNull] IProperty target, IEntityType sourceEntityType)
+            public virtual IProperty FindSource([NotNull] IProperty target)
             {
-                var sourceColumn = FindSourceColumn(target);
-                return sourceColumn == null
-                    ? null
-                    : sourceEntityType.GetProperties().FirstOrDefault(p => p.ClrType == target.ClrType
-                                                                           && p.Relational().ColumnName == sourceColumn);
+                var source = FindSource<IProperty>(target);
+                if (source != null)
+                {
+                    return source;
+                }
+
+                var synonymousTargets = FindTargetTable(target.DeclaringEntityType).GetProperties()
+                    .Where(p => p != target && p.Relational().ColumnName == target.Relational().ColumnName);
+                foreach (var synonymousTarget in synonymousTargets)
+                {
+                    source = FindSource<IProperty>(synonymousTarget);
+                    if (source != null)
+                    {
+                        _targetToSource.Add(target, source);
+
+                        return source;
+                    }
+                }
+
+                return null;
             }
 
             /// <summary>

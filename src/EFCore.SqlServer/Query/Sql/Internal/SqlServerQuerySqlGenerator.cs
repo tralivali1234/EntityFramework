@@ -5,15 +5,15 @@ using System;
 using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
-using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
+using Microsoft.EntityFrameworkCore.Query.Sql;
+using Microsoft.EntityFrameworkCore.SqlServer.Query.Expressions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
 
-namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Query.Sql.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -36,6 +36,26 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
                 var rowNumberPagingExpressionVisitor = new RowNumberPagingExpressionVisitor();
                 rowNumberPagingExpressionVisitor.Visit(selectExpression);
             }
+        }
+
+        /// <summary>
+        ///     Visit a BinaryExpression.
+        /// </summary>
+        /// <param name="binaryExpression"> The binary expression to visit. </param>
+        /// <returns>
+        ///     An Expression.
+        /// </returns>
+        protected override Expression VisitBinary(BinaryExpression binaryExpression)
+        {
+            if (binaryExpression.Left is SqlFunctionExpression sqlFunctionExpression
+                && sqlFunctionExpression.FunctionName == "FREETEXT")
+            {
+                Visit(binaryExpression.Left);
+
+                return binaryExpression;
+            }
+
+            return base.VisitBinary(binaryExpression);
         }
 
         /// <summary>
@@ -124,9 +144,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
             base.GenerateProjection(expressionToProcess);
         }
 
-        private Expression ExplicitCastToBool(Expression expression)
-            => (expression as BinaryExpression)?.NodeType == ExpressionType.Coalesce
-            && expression.Type.UnwrapNullableType() == typeof(bool)
+        private static Expression ExplicitCastToBool(Expression expression)
+            => ((expression as BinaryExpression)?.NodeType == ExpressionType.Coalesce || expression.NodeType == ExpressionType.Constant)
+               && expression.Type.UnwrapNullableType() == typeof(bool)
                 ? new ExplicitCastExpression(expression, expression.Type)
                 : expression;
 
@@ -161,10 +181,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql.Internal
                 }
 
                 var subQuery = selectExpression.PushDownSubquery();
-
-                foreach (var projection in subQuery.Projection)
+                if (subQuery.Projection.Count > 0)
                 {
-                    selectExpression.AddToProjection(projection.LiftExpressionFromSubquery(subQuery));
+                    selectExpression.ExplodeStarProjection();
                 }
 
                 if (subQuery.OrderBy.Count == 0)

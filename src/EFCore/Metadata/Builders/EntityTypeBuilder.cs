@@ -8,6 +8,7 @@ using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -32,6 +33,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         public EntityTypeBuilder([NotNull] InternalEntityTypeBuilder builder)
         {
             Check.NotNull(builder, nameof(builder));
+
+            if (builder.Metadata.IsQueryType)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.CannotAccessQueryAsEntity(builder.Metadata.DisplayName()));
+            }
 
             Builder = builder;
         }
@@ -219,7 +226,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             [NotNull] Type ownedType,
             [NotNull] string navigationName)
             => OwnsOneBuilder(
-                new TypeIdentity(Check.NotNull(ownedType, nameof(ownedType))),
+                new TypeIdentity(Check.NotNull(ownedType, nameof(ownedType)), (Model)Metadata.Model),
                 Check.NotEmpty(navigationName, nameof(navigationName)));
 
         /// <summary>
@@ -271,7 +278,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
 
             using (Builder.Metadata.Model.ConventionDispatcher.StartBatch())
             {
-                buildAction.Invoke(OwnsOneBuilder(new TypeIdentity(ownedType), navigationName));
+                buildAction.Invoke(OwnsOneBuilder(new TypeIdentity(ownedType, (Model)Metadata.Model), navigationName));
                 return this;
             }
         }
@@ -304,7 +311,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             }
         }
 
-        private ReferenceOwnershipBuilder OwnsOneBuilder(TypeIdentity ownedType, string navigationName)
+        private ReferenceOwnershipBuilder OwnsOneBuilder(in TypeIdentity ownedType, string navigationName)
         {
             InternalRelationshipBuilder relationship;
             using (Builder.Metadata.Model.ConventionDispatcher.StartBatch())
@@ -336,6 +343,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///         to a single instance of the other type in the relationship.
         ///     </para>
         ///     <para>
+        ///         Note that calling this method with no parameters will explicitly configure this side
+        ///         of the relationship to use no navigation property, even if such a property exists on the
+        ///         entity type. If the navigation property is to be used, then it must be specified.
+        ///     </para>
+        ///     <para>
         ///         After calling this method, you should chain a call to
         ///         <see cref="ReferenceNavigationBuilder.WithMany" />
         ///         or <see cref="ReferenceNavigationBuilder.WithOne" /> to fully configure
@@ -358,6 +370,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.Metadata.FindInDefinitionPath(relatedType) ??
+                                    Builder.ModelBuilder.Metadata.FindEntityType(relatedType, navigationName, Builder.Metadata) ??
                                     Builder.ModelBuilder.Entity(relatedType, ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder(
@@ -373,6 +386,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         Configures a relationship where this entity type has a reference that points
         ///         to a single instance of the other type in the relationship.
+        ///     </para>
+        ///     <para>
+        ///         Note that calling this method with no parameters will explicitly configure this side
+        ///         of the relationship to use no navigation property, even if such a property exists on the
+        ///         entity type. If the navigation property is to be used, then it must be specified.
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
@@ -397,6 +415,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.Metadata.FindInDefinitionPath(relatedTypeName) ??
+                                    Builder.ModelBuilder.Metadata.FindEntityType(relatedTypeName, navigationName, Builder.Metadata) ??
                                     Builder.ModelBuilder.Entity(relatedTypeName, ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder(
@@ -412,6 +431,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         Configures a relationship where this entity type has a collection that contains
         ///         instances of the other type in the relationship.
+        ///     </para>
+        ///     <para>
+        ///         Note that calling this method with no parameters will explicitly configure this side
+        ///         of the relationship to use no navigation property, even if such a property exists on the
+        ///         entity type. If the navigation property is to be used, then it must be specified.
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
@@ -458,6 +482,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         Configures a relationship where this entity type has a collection that contains
         ///         instances of the other type in the relationship.
+        ///     </para>
+        ///     <para>
+        ///         Note that calling this method with no parameters will explicitly configure this side
+        ///         of the relationship to use no navigation property, even if such a property exists on the
+        ///         entity type. If the navigation property is to be used, then it must be specified.
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
@@ -543,13 +572,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <param name="data">
         ///     An array of seed data of the same type as the entity we're building.
         /// </param>
-        public virtual EntityTypeBuilder SeedData([NotNull] params object[] data)
+        /// <returns> An object that can be used to configure the model data. </returns>
+        public virtual DataBuilder HasData([NotNull] params object[] data)
         {
             Check.NotNull(data, nameof(data));
 
-            Metadata.AddSeedData(data);
+            Metadata.AddData(data);
 
-            return this;
+            return new DataBuilder();
         }
 
         #region Hidden System.Object members

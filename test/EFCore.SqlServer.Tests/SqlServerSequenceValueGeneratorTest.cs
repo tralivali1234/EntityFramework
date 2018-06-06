@@ -8,12 +8,12 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Update.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.ValueGeneration.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update;
-using Microsoft.EntityFrameworkCore.Update.Internal;
-using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -76,9 +76,9 @@ namespace Microsoft.EntityFrameworkCore
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
                             new RelationalSqlGenerationHelperDependencies()),
-                        new SqlServerTypeMapper(
-                            new CoreTypeMapperDependencies(),
-                            new RelationalTypeMapperDependencies()))),
+                        new SqlServerTypeMappingSource(
+                            TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                            TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()))),
                 state,
                 CreateConnection());
 
@@ -129,9 +129,9 @@ namespace Microsoft.EntityFrameworkCore
                 new UpdateSqlGeneratorDependencies(
                     new SqlServerSqlGenerationHelper(
                         new RelationalSqlGenerationHelperDependencies()),
-                    new SqlServerTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())));
+                    new SqlServerTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())));
 
             var tests = new Func<Task>[threadCount];
             var generatedValues = new List<long>[threadCount];
@@ -140,19 +140,19 @@ namespace Microsoft.EntityFrameworkCore
                 var testNumber = i;
                 generatedValues[testNumber] = new List<long>();
                 tests[testNumber] = async () =>
+                {
+                    for (var j = 0; j < valueCount; j++)
                     {
-                        for (var j = 0; j < valueCount; j++)
-                        {
-                            var connection = CreateConnection(serviceProvider);
-                            var generator = new SqlServerSequenceHiLoValueGenerator<long>(executor, sqlGenerator, state, connection);
+                        var connection = CreateConnection(serviceProvider);
+                        var generator = new SqlServerSequenceHiLoValueGenerator<long>(executor, sqlGenerator, state, connection);
 
-                            var value = j % 2 == 0
-                                ? await generator.NextAsync(null)
-                                : generator.Next(null);
+                        var value = j % 2 == 0
+                            ? await generator.NextAsync(null)
+                            : generator.Next(null);
 
-                            generatedValues[testNumber].Add(value);
-                        }
-                    };
+                        generatedValues[testNumber].Add(value);
+                    }
+                };
             }
 
             var tasks = tests.Select(Task.Run).ToArray();
@@ -178,9 +178,9 @@ namespace Microsoft.EntityFrameworkCore
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
                             new RelationalSqlGenerationHelperDependencies()),
-                        new SqlServerTypeMapper(
-                            new CoreTypeMapperDependencies(),
-                            new RelationalTypeMapperDependencies()))),
+                        new SqlServerTypeMappingSource(
+                            TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                            TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()))),
                 state,
                 CreateConnection());
 
@@ -221,20 +221,11 @@ namespace Microsoft.EntityFrameworkCore
                     _commandBuilder = commandBuilder;
                 }
 
-                public string CommandText
-                {
-                    get { throw new NotImplementedException(); }
-                }
+                public string CommandText => throw new NotImplementedException();
 
-                public IReadOnlyList<IRelationalParameter> Parameters
-                {
-                    get { throw new NotImplementedException(); }
-                }
+                public IReadOnlyList<IRelationalParameter> Parameters => throw new NotImplementedException();
 
-                public IReadOnlyDictionary<string, object> ParameterValues
-                {
-                    get { throw new NotImplementedException(); }
-                }
+                public IReadOnlyDictionary<string, object> ParameterValues => throw new NotImplementedException();
 
                 public int ExecuteNonQuery(IRelationalConnection connection, IReadOnlyDictionary<string, object> parameterValues)
                 {

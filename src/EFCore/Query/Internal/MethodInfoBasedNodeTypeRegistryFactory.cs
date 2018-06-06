@@ -56,6 +56,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 .Register(TrackingExpressionNode.SupportedMethods, typeof(TrackingExpressionNode));
 
             _methodInfoBasedNodeTypeRegistry
+                .Register(TagExpressionNode.SupportedMethods, typeof(TagExpressionNode));
+
+            _methodInfoBasedNodeTypeRegistry
                 .Register(IgnoreQueryFiltersExpressionNode.SupportedMethods, typeof(IgnoreQueryFiltersExpressionNode));
 
             _methodInfoBasedNodeTypeRegistry

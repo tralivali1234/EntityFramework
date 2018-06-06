@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
     /// <summary>
     ///     Represents a SQL function call expression.
     /// </summary>
-    [DebuggerDisplay("{ToString()}")]
+    [DebuggerDisplay("{" + nameof(ToString) + "()}")]
     public class SqlFunctionExpression : Expression
     {
         private readonly ReadOnlyCollection<Expression> _arguments;
@@ -29,7 +29,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         public SqlFunctionExpression(
             [NotNull] string functionName,
             [NotNull] Type returnType)
-            : this(functionName, returnType, Enumerable.Empty<Expression>())
+            : this(
+                Check.NotEmpty(functionName, nameof(functionName)),
+                Check.NotNull(returnType, nameof(returnType)),
+                Enumerable.Empty<Expression>())
         {
         }
 
@@ -43,7 +46,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             [NotNull] string functionName,
             [NotNull] Type returnType,
             [NotNull] IEnumerable<Expression> arguments)
-            : this(functionName, returnType, /*schema*/ null, arguments)
+            : this(
+                Check.NotEmpty(functionName, nameof(functionName)),
+                Check.NotNull(returnType, nameof(returnType)),
+                /*schema*/ null,
+                Check.NotNull(arguments, nameof(arguments)))
         {
         }
 
@@ -59,7 +66,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             [NotNull] Type returnType,
             [CanBeNull] string schema,
             [NotNull] IEnumerable<Expression> arguments)
-            : this(/*instance*/ null, functionName, schema, returnType, arguments)
+            : this(
+                /*instance*/ null,
+                Check.NotEmpty(functionName, nameof(functionName)),
+                schema,
+                Check.NotNull(returnType, nameof(returnType)),
+                Check.NotNull(arguments, nameof(arguments)))
         {
         }
 
@@ -75,7 +87,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             [NotNull] string functionName,
             [NotNull] Type returnType,
             [NotNull] IEnumerable<Expression> arguments)
-            : this(instance, functionName, /*schema*/ null, returnType, arguments)
+            : this(
+                Check.NotNull(instance, nameof(instance)),
+                Check.NotEmpty(functionName, nameof(functionName)),
+                /*schema*/ null,
+                Check.NotNull(returnType, nameof(returnType)),
+                Check.NotNull(arguments, nameof(arguments)))
         {
         }
 
@@ -159,7 +176,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         protected override Expression VisitChildren(ExpressionVisitor visitor)
         {
             var newInstance = Instance != null ? visitor.Visit(Instance) : null;
-            var newArguments = visitor.VisitAndConvert(_arguments, "VisitChildren");
+            var newArguments = visitor.VisitAndConvert(_arguments, nameof(VisitChildren));
 
             return newInstance != Instance || newArguments != _arguments
                 ? new SqlFunctionExpression(newInstance, FunctionName, Schema, Type, newArguments)
@@ -192,8 +209,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             => Type == other.Type
                && string.Equals(FunctionName, other.FunctionName)
                && string.Equals(Schema, other.Schema)
-               && Instance.Equals(other.Instance)
-               && _arguments.SequenceEqual(other._arguments);
+               && _arguments.SequenceEqual(other._arguments)
+               && (Instance == null && other.Instance == null
+                   || Instance?.Equals(other.Instance) == true);
 
         /// <summary>
         ///     Returns a hash code for this object.
@@ -220,6 +238,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// <returns>A <see cref="string" /> representation of the Expression.</returns>
         public override string ToString()
             => (Instance != null ? Instance + "." : Schema != null ? Schema + "." : "") +
-            $"{FunctionName}({string.Join("", "", Arguments)}";
+               $"{FunctionName}({string.Join("", "", Arguments)}";
     }
 }

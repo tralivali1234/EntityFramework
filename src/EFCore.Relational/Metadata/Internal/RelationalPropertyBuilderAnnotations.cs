@@ -9,6 +9,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class RelationalPropertyBuilderAnnotations : RelationalPropertyAnnotations
     {
         /// <summary>
@@ -79,5 +80,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual bool HasDefaultValue([CanBeNull] object value)
             => SetDefaultValue(value);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+#pragma warning disable 109
+        public new virtual bool IsFixedLength(bool fixedLength)
+#pragma warning restore 109
+            => SetFixedLength(fixedLength);
     }
 }

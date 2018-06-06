@@ -28,9 +28,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             [NotNull] IQuerySource querySource,
             bool trackingQuery,
             [NotNull] IKey key,
-            [NotNull] Func<ValueBuffer, object> materializer,
+            [NotNull] Func<MaterializationContext, object> materializer,
             [CanBeNull] Dictionary<Type, int[]> typeIndexMap)
-            : base(querySource, trackingQuery, key, materializer)
+            : base(querySource, trackingQuery, key, materializer, materializerExpression: null)
         {
             _typeIndexMap = typeIndexMap;
         }
@@ -45,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual TEntity Shape(QueryContext queryContext, ValueBuffer valueBuffer)
+        public virtual TEntity Shape(QueryContext queryContext, in ValueBuffer valueBuffer)
         {
             Debug.Assert(queryContext != null);
 
@@ -53,7 +53,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 = (TEntity)queryContext.QueryBuffer
                     .GetEntity(
                         Key,
-                        new EntityLoadInfo(valueBuffer, Materializer, _typeIndexMap),
+                        new EntityLoadInfo(
+                            new MaterializationContext(valueBuffer, queryContext.Context),
+                            Materializer,
+                            _typeIndexMap),
                         queryStateManager: IsTrackingQuery,
                         throwOnNullKey: !AllowNullResult);
 

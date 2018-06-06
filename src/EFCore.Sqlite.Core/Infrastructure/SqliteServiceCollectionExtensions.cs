@@ -3,18 +3,23 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
-using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal;
+using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
 using Microsoft.EntityFrameworkCore.Query.Sql;
-using Microsoft.EntityFrameworkCore.Query.Sql.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Migrations.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Query.ExpressionTranslators.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Query.ExpressionVisitors.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Query.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Query.Sql.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Storage.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Update.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Update;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -42,17 +47,17 @@ namespace Microsoft.Extensions.DependencyInjection
         /// </summary>
         /// <example>
         ///     <code>
-        ///          public void ConfigureServices(IServiceCollection services)
-        ///          {
-        ///              var connectionString = "connection string to database";
+        ///           public void ConfigureServices(IServiceCollection services)
+        ///           {
+        ///               var connectionString = "connection string to database";
         /// 
-        ///              services
-        ///                  .AddEntityFrameworkSqlite()
-        ///                  .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
-        ///                      options.UseSqlite(connectionString)
-        ///                             .UseInternalServiceProvider(serviceProvider));
-        ///          }
-        ///      </code>
+        ///               services
+        ///                   .AddEntityFrameworkSqlite()
+        ///                   .AddDbContext&lt;MyContext&gt;((serviceProvider, options) =>
+        ///                       options.UseSqlite(connectionString)
+        ///                              .UseInternalServiceProvider(serviceProvider));
+        ///           }
+        ///       </code>
         /// </example>
         /// <param name="serviceCollection"> The <see cref="IServiceCollection" /> to add services to. </param>
         /// <returns>
@@ -64,12 +69,13 @@ namespace Microsoft.Extensions.DependencyInjection
 
             var builder = new EntityFrameworkRelationalServicesBuilder(serviceCollection)
                 .TryAdd<IDatabaseProvider, DatabaseProvider<SqliteOptionsExtension>>()
-                .TryAdd<IRelationalTypeMapper, SqliteTypeMapper>()
+                .TryAdd<IRelationalTypeMappingSource, SqliteTypeMappingSource>()
                 .TryAdd<ISqlGenerationHelper, SqliteSqlGenerationHelper>()
                 .TryAdd<IMigrationsAnnotationProvider, SqliteMigrationsAnnotationProvider>()
                 .TryAdd<IModelValidator, SqliteModelValidator>()
                 .TryAdd<IConventionSetBuilder, SqliteConventionSetBuilder>()
                 .TryAdd<IUpdateSqlGenerator, SqliteUpdateSqlGenerator>()
+                .TryAdd<ISingletonUpdateSqlGenerator, SqliteUpdateSqlGenerator>()
                 .TryAdd<IModificationCommandBatchFactory, SqliteModificationCommandBatchFactory>()
                 .TryAdd<IRelationalConnection>(p => p.GetService<ISqliteRelationalConnection>())
                 .TryAdd<IMigrationsSqlGenerator, SqliteMigrationsSqlGenerator>()
@@ -78,9 +84,10 @@ namespace Microsoft.Extensions.DependencyInjection
                 .TryAdd<IMemberTranslator, SqliteCompositeMemberTranslator>()
                 .TryAdd<ICompositeMethodCallTranslator, SqliteCompositeMethodCallTranslator>()
                 .TryAdd<IQuerySqlGeneratorFactory, SqliteQuerySqlGeneratorFactory>()
+                .TryAdd<ISqlTranslatingExpressionVisitorFactory, SqliteSqlTranslatingExpressionVisitorFactory>()
+                .TryAdd<IRelationalResultOperatorHandler, SqliteResultOperatorHandler>()
                 .TryAddProviderSpecificServices(
-                    b => b
-                        .TryAddScoped<ISqliteRelationalConnection, SqliteRelationalConnection>());
+                    b => b.TryAddScoped<ISqliteRelationalConnection, SqliteRelationalConnection>());
 
             builder.TryAddCoreServices();
 

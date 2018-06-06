@@ -8,6 +8,8 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public abstract partial class ModelBuilderTest
@@ -104,9 +106,13 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
         {
         }
 
-        protected class CustomerDetails
+        protected class DetailsBase
         {
             public int Id { get; set; }
+        }
+
+        protected class CustomerDetails : DetailsBase
+        {
             public int CustomerId { get; set; }
 
             public Customer Customer { get; set; }
@@ -127,6 +133,13 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public OrderDetails Details { get; set; }
         }
 
+        [Owned]
+        protected class StreetAddress
+        {
+            public string Street { get; set; }
+            public string City { get; set; }
+        }
+
         [NotMapped]
         protected class SpecialOrder : Order
         {
@@ -134,6 +147,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public SpecialCustomer SpecialCustomer { get; set; }
             public BackOrder BackOrder { get; set; }
             public OrderCombination SpecialOrderCombination { get; set; }
+            public StreetAddress ShippingAddress { get; set; }
         }
 
         protected class BackOrder : Order
@@ -150,13 +164,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public Order Order { get; set; }
             public int SpecialOrderId { get; set; }
             public SpecialOrder SpecialOrder { get; set; }
+            public DetailsBase Details { get; set; }
         }
 
-        protected class OrderDetails
+        protected class OrderDetails : DetailsBase
         {
             public static readonly PropertyInfo OrderIdProperty = typeof(OrderDetails).GetProperty("OrderId");
-
-            public int Id { get; set; }
 
             public int OrderId { get; set; }
             public Order Order { get; set; }
@@ -173,15 +186,15 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             // ReSharper disable once ConvertToAutoProperty
             public int Up
             {
-                get { return _forUp; }
-                set { _forUp = value; }
+                get => _forUp;
+                set => _forUp = value;
             }
 
             // ReSharper disable once ConvertToAutoProperty
             public string Down
             {
-                get { return _forDown; }
-                set { _forDown = value; }
+                get => _forDown;
+                set => _forDown = value;
             }
 
 #pragma warning disable 67
@@ -247,10 +260,8 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public BookDetails Details { get; set; }
         }
 
-        protected abstract class BookDetailsBase
+        protected abstract class BookDetailsBase : DetailsBase
         {
-            public int Id { get; set; }
-
             public int AnotherBookId { get; set; }
 
             public Book AnotherBook { get; set; }
@@ -379,6 +390,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public Alpha AlphaTwo { get; set; }
         }
 
+        [NotMapped]
         protected class Theta
         {
             public int ThetaId { get; set; }
@@ -537,12 +549,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
         {
         }
 
-        public class StringIdBase
+        protected class StringIdBase
         {
             public string Id { get; set; }
         }
 
-        public class StringIdDerived : StringIdBase
+        protected class StringIdDerived : StringIdBase
         {
         }
 
@@ -561,6 +573,25 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
         {
             public int Id { get; set; }
             public IList<Friendship> Friendships { get; set; }
+        }
+
+        protected class QueryResult
+        {
+            public int ValueFk { get; set; }
+            public Value Value { get; set; }
+        }
+
+        protected class Value
+        {
+            public int Id { get; set; }
+            public int AlternateId { get; set; }
+        }
+
+        protected class QueryCoreResult
+        {
+            public int ValueFk { get; set; }
+            public int ValueId { get; set; }
+            public Value Value { get; set; }
         }
     }
 }

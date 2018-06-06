@@ -5,12 +5,14 @@ using System;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.ValueGeneration.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Microsoft.EntityFrameworkCore.ValueGeneration.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class SqlServerValueGeneratorCacheTest
@@ -340,11 +342,11 @@ namespace Microsoft.EntityFrameworkCore
 
             modelBuilder.Entity<Led>(
                 b =>
-                    {
-                        b.Property(e => e.Zeppelin).ForSqlServerUseSequenceHiLo("Heaven");
-                        b.Property(e => e.Stairway).ForSqlServerUseSequenceHiLo("Heaven");
-                        b.Property(e => e.WholeLotta).ForSqlServerUseSequenceHiLo("Rosie");
-                    });
+                {
+                    b.Property(e => e.Zeppelin).ForSqlServerUseSequenceHiLo("Heaven");
+                    b.Property(e => e.Stairway).ForSqlServerUseSequenceHiLo("Heaven");
+                    b.Property(e => e.WholeLotta).ForSqlServerUseSequenceHiLo("Rosie");
+                });
 
             return modelBuilder.Model;
         }

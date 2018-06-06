@@ -8,12 +8,12 @@ namespace Microsoft.EntityFrameworkCore.TestModels.TransportationModel
         public Engine Engine { get; set; }
 
         public override bool Equals(object obj)
-        {
-            return obj is PoweredVehicle other
-                   && base.Equals(other)
-                   && Equals(Engine, other.Engine);
-        }
+            => obj is PoweredVehicle other
+               && base.Equals(other)
+               && Equals(Engine, other.Engine);
 
-        public override int GetHashCode() => base.GetHashCode();
+        public override int GetHashCode()
+            => base.GetHashCode() * 397
+               ^ Engine.GetHashCode();
     }
 }

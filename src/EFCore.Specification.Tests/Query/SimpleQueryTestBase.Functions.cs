@@ -484,7 +484,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_math_round_int()
         {
             AssertQuery<Order>(
-                os => os.Where(o => o.OrderID < 10250).Select(o => new { A = Math.Round((double)o.OrderID) }),
+                os => os.Where(o => o.OrderID < 10250).Select(
+                    o => new
+                    {
+                        A = Math.Round((double)o.OrderID)
+                    }),
                 e => e.A);
         }
 
@@ -492,7 +496,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_math_truncate_int()
         {
             AssertQuery<Order>(
-                os => os.Where(o => o.OrderID < 10250).Select(o => new { A = Math.Truncate((double)o.OrderID) }),
+                os => os.Where(o => o.OrderID < 10250).Select(
+                    o => new
+                    {
+                        A = Math.Truncate((double)o.OrderID)
+                    }),
                 e => e.A);
         }
 
@@ -614,6 +622,22 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Sign(od.Discount) > 0),
                 entryCount: 13);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_math_max()
+        {
+            AssertQuery<OrderDetail>(
+                ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Max(od.OrderID, od.ProductID) == od.OrderID),
+                entryCount: 25);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_math_min()
+        {
+            AssertQuery<OrderDetail>(
+                ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Min(od.OrderID, od.ProductID) == od.ProductID),
+                entryCount: 25);
         }
 
         [ConditionalFact]
@@ -817,38 +841,56 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual void Indexof_with_emptystring()
+        {
+            // ReSharper disable once StringIndexOfIsCultureSpecific.1
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.IndexOf(string.Empty)));
+        }
+
+        [ConditionalFact]
+        public virtual void Replace_with_emptystring()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.Replace("ari", string.Empty)));
+        }
+
+        [ConditionalFact]
+        public virtual void Substring_with_zero_startindex()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.Substring(0, 3)));
+        }
+
+        [ConditionalFact]
+        public virtual void Substring_with_zero_length()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.Substring(2, 0)));
+        }
+
+        [ConditionalFact]
         public virtual void Substring_with_constant()
         {
-            using (var context = CreateContext())
-            {
-                Assert.Equal(
-                    "ari",
-                    context.Set<Customer>().OrderBy(c => c.CustomerID).Select(c => c.ContactName.Substring(1, 3)).First());
-            }
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.Substring(1, 3)));
         }
 
         [ConditionalFact]
         public virtual void Substring_with_closure()
         {
+            // ReSharper disable once ConvertToConstant.Local
             var start = 2;
 
-            using (var context = CreateContext())
-            {
-                Assert.Equal(
-                    "ria",
-                    context.Set<Customer>().OrderBy(c => c.CustomerID).Select(c => c.ContactName.Substring(start, 3)).First());
-            }
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.Substring(start, 3)));
         }
 
         [ConditionalFact]
         public virtual void Substring_with_client_eval()
         {
-            using (var context = CreateContext())
-            {
-                Assert.Equal(
-                    "ari",
-                    context.Set<Customer>().OrderBy(c => c.CustomerID).Select(c => c.ContactName.Substring(c.ContactName.IndexOf('a'), 3)).First());
-            }
+            AssertSingleResult<Customer>(
+                cs => cs.Where(c => c.CustomerID == "ALFKI").Select(c => c.ContactName.Substring(c.ContactName.IndexOf('a'), 3)));
         }
 
         [ConditionalFact]
@@ -865,7 +907,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             using (var context = CreateContext())
             {
                 var query = context.Set<Customer>()
-                    .Select(c => new { Id = c.CustomerID, Value = string.IsNullOrEmpty(c.Region) })
+                    .Select(
+                        c => new
+                        {
+                            Id = c.CustomerID,
+                            Value = string.IsNullOrEmpty(c.Region)
+                        })
                     .ToList();
 
                 Assert.Equal(91, query.Count);
@@ -878,7 +925,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             using (var context = CreateContext())
             {
                 var query = context.Set<Customer>()
-                    .Select(c => new { Id = c.CustomerID, Value = !string.IsNullOrEmpty(c.Region) })
+                    .Select(
+                        c => new
+                        {
+                            Id = c.CustomerID,
+                            Value = !string.IsNullOrEmpty(c.Region)
+                        })
                     .ToList();
 
                 Assert.Equal(91, query.Count);
@@ -963,6 +1015,41 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.Trim('O', 'r') == "wne"),
                 entryCount: 17);
+        }
+
+        [ConditionalFact]
+        public virtual void Order_by_length_twice()
+        {
+            AssertQuery<Customer>(
+                cs => cs.OrderBy(c => c.CustomerID.Length).ThenBy(c => c.CustomerID.Length).ThenBy(c => c.CustomerID),
+                entryCount: 91);
+        }
+
+        [ConditionalFact]
+        public virtual void Static_string_equals_in_predicate()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => string.Equals(c.CustomerID, "ANATR")),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Static_equals_nullable_datetime_compared_to_non_nullable()
+        {
+            var arg = new DateTime(1996, 7, 4);
+
+            AssertQuery<Order>(
+                os => os.Where(o => Equals(o.OrderDate, arg)),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Static_equals_int_compared_to_long()
+        {
+            long arg = 10248;
+
+            AssertQuery<Order>(
+                os => os.Where(o => Equals(o.OrderID, arg)));
         }
     }
 }

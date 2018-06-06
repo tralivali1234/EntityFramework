@@ -13,7 +13,6 @@ using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Internal
 {
@@ -53,7 +52,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public virtual TEntity Find(object[] keyValues)
         {
-            Check.NotNull(keyValues, nameof(keyValues));
+            if (keyValues == null
+                || keyValues.Any(v => v == null))
+            {
+                return null;
+            }
 
             return FindTracked(keyValues, out var keyProperties)
                    ?? _queryRoot.FirstOrDefault(BuildLambda(keyProperties, new ValueBuffer(keyValues)));
@@ -72,7 +75,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public virtual Task<TEntity> FindAsync(object[] keyValues, CancellationToken cancellationToken = default)
         {
-            Check.NotNull(keyValues, nameof(keyValues));
+            if (keyValues == null
+                || keyValues.Any(v => v == null))
+            {
+                return Task.FromResult<TEntity>(null);
+            }
 
             var tracked = FindTracked(keyValues, out var keyProperties);
             return tracked != null
@@ -86,7 +93,11 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         Task<object> IEntityFinder.FindAsync(object[] keyValues, CancellationToken cancellationToken)
         {
-            Check.NotNull(keyValues, nameof(keyValues));
+            if (keyValues == null
+                || keyValues.Any(v => v == null))
+            {
+                return Task.FromResult<object>(null);
+            }
 
             var tracked = FindTracked(keyValues, out var keyProperties);
             return tracked != null
@@ -199,7 +210,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         }
 
         private IQueryable<TEntity> Query(INavigation navigation, object[] keyValues)
-            => _queryRoot.Where(BuildLambda(GetLoadProperties(navigation), new ValueBuffer(keyValues)));
+            => _queryRoot.Where(BuildLambda(GetLoadProperties(navigation), new ValueBuffer(keyValues))).AsTracking();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -245,17 +256,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
                     throw new ArgumentException(
                         CoreStrings.FindNotCompositeKey(typeof(TEntity).ShortDisplayName(), keyValues.Length));
                 }
+
                 throw new ArgumentException(
                     CoreStrings.FindValueCountMismatch(typeof(TEntity).ShortDisplayName(), keyProperties.Count, keyValues.Length));
             }
 
             for (var i = 0; i < keyValues.Length; i++)
             {
-                if (keyValues[i] == null)
-                {
-                    throw new ArgumentNullException(nameof(keyValues));
-                }
-
                 var valueType = keyValues[i].GetType();
                 var propertyType = keyProperties[i].ClrType;
                 if (valueType != propertyType.UnwrapNullableType())
@@ -345,6 +352,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
                 predicate = predicate == null ? equalsExpression : Expression.AndAlso(predicate, equalsExpression);
             }
+
             return predicate;
         }
 

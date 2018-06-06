@@ -5,6 +5,8 @@ using System;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Internal;
+using Microsoft.EntityFrameworkCore.Oracle.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata
@@ -23,8 +25,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
         public virtual string HiLoSequenceName
         {
-            get { return (string)Annotations.Metadata[OracleAnnotationNames.HiLoSequenceName]; }
-            [param: CanBeNull] set { SetHiLoSequenceName(value); }
+            get => (string)Annotations.Metadata[OracleAnnotationNames.HiLoSequenceName];
+            [param: CanBeNull]
+            set => SetHiLoSequenceName(value);
         }
 
         protected virtual bool SetHiLoSequenceName([CanBeNull] string value)
@@ -50,8 +53,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
         public virtual OracleValueGenerationStrategy? ValueGenerationStrategy
         {
-            get { return GetOracleValueGenerationStrategy(fallbackToModel: true); }
-            [param: CanBeNull] set { SetValueGenerationStrategy(value); }
+            get => GetOracleValueGenerationStrategy(fallbackToModel: true);
+            [param: CanBeNull]
+            set => SetValueGenerationStrategy(value);
         }
 
         public virtual OracleValueGenerationStrategy? GetOracleValueGenerationStrategy(bool fallbackToModel)
@@ -76,13 +80,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             var modelStrategy = Property.DeclaringEntityType.Model.Oracle().ValueGenerationStrategy;
 
             if (modelStrategy == OracleValueGenerationStrategy.SequenceHiLo
-                && IsCompatibleSequenceHiLo(Property.ClrType))
+                && IsCompatibleSequenceHiLo(Property))
             {
                 return OracleValueGenerationStrategy.SequenceHiLo;
             }
 
             if (modelStrategy == OracleValueGenerationStrategy.IdentityColumn
-                && IsCompatibleIdentityColumn(Property.ClrType))
+                && IsCompatibleIdentityColumn(Property))
             {
                 return OracleValueGenerationStrategy.IdentityColumn;
             }
@@ -97,7 +101,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 var propertyType = Property.ClrType;
 
                 if (value == OracleValueGenerationStrategy.IdentityColumn
-                    && !IsCompatibleIdentityColumn(propertyType))
+                    && !IsCompatibleIdentityColumn(Property))
                 {
                     if (ShouldThrowOnInvalidConfiguration)
                     {
@@ -110,7 +114,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                 }
 
                 if (value == OracleValueGenerationStrategy.SequenceHiLo
-                    && !IsCompatibleSequenceHiLo(propertyType))
+                    && !IsCompatibleSequenceHiLo(Property))
                 {
                     if (ShouldThrowOnInvalidConfiguration)
                     {
@@ -276,9 +280,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             base.ClearAllServerGeneratedValues();
         }
 
-        private static bool IsCompatibleIdentityColumn(Type type)
-            => type.IsInteger() || type == typeof(decimal);
+        private static bool IsCompatibleIdentityColumn(IProperty property)
+        {
+            var type = property.ClrType;
 
-        private static bool IsCompatibleSequenceHiLo(Type type) => type.IsInteger();
+            return (type.IsInteger() || type == typeof(decimal)) && !HasConverter(property);
+        }
+
+        private static bool IsCompatibleSequenceHiLo(IProperty property)
+            => property.ClrType.IsInteger() && !HasConverter(property);
+
+        private static bool HasConverter(IProperty property)
+            => (property.FindMapping()?.Converter
+                ?? property.GetValueConverter()) != null;
     }
 }

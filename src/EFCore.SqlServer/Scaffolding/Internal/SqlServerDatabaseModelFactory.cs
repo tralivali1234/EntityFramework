@@ -15,13 +15,15 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Scaffolding;
 using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
 using Microsoft.EntityFrameworkCore.Scaffolding.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
-namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Scaffolding.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -30,10 +32,24 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
     public class SqlServerDatabaseModelFactory : IDatabaseModelFactory
     {
         private readonly IDiagnosticsLogger<DbLoggerCategory.Scaffolding> _logger;
-        private static readonly ISet<string> _dateTimePrecisionTypes = new HashSet<string> { "datetimeoffset", "datetime2", "time" };
+
+        private static readonly ISet<string> _dateTimePrecisionTypes = new HashSet<string>
+        {
+            "datetimeoffset",
+            "datetime2",
+            "time"
+        };
 
         private static readonly ISet<string> _maxLengthRequiredTypes
-            = new HashSet<string> { "binary", "varbinary", "char", "varchar", "nchar", "nvarchar" };
+            = new HashSet<string>
+            {
+                "binary",
+                "varbinary",
+                "char",
+                "varchar",
+                "nchar",
+                "nvarchar"
+            };
 
         private const string NamePartRegex
             = @"(?:(?:\[(?<part{0}>(?:(?:\]\])|[^\]])+)\])|(?<part{0}>[^\.\[\]]+))";
@@ -102,6 +118,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             {
                 connection.Open();
             }
+
             try
             {
                 databaseModel.DatabaseName = connection.Database;
@@ -183,14 +200,14 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             if (schemas.Any())
             {
                 return s =>
-                    {
-                        var schemaFilterBuilder = new StringBuilder();
-                        schemaFilterBuilder.Append(s);
-                        schemaFilterBuilder.Append(" IN (");
-                        schemaFilterBuilder.Append(string.Join(", ", schemas.Select(EscapeLiteral)));
-                        schemaFilterBuilder.Append(")");
-                        return schemaFilterBuilder.ToString();
-                    };
+                {
+                    var schemaFilterBuilder = new StringBuilder();
+                    schemaFilterBuilder.Append(s);
+                    schemaFilterBuilder.Append(" IN (");
+                    schemaFilterBuilder.Append(string.Join(", ", schemas.Select(EscapeLiteral)));
+                    schemaFilterBuilder.Append(")");
+                    return schemaFilterBuilder.ToString();
+                };
             }
 
             return null;
@@ -219,68 +236,69 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 || tables.Any())
             {
                 return (s, t) =>
-                    {
-                        var tableFilterBuilder = new StringBuilder();
+                {
+                    var tableFilterBuilder = new StringBuilder();
 
-                        var openBracket = false;
-                        if (schemaFilter != null)
+                    var openBracket = false;
+                    if (schemaFilter != null)
+                    {
+                        tableFilterBuilder
+                            .Append("(")
+                            .Append(schemaFilter(s));
+                        openBracket = true;
+                    }
+
+                    if (tables.Any())
+                    {
+                        if (openBracket)
                         {
                             tableFilterBuilder
-                                .Append("(")
-                                .Append(schemaFilter(s));
+                                .AppendLine()
+                                .Append("OR ");
+                        }
+                        else
+                        {
+                            tableFilterBuilder.Append("(");
                             openBracket = true;
                         }
 
-                        if (tables.Any())
+                        var tablesWithoutSchema = tables.Where(e => string.IsNullOrEmpty(e.Schema)).ToList();
+                        if (tablesWithoutSchema.Any())
                         {
-                            if (openBracket)
-                            {
-                                tableFilterBuilder
-                                    .AppendLine()
-                                    .Append("OR ");
-                            }
-                            else
-                            {
-                                tableFilterBuilder.Append("(");
-                                openBracket = true;
-                            }
-
-                            var tablesWithoutSchema = tables.Where(e => string.IsNullOrEmpty(e.Schema)).ToList();
-                            if (tablesWithoutSchema.Any())
-                            {
-                                tableFilterBuilder.Append(t);
-                                tableFilterBuilder.Append(" IN (");
-                                tableFilterBuilder.Append(string.Join(", ", tablesWithoutSchema.Select(e => EscapeLiteral(e.Table))));
-                                tableFilterBuilder.Append(")");
-                            }
-
-                            var tablesWithSchema = tables.Where(e => !string.IsNullOrEmpty(e.Schema)).ToList();
-                            if (tablesWithSchema.Any())
-                            {
-                                if (tablesWithoutSchema.Any())
-                                {
-                                    tableFilterBuilder.Append(" OR ");
-                                }
-                                tableFilterBuilder.Append(t);
-                                tableFilterBuilder.Append(" IN (");
-                                tableFilterBuilder.Append(string.Join(", ", tablesWithSchema.Select(e => EscapeLiteral(e.Table))));
-                                tableFilterBuilder.Append(") AND CONCAT(");
-                                tableFilterBuilder.Append(s);
-                                tableFilterBuilder.Append(", N'.', ");
-                                tableFilterBuilder.Append(t);
-                                tableFilterBuilder.Append(") IN (");
-                                tableFilterBuilder.Append(string.Join(", ", tablesWithSchema.Select(e => EscapeLiteral($"{e.Schema}.{e.Table}"))));
-                                tableFilterBuilder.Append(")");
-                            }
-                        }
-
-                        if (openBracket)
-                        {
+                            tableFilterBuilder.Append(t);
+                            tableFilterBuilder.Append(" IN (");
+                            tableFilterBuilder.Append(string.Join(", ", tablesWithoutSchema.Select(e => EscapeLiteral(e.Table))));
                             tableFilterBuilder.Append(")");
                         }
 
-                        return tableFilterBuilder.ToString();
-                    };
+                        var tablesWithSchema = tables.Where(e => !string.IsNullOrEmpty(e.Schema)).ToList();
+                        if (tablesWithSchema.Any())
+                        {
+                            if (tablesWithoutSchema.Any())
+                            {
+                                tableFilterBuilder.Append(" OR ");
+                            }
+
+                            tableFilterBuilder.Append(t);
+                            tableFilterBuilder.Append(" IN (");
+                            tableFilterBuilder.Append(string.Join(", ", tablesWithSchema.Select(e => EscapeLiteral(e.Table))));
+                            tableFilterBuilder.Append(") AND (");
+                            tableFilterBuilder.Append(s);
+                            tableFilterBuilder.Append(" + N'.' + ");
+                            tableFilterBuilder.Append(t);
+                            tableFilterBuilder.Append(") IN (");
+                            tableFilterBuilder.Append(string.Join(", ", tablesWithSchema.Select(e => EscapeLiteral($"{e.Schema}.{e.Table}"))));
+                            tableFilterBuilder.Append(")");
+                        }
+                    }
+
+                    if (openBracket)
+                    {
+                        tableFilterBuilder.Append(")");
+                    }
+
+                    return tableFilterBuilder.ToString();
+                };
             }
 
             return null;
@@ -291,11 +309,11 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             return $"N'{s}'";
         }
 
-        private IReadOnlyDictionary<string, string> GetTypeAliases(DbConnection connection)
+        private IReadOnlyDictionary<string, (string, string)> GetTypeAliases(DbConnection connection)
         {
             using (var command = connection.CreateCommand())
             {
-                var typeAliasMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                var typeAliasMap = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
 
                 command.CommandText = @"
 SELECT
@@ -324,7 +342,7 @@ WHERE [t].[is_user_defined] = 1";
 
                         _logger.TypeAliasFound(DisplayName(schema, userType), storeType);
 
-                        typeAliasMap.Add($"[{schema}].[{userType}]", storeType);
+                        typeAliasMap.Add($"[{schema}].[{userType}]", (storeType, systemType));
                     }
                 }
 
@@ -335,7 +353,7 @@ WHERE [t].[is_user_defined] = 1";
         private IEnumerable<DatabaseSequence> GetSequences(
             DbConnection connection,
             Func<string, string> schemaFilter,
-            IReadOnlyDictionary<string, string> typeAliases)
+            IReadOnlyDictionary<string, (string storeType, string)> typeAliases)
         {
             using (var command = connection.CreateCommand())
             {
@@ -378,9 +396,9 @@ WHERE " + schemaFilter("OBJECT_SCHEMA_NAME([s].[object_id])");
                         var maxValue = reader.GetValueOrDefault<long>("maximum_value");
 
                         // Swap store type if type alias is used
-                        if (typeAliases.TryGetValue($"[{storeTypeSchema}].[{storeType}]", out var underlyingType))
+                        if (typeAliases.TryGetValue($"[{storeTypeSchema}].[{storeType}]", out var value))
                         {
-                            storeType = underlyingType;
+                            storeType = value.storeType;
                         }
 
                         storeType = GetStoreType(storeType, maxLength: 0, precision: precision, scale: scale);
@@ -417,7 +435,7 @@ WHERE " + schemaFilter("OBJECT_SCHEMA_NAME([s].[object_id])");
         private IEnumerable<DatabaseTable> GetTables(
             DbConnection connection,
             Func<string, string, string> tableFilter,
-            IReadOnlyDictionary<string, string> typeAliases)
+            IReadOnlyDictionary<string, (string, string)> typeAliases)
         {
             using (var command = connection.CreateCommand())
             {
@@ -505,7 +523,7 @@ WHERE " + filter;
             DbConnection connection,
             IReadOnlyList<DatabaseTable> tables,
             string tableFilter,
-            IReadOnlyDictionary<string, string> typeAliases)
+            IReadOnlyDictionary<string, (string storeType, string typeName)> typeAliases)
         {
             using (var command = connection.CreateCommand())
             {
@@ -583,26 +601,22 @@ ORDER BY [table_schema], [table_name], [c].[column_id]";
                                 computedValue);
 
                             string storeType;
-                            if (typeAliases.TryGetValue($"[{dataTypeSchemaName}].[{dataTypeName}]", out var underlyingStoreType))
+                            string underlyingStoreType;
+                            string systemTypeName;
+                            if (typeAliases.TryGetValue($"[{dataTypeSchemaName}].[{dataTypeName}]", out var value))
                             {
                                 storeType = dataTypeName;
+                                underlyingStoreType = value.storeType;
+                                systemTypeName = value.typeName;
                             }
                             else
                             {
                                 storeType = GetStoreType(dataTypeName, maxLength, precision, scale);
                                 underlyingStoreType = null;
+                                systemTypeName = dataTypeName;
                             }
 
-                            if (defaultValue == "(NULL)")
-                            {
-                                defaultValue = null;
-                            }
-
-                            if (defaultValue == "((0))"
-                                && (underlyingStoreType ?? storeType) == "bit")
-                            {
-                                defaultValue = null;
-                            }
+                            defaultValue = FilterClrDefaults(systemTypeName, nullable, defaultValue);
 
                             var column = new DatabaseColumn
                             {
@@ -633,6 +647,63 @@ ORDER BY [table_schema], [table_name], [c].[column_id]";
                     }
                 }
             }
+        }
+
+        private static string FilterClrDefaults(string dataTypeName, bool nullable, string defaultValue)
+        {
+            if (defaultValue == null
+                || defaultValue == "(NULL)")
+            {
+                return null;
+            }
+
+            if (nullable)
+            {
+                return defaultValue;
+            }
+
+            if (defaultValue == "((0))")
+            {
+                if (dataTypeName == "bigint"
+                    || dataTypeName == "bit"
+                    || dataTypeName == "decimal"
+                    || dataTypeName == "float"
+                    || dataTypeName == "int"
+                    || dataTypeName == "money"
+                    || dataTypeName == "numeric"
+                    || dataTypeName == "real"
+                    || dataTypeName == "smallint"
+                    || dataTypeName == "smallmoney"
+                    || dataTypeName == "tinyint")
+                {
+                    return null;
+                }
+            }
+            else if (defaultValue == "((0.0))")
+            {
+                if (dataTypeName == "decimal"
+                    || dataTypeName == "float"
+                    || dataTypeName == "money"
+                    || dataTypeName == "numeric"
+                    || dataTypeName == "real"
+                    || dataTypeName == "smallmoney")
+                {
+                    return null;
+                }
+            }
+            else if ((defaultValue == "(CONVERT([real],(0)))" && dataTypeName == "real")
+                     || (defaultValue == "((0.0000000000000000e+000))" && dataTypeName == "float")
+                     || (defaultValue == "('0001-01-01')" && dataTypeName == "date")
+                     || (defaultValue == "('1900-01-01T00:00:00.000')" && (dataTypeName == "datetime" || dataTypeName == "smalldatetime"))
+                     || (defaultValue == "('0001-01-01T00:00:00.000')" && dataTypeName == "datetime2")
+                     || (defaultValue == "('0001-01-01T00:00:00.000+00:00')" && dataTypeName == "datetimeoffset")
+                     || (defaultValue == "('00:00:00')" && dataTypeName == "time")
+                     || (defaultValue == "('00000000-0000-0000-0000-000000000000')" && dataTypeName == "uniqueidentifier"))
+            {
+                return null;
+            }
+
+            return defaultValue;
         }
 
         private static string GetStoreType(string dataTypeName, int maxLength, int precision, int scale)
@@ -714,7 +785,7 @@ ORDER BY [table_schema], [table_name], [index_name], [ic].[key_ordinal]";
                             .GroupBy(
                                 ddr =>
                                     (Name: ddr.GetValueOrDefault<string>("index_name"),
-                                    TypeDesc: ddr.GetValueOrDefault<string>("type_desc")))
+                                        TypeDesc: ddr.GetValueOrDefault<string>("type_desc")))
                             .ToArray();
 
                         if (primaryKeyGroups.Length == 1)
@@ -752,7 +823,7 @@ ORDER BY [table_schema], [table_name], [index_name], [ic].[key_ordinal]";
                             .GroupBy(
                                 ddr =>
                                     (Name: ddr.GetValueOrDefault<string>("index_name"),
-                                    TypeDesc: ddr.GetValueOrDefault<string>("type_desc")))
+                                        TypeDesc: ddr.GetValueOrDefault<string>("type_desc")))
                             .ToArray();
 
                         foreach (var uniqueConstraintGroup in uniqueConstraintGroups)
@@ -790,10 +861,10 @@ ORDER BY [table_schema], [table_name], [index_name], [ic].[key_ordinal]";
                             .GroupBy(
                                 ddr =>
                                     (Name: ddr.GetValueOrDefault<string>("index_name"),
-                                    TypeDesc: ddr.GetValueOrDefault<string>("type_desc"),
-                                    IsUnique: ddr.GetValueOrDefault<bool>("is_unique"),
-                                    HasFilter: ddr.GetValueOrDefault<bool>("has_filter"),
-                                    FilterDefinition: ddr.GetValueOrDefault<string>("filter_definition")))
+                                        TypeDesc: ddr.GetValueOrDefault<string>("type_desc"),
+                                        IsUnique: ddr.GetValueOrDefault<bool>("is_unique"),
+                                        HasFilter: ddr.GetValueOrDefault<bool>("has_filter"),
+                                        FilterDefinition: ddr.GetValueOrDefault<string>("filter_definition")))
                             .ToArray();
 
                         foreach (var indexGroup in indexGroups)

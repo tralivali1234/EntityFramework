@@ -4,6 +4,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -16,6 +18,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
     /// </summary>
     public class ChangeDetector : IChangeDetector
     {
+        private readonly IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> _logger;
+        private readonly ILoggingOptions _loggingOptions;
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -23,6 +28,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         public const string SkipDetectChangesAnnotation = "ChangeDetector.SkipDetectChanges";
 
         private bool _suspended;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public ChangeDetector(
+            [NotNull] IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> logger,
+            [NotNull] ILoggingOptions loggingOptions)
+        {
+            _logger = logger;
+            _loggingOptions = loggingOptions;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -42,7 +59,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public virtual void PropertyChanged(InternalEntityEntry entry, IPropertyBase propertyBase, bool setModified)
         {
-            if (_suspended || entry.EntityState == EntityState.Detached)
+            if (_suspended
+                || entry.EntityState == EntityState.Detached
+                || propertyBase is IServiceProperty)
             {
                 return;
             }
@@ -69,7 +88,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public virtual void PropertyChanging(InternalEntityEntry entry, IPropertyBase propertyBase)
         {
-            if (_suspended || entry.EntityState == EntityState.Detached)
+            if (_suspended
+                || entry.EntityState == EntityState.Detached
+                || propertyBase is IServiceProperty)
             {
                 return;
             }
@@ -95,6 +116,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public virtual void DetectChanges(IStateManager stateManager)
         {
+            _logger.DetectChangesStarting(stateManager.Context);
+
             foreach (var entry in stateManager.Entries.Where(
                 e => e.EntityState != EntityState.Detached
                      && e.EntityType.GetChangeTrackingStrategy() == ChangeTrackingStrategy.Snapshot).ToList())
@@ -105,6 +128,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     DetectChanges(entry);
                 }
             }
+
+            _logger.DetectChangesCompleted(stateManager.Context);
         }
 
         /// <summary>
@@ -118,10 +143,30 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             foreach (var property in entityType.GetProperties())
             {
                 if (property.GetOriginalValueIndex() >= 0
-                    && !entry.IsConceptualNull(property)
-                    && !Equals(entry[property], entry.GetOriginalValue(property)))
+                    && !entry.IsModified(property)
+                    && !entry.IsConceptualNull(property))
                 {
-                    entry.SetPropertyModified(property);
+                    var current = entry[property];
+                    var original = entry.GetOriginalValue(property);
+
+                    var comparer = property.GetValueComparer() ?? property.FindMapping()?.Comparer;
+
+                    if (comparer == null)
+                    {
+                        if (!Equals(current, original))
+                        {
+                            LogChangeDetected(entry, property, original, current);
+                            entry.SetPropertyModified(property);
+                        }
+                    }
+                    else
+                    {
+                        if (!comparer.Equals(current, original))
+                        {
+                            LogChangeDetected(entry, property, original, current);
+                            entry.SetPropertyModified(property);
+                        }
+                    }
                 }
             }
 
@@ -139,27 +184,52 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             }
         }
 
-        private static void DetectKeyChange(InternalEntityEntry entry, IProperty property)
+        private void LogChangeDetected(InternalEntityEntry entry, IProperty property, object original, object current)
+        {
+            if (_loggingOptions.IsSensitiveDataLoggingEnabled)
+            {
+                _logger.PropertyChangeDetectedSensitive(entry, property, original, current);
+            }
+            else
+            {
+                _logger.PropertyChangeDetected(entry, property, original, current);
+            }
+        }
+
+        private void DetectKeyChange(InternalEntityEntry entry, IProperty property)
         {
             if (property.GetRelationshipIndex() >= 0)
             {
                 var snapshotValue = entry.GetRelationshipSnapshotValue(property);
                 var currentValue = entry[property];
 
+                var comparer = property.GetKeyValueComparer()
+                               ?? property.FindMapping()?.KeyComparer;
+
                 // Note that mutation of a byte[] key is not supported or detected, but two different instances
                 // of byte[] with the same content must be detected as equal.
-                if (!StructuralComparisons.StructuralEqualityComparer.Equals(currentValue, snapshotValue))
+                if (!(comparer?.Equals(currentValue, snapshotValue)
+                      ?? StructuralComparisons.StructuralEqualityComparer.Equals(currentValue, snapshotValue)))
                 {
                     var keys = property.GetContainingKeys().ToList();
                     var foreignKeys = property.GetContainingForeignKeys()
                         .Where(fk => fk.DeclaringEntityType.IsAssignableFrom(entry.EntityType)).ToList();
+
+                    if (_loggingOptions.IsSensitiveDataLoggingEnabled)
+                    {
+                        _logger.ForeignKeyChangeDetectedSensitive(entry, property, snapshotValue, currentValue);
+                    }
+                    else
+                    {
+                        _logger.ForeignKeyChangeDetected(entry, property, snapshotValue, currentValue);
+                    }
 
                     entry.StateManager.InternalEntityEntryNotifier.KeyPropertyChanged(entry, property, keys, foreignKeys, snapshotValue, currentValue);
                 }
             }
         }
 
-        private static void DetectNavigationChange(InternalEntityEntry entry, INavigation navigation)
+        private void DetectNavigationChange(InternalEntityEntry entry, INavigation navigation)
         {
             var snapshotValue = entry.GetRelationshipSnapshotValue(navigation);
             var currentValue = entry[navigation];
@@ -195,6 +265,15 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 if (added.Any()
                     || removed.Any())
                 {
+                    if (_loggingOptions.IsSensitiveDataLoggingEnabled)
+                    {
+                        _logger.CollectionChangeDetectedSensitive(entry, navigation, added, removed);
+                    }
+                    else
+                    {
+                        _logger.CollectionChangeDetected(entry, navigation, added, removed);
+                    }
+
                     stateManager.InternalEntityEntryNotifier.NavigationCollectionChanged(entry, navigation, added, removed);
                 }
             }
@@ -202,6 +281,15 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                      && (!navigation.ForeignKey.IsOwnership
                          || !navigation.IsDependentToPrincipal()))
             {
+                if (_loggingOptions.IsSensitiveDataLoggingEnabled)
+                {
+                    _logger.ReferenceChangeDetectedSensitive(entry, navigation, snapshotValue, currentValue);
+                }
+                else
+                {
+                    _logger.ReferenceChangeDetected(entry, navigation, snapshotValue, currentValue);
+                }
+
                 stateManager.InternalEntityEntryNotifier.NavigationReferenceChanged(entry, navigation, snapshotValue, currentValue);
             }
         }

@@ -2,12 +2,17 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
+#if Test20
+using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+#else
+using Microsoft.EntityFrameworkCore.Sqlite.Internal;
+using Microsoft.EntityFrameworkCore.Sqlite.Metadata.Internal;
+#endif
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
@@ -326,6 +331,7 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Equal(SqliteStrings.SequencesNotSupported, ex.Message);
         }
 
+#if !Test20
         [Fact]
         public virtual void RenameIndexOperation()
         {
@@ -349,6 +355,7 @@ namespace Microsoft.EntityFrameworkCore
                 @"CREATE UNIQUE INDEX ""IX_Person_FullName"" ON ""Person"" (""FullName"") WHERE ""Id"" > 2;" + EOL,
                 Sql);
         }
+#endif
 
         [Fact]
         public virtual void RenameIndexOperations_throws_when_no_model()
@@ -366,14 +373,25 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Equal(SqliteStrings.InvalidMigrationOperation("RenameIndexOperation"), ex.Message);
         }
 
-        public override void RenameTableOperation_within_schema()
+        public override void RenameTableOperation_legacy()
         {
-            base.RenameTableOperation_within_schema();
+            base.RenameTableOperation_legacy();
 
             Assert.Equal(
-                "ALTER TABLE \"People\" RENAME TO \"Personas\";" + EOL,
+                "ALTER TABLE \"People\" RENAME TO \"Person\";" + EOL,
                 Sql);
         }
+
+#if !Test20
+        public override void RenameTableOperation()
+        {
+            base.RenameTableOperation();
+
+            Assert.Equal(
+                "ALTER TABLE \"People\" RENAME TO \"Person\";" + EOL,
+                Sql);
+        }
+#endif
 
         public override void CreateSequenceOperation_with_minValue_and_maxValue()
         {

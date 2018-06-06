@@ -25,6 +25,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
     /// </summary>
     public class RequiresMaterializationExpressionVisitor : ExpressionVisitorBase
     {
+        private static readonly ISet<Type> _aggregateResultOperators = new HashSet<Type>
+        {
+            typeof(AverageResultOperator),
+            typeof(CountResultOperator),
+            typeof(LongCountResultOperator),
+            typeof(MaxResultOperator),
+            typeof(MinResultOperator),
+            typeof(SumResultOperator)
+        };
+
         private readonly IModel _model;
         private readonly EntityQueryModelVisitor _queryModelVisitor;
         private readonly Stack<QueryModel> _queryModelStack = new Stack<QueryModel>();
@@ -100,13 +110,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return node;
             }
 
-            if (node is NullConditionalEqualExpression nullConditionalEqualExpression)
+            if (node is NullSafeEqualExpression nullConditionalEqualExpression)
             {
-                Visit(nullConditionalEqualExpression.OuterNullProtection);
-                Visit(
-                    Expression.Equal(
-                        nullConditionalEqualExpression.OuterKey,
-                        nullConditionalEqualExpression.InnerKey));
+                Visit(nullConditionalEqualExpression.OuterKeyNullCheck);
+                Visit(nullConditionalEqualExpression.EqualExpression);
 
                 return node;
             }
@@ -136,12 +143,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 {
                     _queryModelVisitor.BindMemberExpression(
                         node, (property, querySource) =>
+                        {
+                            if (querySource != null)
                             {
-                                if (querySource != null)
-                                {
-                                    DemoteQuerySource(querySource);
-                                }
-                            });
+                                DemoteQuerySource(querySource);
+                            }
+                        });
                 }
             }
 
@@ -158,12 +165,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             _queryModelVisitor.BindMethodCallExpression(
                 node, (property, querySource) =>
+                {
+                    if (querySource != null)
                     {
-                        if (querySource != null)
-                        {
-                            DemoteQuerySource(querySource);
-                        }
-                    });
+                        DemoteQuerySource(querySource);
+                    }
+                });
 
             if (AnonymousObject.IsGetValueExpression(node, out var querySourceReferenceExpression))
             {
@@ -200,32 +207,16 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (comparison == ExpressionType.Equal
                 || comparison == ExpressionType.NotEqual)
             {
-                var isEntityTypeExpression = _model.FindEntityType(operand.Type) != null
-                                             || _model.HasEntityTypeWithDefiningNavigation(operand.Type);
-
-                if (isEntityTypeExpression)
+                if (operand is SubQueryExpression subQueryExpression
+                    && _queryModelVisitor.QueryCompilationContext.DuplicateQueryModels.Contains(subQueryExpression.QueryModel))
                 {
-                    // An equality comparison of query source reference expressions
-                    // that reference an entity query source does not suggest that
-                    // materialization of that entity type may be required. This is true
-                    // whether in a join predicate, where predicate, selector, etc.
-                    // because it is rewritten into a key equality comparison.
-                    if (operand is QuerySourceReferenceExpression)
-                    {
-                        return operand;
-                    }
+                    _queryModelStack.Push(subQueryExpression.QueryModel);
 
-                    // Same as above, key comparison, except coming from a subquery
-                    if (operand is SubQueryExpression subQueryExpression)
-                    {
-                        _queryModelStack.Push(subQueryExpression.QueryModel);
+                    subQueryExpression.QueryModel.TransformExpressions(Visit);
 
-                        subQueryExpression.QueryModel.TransformExpressions(Visit);
+                    _queryModelStack.Pop();
 
-                        _queryModelStack.Pop();
-
-                        return operand;
-                    }
+                    return operand;
                 }
             }
 
@@ -238,31 +229,67 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         /// </summary>
         protected override Expression VisitSubQuery(SubQueryExpression expression)
         {
-            _queryModelStack.Push(expression.QueryModel);
-
-            expression.QueryModel.TransformExpressions(Visit);
-
-            _queryModelStack.Pop();
-
-            AdjustForResultOperators(expression.QueryModel);
-
-            var parentQueryModel = _queryModelStack.Peek();
-
-            var referencedQuerySource = expression.QueryModel.SelectClause.Selector.TryGetReferencedQuerySource();
-
-            if (referencedQuerySource != null)
+            if (!IsGroupByAggregateSubQuery(expression.QueryModel))
             {
-                var parentQuerySource = parentQueryModel.SelectClause.Selector.TryGetReferencedQuerySource();
-                var resultSetOperators = GetSetResultOperatorSourceExpressions(parentQueryModel.ResultOperators);
+                _queryModelStack.Push(expression.QueryModel);
 
-                if (resultSetOperators.Any(r => r.Equals(expression))
-                    && _querySourceReferences[parentQuerySource] > 0)
+                expression.QueryModel.TransformExpressions(Visit);
+
+                _queryModelStack.Pop();
+
+                AdjustForResultOperators(expression.QueryModel);
+
+                var parentQueryModel = _queryModelStack.Peek();
+
+                var referencedQuerySource = expression.QueryModel.SelectClause.Selector.TryGetReferencedQuerySource();
+
+                if (referencedQuerySource != null)
                 {
-                    PromoteQuerySource(referencedQuerySource);
+                    var parentQuerySource = parentQueryModel.SelectClause.Selector.TryGetReferencedQuerySource();
+                    if (parentQuerySource != null)
+                    {
+                        var resultSetOperators = GetSetResultOperatorSourceExpressions(parentQueryModel.ResultOperators);
+                        if (resultSetOperators.Any(r => r.Equals(expression))
+                            && _querySourceReferences[parentQuerySource] > 0)
+                        {
+                            PromoteQuerySource(referencedQuerySource);
+                        }
+                    }
                 }
             }
 
             return expression;
+        }
+
+        private bool IsGroupByAggregateSubQuery(QueryModel queryModel)
+        {
+            if (queryModel.MainFromClause.FromExpression.Type.IsGrouping()
+                && queryModel.BodyClauses.Count == 0
+                && queryModel.ResultOperators.Count == 1
+                && _aggregateResultOperators.Contains(queryModel.ResultOperators[0].GetType())
+                && _queryModelStack.Count > 0
+                && !_queryModelStack.Peek().BodyClauses.OfType<IQuerySource>().Any())
+            {
+                var groupResultOperator
+                    = (GroupResultOperator)
+                    ((SubQueryExpression)
+                        ((FromClauseBase)queryModel.MainFromClause.FromExpression.TryGetReferencedQuerySource())
+                        .FromExpression)
+                    .QueryModel.ResultOperators.Last();
+
+                var properties = MemberAccessBindingExpressionVisitor.GetPropertyPath(
+                    queryModel.SelectClause.Selector, _queryModelVisitor.QueryCompilationContext, out var qsre);
+
+                if (qsre != null
+                    || queryModel.SelectClause.Selector.RemoveConvert() is ConstantExpression
+                    || groupResultOperator.ElementSelector.NodeType == ExpressionType.New
+                    || groupResultOperator.ElementSelector.NodeType == ExpressionType.MemberInit)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void DemoteQuerySource(IQuerySource querySource)
@@ -350,11 +377,80 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             }
         }
 
+        private static IEnumerable<IQuerySource> TraverseQuerySources(Expression expression)
+        {
+            switch (expression)
+            {
+                case QuerySourceReferenceExpression qsre:
+                    yield return qsre.ReferencedQuerySource;
+                    break;
+
+                case NewExpression newExpression:
+                    foreach (var arg in newExpression.Arguments)
+                    {
+                        foreach (var querySource in TraverseQuerySources(arg))
+                        {
+                            yield return querySource;
+                        }
+                    }
+
+                    break;
+
+                case MemberInitExpression memberInitExpression:
+                    foreach (var memberBinding in memberInitExpression.Bindings)
+                    {
+                        if (memberBinding is MemberAssignment memberAssignment)
+                        {
+                            foreach (var querySource in TraverseQuerySources(memberAssignment.Expression))
+                            {
+                                yield return querySource;
+                            }
+                        }
+                    }
+
+                    break;
+            }
+        }
+
         private void AdjustForResultOperators(QueryModel queryModel)
         {
             var referencedQuerySource
                 = queryModel.SelectClause.Selector.TryGetReferencedQuerySource()
                   ?? queryModel.MainFromClause.FromExpression.TryGetReferencedQuerySource();
+
+            // If there is any CastResultOperator then we need to do client eval unless it is doing same cast.
+            if (queryModel.ResultOperators.OfType<CastResultOperator>().Any()
+                && referencedQuerySource != null)
+            {
+                PromoteQuerySource(referencedQuerySource);
+
+                return;
+            }
+
+            var isSubQuery = _queryModelStack.Count > 0;
+            var finalResultOperator = queryModel.ResultOperators.LastOrDefault();
+
+            if (isSubQuery
+                && finalResultOperator is GroupResultOperator groupResultOperator
+                && queryModel.ResultOperators.OfType<GroupResultOperator>().Count() == 1)
+            {
+                if (!(groupResultOperator.KeySelector is MemberInitExpression))
+                {
+                    // This is to compensate for the fact that we have to demote querysources found in selector for GroupBy
+                    // TODO: See #11215
+                    foreach (var querySource in TraverseQuerySources(queryModel.SelectClause.Selector))
+                    {
+                        DemoteQuerySource(querySource);
+                    }
+
+                    if (groupResultOperator.ElementSelector is QuerySourceReferenceExpression qsre)
+                    {
+                        DemoteQuerySource(qsre.ReferencedQuerySource);
+                    }
+
+                    return;
+                }
+            }
 
             // The selector may not have been a QSRE but this query model may still have something that needs adjusted.
             // Example:
@@ -366,15 +462,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return;
             }
 
-            var isSubQuery = _queryModelStack.Count > 0;
-            var finalResultOperator = queryModel.ResultOperators.LastOrDefault();
+            // If the GroupResultOperator is not last (as captured by above)
+            // then we promote first GroupResultOperator to fall through streaming group by
+            var firstGroupResultOperator = queryModel.ResultOperators.OfType<GroupResultOperator>().FirstOrDefault();
 
-            if (isSubQuery && finalResultOperator is GroupResultOperator)
+            if (firstGroupResultOperator != null)
             {
-                // These two lines should be uncommented to implement GROUP BY translation.
-                //DemoteQuerySource(referencedQuerySource);
-                //DemoteQuerySource(groupResultOperator);
-                return;
+                PromoteQuerySource(firstGroupResultOperator);
             }
 
             var unreachableFromParentSelector =
@@ -397,13 +491,33 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return;
             }
 
-            if (ConvergesToSingleValue(queryModel))
+            if (ConvergesToSingleValue(queryModel)
+                // This is to preserve QuerySource from MainFromClause when selector is ConstantExpression
+                // Since we would cause client evaluation from ConstantExpression.
+                // TODO: See #11215
+                && !(queryModel.SelectClause.Selector is ConstantExpression))
             {
                 // This is a top-level query that was not Single/First/Last
                 // but returns a single/scalar value (Avg/Min/Max/etc.)
-                // or a subquery that belongs to some outer-level query that returns 
-                // a single or scalar value. The referenced query source should be 
+                // or a subquery that belongs to some outer-level query that returns
+                // a single or scalar value. The referenced query source should be
                 // re-promoted later if necessary.
+
+                // For top-level Contains we cannot translate it since Item is not Expression
+                if (!isSubQuery
+                    && finalResultOperator is ContainsResultOperator containsResultOperator)
+                {
+                    return;
+                }
+
+                // If we are selecting from Grouping source but it is not GroupByAggregate Query
+                // then do not demote Grouping source since we still need to create groups.
+                if (queryModel.MainFromClause.FromExpression.Type.IsGrouping()
+                    && !IsGroupByAggregateSubQuery(queryModel))
+                {
+                    return;
+                }
+
                 DemoteQuerySourceAndUnderlyingFromClause(referencedQuerySource);
                 return;
             }
@@ -414,28 +528,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             }
         }
 
-        private bool ConvergesToSingleValue(QueryModel queryModel)
+        private static bool ConvergesToSingleValue(QueryModel queryModel)
         {
             var outputInfo = queryModel.GetOutputDataInfo();
 
-            if (outputInfo is StreamedSingleValueInfo
-                || outputInfo is StreamedScalarValueInfo)
-            {
-                return true;
-            }
-
-            foreach (var ancestorQueryModel in _queryModelStack)
-            {
-                outputInfo = ancestorQueryModel.GetOutputDataInfo();
-
-                if (outputInfo is StreamedSingleValueInfo
-                    || outputInfo is StreamedScalarValueInfo)
-                {
-                    return true;
-                }
-            }
-
-            return false;
+            return outputInfo is StreamedSingleValueInfo || outputInfo is StreamedScalarValueInfo;
         }
 
         private void DemoteQuerySourceAndUnderlyingFromClause(IQuerySource querySource)

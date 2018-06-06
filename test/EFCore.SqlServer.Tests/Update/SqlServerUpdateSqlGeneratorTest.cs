@@ -3,10 +3,10 @@
 
 using System;
 using System.Text;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Update.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -19,9 +19,9 @@ namespace Microsoft.EntityFrameworkCore.Update
                 new UpdateSqlGeneratorDependencies(
                     new SqlServerSqlGenerationHelper(
                         new RelationalSqlGenerationHelperDependencies()),
-                    new SqlServerTypeMapper(
-                        new CoreTypeMapperDependencies(),
-                        new RelationalTypeMapperDependencies())));
+                    new SqlServerTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())));
 
         protected override TestHelpers TestHelpers => SqlServerTestHelpers.Instance;
 

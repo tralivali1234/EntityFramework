@@ -3,9 +3,10 @@
 
 using System.Linq.Expressions;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
+using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.EntityFrameworkCore.SqlServer.Infrastructure.Internal;
 
-namespace Microsoft.EntityFrameworkCore.Query.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Query.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -33,7 +34,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 GenerateCacheKeyCore(query, async),
                 RelationalDependencies.ContextOptions.FindExtension<SqlServerOptionsExtension>()?.RowNumberPaging ?? false);
 
-        private struct SqlServerCompiledQueryCacheKey
+        private readonly struct SqlServerCompiledQueryCacheKey
         {
             private readonly RelationalCompiledQueryCacheKey _relationalCompiledQueryCacheKey;
             private readonly bool _useRowNumberOffset;

@@ -25,40 +25,25 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public ShortTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, typeof(short), dbType)
         {
         }
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="ShortTypeMapping" /> class.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="converter"> Converts values to and from the store whenever this mapping is used. </param>
-        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
-        public ShortTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null)
-            : base(storeType, typeof(short), converter, dbType)
+        /// <param name="parameters"> Parameter object for <see cref="RelationalTypeMapping" />. </param>
+        protected ShortTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         /// <summary>
         ///     Creates a copy of this mapping.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        /// <param name="parameters"> The parameters for this mapping. </param>
         /// <returns> The newly created mapping. </returns>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new ShortTypeMapping(storeType, Converter, DbType);
-
-        /// <summary>
-        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
-        ///    added.
-        /// </summary>
-        /// <param name="converter"> The converter to use. </param>
-        /// <returns> A new type mapping </returns>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new ShortTypeMapping(StoreType, ComposeConverter(converter), DbType);
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new ShortTypeMapping(parameters);
     }
 }

@@ -146,25 +146,25 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
 
                 var index = i;
                 yield return () =>
-                    {
-                        _logger.MigrationReverting(this, migration);
+                {
+                    _logger.MigrationReverting(this, migration);
 
-                        return GenerateDownSql(
-                            migration,
-                            index != migrationsToRevert.Count - 1
-                                ? migrationsToRevert[index + 1]
-                                : null);
-                    };
+                    return GenerateDownSql(
+                        migration,
+                        index != migrationsToRevert.Count - 1
+                            ? migrationsToRevert[index + 1]
+                            : null);
+                };
             }
 
             foreach (var migration in migrationsToApply)
             {
                 yield return () =>
-                    {
-                        _logger.MigrationApplying(this, migration);
+                {
+                    _logger.MigrationApplying(this, migration);
 
-                        return GenerateUpSql(migration);
-                    };
+                    return GenerateUpSql(migration);
+                };
             }
 
             if (migrationsToRevert.Count + migrationsToApply.Count == 0)
@@ -173,7 +173,11 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             }
         }
 
-        private void PopulateMigrations(
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void PopulateMigrations(
             IEnumerable<string> appliedMigrationEntries,
             string targetMigration,
             out IReadOnlyList<Migration> migrationsToApply,
@@ -186,6 +190,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             {
                 _logger.MigrationsNotFound(this, _migrationsAssembly);
             }
+
             foreach (var migration in _migrationsAssembly.Migrations)
             {
                 if (appliedMigrationEntrySet.Contains(migration.Key))
@@ -197,16 +202,17 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                     unappliedMigrations.Add(migration.Key, migration.Value);
                 }
             }
+
             if (string.IsNullOrEmpty(targetMigration))
             {
                 migrationsToApply = unappliedMigrations
                     .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
                     .ToList();
-                migrationsToRevert = new Migration[0];
+                migrationsToRevert = Array.Empty<Migration>();
             }
             else if (targetMigration == Migration.InitialDatabase)
             {
-                migrationsToApply = new Migration[0];
+                migrationsToApply = Array.Empty<Migration>();
                 migrationsToRevert = appliedMigrations
                     .OrderByDescending(m => m.Key)
                     .Select(p => _migrationsAssembly.CreateMigration(p.Value, _activeProvider))
@@ -283,6 +289,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                         {
                             builder.AppendLines(command.CommandText);
                         }
+
                         builder.AppendLine(_historyRepository.GetEndIfScript());
                     }
                     else
@@ -307,6 +314,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                         {
                             builder.AppendLines(command.CommandText);
                         }
+
                         builder.AppendLine(_historyRepository.GetEndIfScript());
                     }
                     else

@@ -7,6 +7,7 @@ using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Internal
@@ -16,6 +17,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
     [DebuggerDisplay("{Metadata,nq}")]
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class InternalPropertyBuilder : InternalMetadataItemBuilder<Property>
     {
         /// <summary>
@@ -50,6 +52,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         Debug.Assert(removed.HasValue);
                     }
                 }
+
                 Metadata.SetIsNullable(!isRequired, configurationSource);
 
                 return true;
@@ -104,17 +107,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             return HasValueGenerator(
                 (_, __)
                     =>
+                {
+                    try
                     {
-                        try
-                        {
-                            return (ValueGenerator)Activator.CreateInstance(valueGeneratorType);
-                        }
-                        catch (Exception e)
-                        {
-                            throw new InvalidOperationException(
-                                CoreStrings.CannotCreateValueGenerator(valueGeneratorType.ShortDisplayName()), e);
-                        }
-                    }, configurationSource);
+                        return (ValueGenerator)Activator.CreateInstance(valueGeneratorType);
+                    }
+                    catch (Exception e)
+                    {
+                        throw new InvalidOperationException(
+                            CoreStrings.CannotCreateValueGenerator(valueGeneratorType.ShortDisplayName()), e);
+                    }
+                }, configurationSource);
         }
 
         /// <summary>
@@ -146,7 +149,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             if (fieldName != null)
             {
                 var fieldInfo = PropertyBase.GetFieldInfo(
-                    fieldName, Metadata.DeclaringType.ClrType, Metadata.Name,
+                    fieldName, Metadata.DeclaringType, Metadata.Name,
                     shouldThrow: configurationSource == ConfigurationSource.Explicit);
                 Metadata.SetFieldInfo(fieldInfo, configurationSource);
                 return true;
@@ -182,6 +185,33 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public virtual bool UsePropertyAccessMode(PropertyAccessMode propertyAccessMode, ConfigurationSource configurationSource)
             => HasAnnotation(CoreAnnotationNames.PropertyAccessModeAnnotation, propertyAccessMode, configurationSource);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool HasConversion([CanBeNull] ValueConverter valueConverter, ConfigurationSource configurationSource)
+        {
+            if (valueConverter != null
+                && valueConverter.ModelClrType.UnwrapNullableType() != Metadata.ClrType.UnwrapNullableType())
+            {
+                throw new ArgumentException(
+                    CoreStrings.ConverterPropertyMismatch(
+                        valueConverter.ModelClrType.ShortDisplayName(),
+                        Metadata.DeclaringEntityType.DisplayName(),
+                        Metadata.Name,
+                        Metadata.ClrType.ShortDisplayName()));
+            }
+
+            return HasAnnotation(CoreAnnotationNames.ValueConverter, valueConverter, configurationSource);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool HasConversion([CanBeNull] Type providerClrType, ConfigurationSource configurationSource)
+            => HasAnnotation(CoreAnnotationNames.ProviderClrType, providerClrType, configurationSource);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -254,17 +284,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual InternalPropertyBuilder Attach(
-            [NotNull] InternalEntityTypeBuilder entityTypeBuilder, ConfigurationSource configurationSource)
+        public virtual InternalPropertyBuilder Attach([NotNull] InternalEntityTypeBuilder entityTypeBuilder)
         {
             var newProperty = entityTypeBuilder.Metadata.FindProperty(Metadata.Name);
             InternalPropertyBuilder newPropertyBuilder;
+            var configurationSource = Metadata.GetConfigurationSource();
             var typeConfigurationSource = Metadata.GetTypeConfigurationSource();
             if (newProperty != null
                 && (newProperty.GetConfigurationSource().Overrides(configurationSource)
                     || newProperty.GetTypeConfigurationSource().Overrides(typeConfigurationSource)
                     || (Metadata.ClrType == newProperty.ClrType
-                        && Metadata.PropertyInfo?.Name == newProperty.PropertyInfo?.Name)))
+                        && Metadata.GetIdentifyingMemberInfo()?.Name == newProperty.GetIdentifyingMemberInfo()?.Name)))
             {
                 newPropertyBuilder = newProperty.Builder;
                 newProperty.UpdateConfigurationSource(configurationSource);
@@ -275,9 +305,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
             else
             {
-                newPropertyBuilder = Metadata.PropertyInfo == null
+                newPropertyBuilder = Metadata.GetIdentifyingMemberInfo() == null
                     ? entityTypeBuilder.Property(Metadata.Name, Metadata.ClrType, configurationSource, Metadata.GetTypeConfigurationSource())
-                    : entityTypeBuilder.Property(Metadata.PropertyInfo, configurationSource);
+                    : entityTypeBuilder.Property(Metadata.GetIdentifyingMemberInfo(), configurationSource);
             }
 
             if (newProperty == Metadata)

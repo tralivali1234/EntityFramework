@@ -6,8 +6,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Oracle.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -40,7 +40,8 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Equal(
                 CoreStrings.WarningAsErrorTemplate(
                     RelationalEventId.ModelValidationKeyDefaultValueWarning,
-                    RelationalStrings.LogKeyHasDefaultValue.GenerateMessage(nameof(Login1.UserName), nameof(Login1))),
+                    RelationalStrings.LogKeyHasDefaultValue.GenerateMessage(nameof(Login1.UserName), nameof(Login1)),
+                    "RelationalEventId.ModelValidationKeyDefaultValueWarning"),
                 Assert.Throws<InvalidOperationException>(() => Validate(modelBuilder)).Message);
 
             return modelBuilder;
@@ -84,7 +85,7 @@ namespace Microsoft.EntityFrameworkCore
             var modelBuilder = base.Key_and_MaxLength_64_produce_nvarchar_64();
 
             var property = GetProperty<ColumnKeyAnnotationClass2>(modelBuilder, "PersonFirstName");
-            Assert.Equal("NVARCHAR2(64)", new OracleTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("NVARCHAR2(64)", TestServiceFactory.Instance.Create<OracleTypeMappingSource>().GetMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -94,17 +95,7 @@ namespace Microsoft.EntityFrameworkCore
             var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength();
 
             var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "MaxTimestamp");
-            Assert.Equal("RAW(8)", new OracleTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
-
-            return modelBuilder;
-        }
-
-        public override ModelBuilder Timestamp_takes_precedence_over_MaxLength_with_value()
-        {
-            var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength_with_value();
-
-            var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "NonMaxTimestamp");
-            Assert.Equal("RAW(8)", new OracleTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("RAW(8)", TestServiceFactory.Instance.Create<OracleTypeMappingSource>().GetMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -152,20 +143,20 @@ namespace Microsoft.EntityFrameworkCore
             base.ConcurrencyCheckAttribute_throws_if_value_in_database_changed();
 
             Assert.Equal(
-                @"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
+                @"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion"", ""r"".""UniqueNo"", ""r"".""Details_Name"", ""r"".""UniqueNo"", ""r"".""AdditionalDetails_Name""
 FROM ""Sample"" ""r""
 WHERE ""r"".""UniqueNo"" = 1
 FETCH FIRST 1 ROWS ONLY
 
-SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
+SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion"", ""r"".""UniqueNo"", ""r"".""Details_Name"", ""r"".""UniqueNo"", ""r"".""AdditionalDetails_Name""
 FROM ""Sample"" ""r""
 WHERE ""r"".""UniqueNo"" = 1
 FETCH FIRST 1 ROWS ONLY
 
 :p2='1'
 :p0='ModifiedData' (Nullable = false) (Size = 2000)
-:p1='0x00000000000000000003000000000001' (Nullable = false)
-:p3='0x01000000000000000000000000000001' (Nullable = false)
+:p1='0x00000000000000000003000000000001' (Nullable = false) (Size = 16)
+:p3='0x01000000000000000000000000000001' (Nullable = false) (Size = 16)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -180,8 +171,8 @@ END;
 
 :p2='1'
 :p0='ChangedData' (Nullable = false) (Size = 2000)
-:p1='0x00000000000000000002000000000001' (Nullable = false)
-:p3='0x01000000000000000000000000000001' (Nullable = false)
+:p1='0x00000000000000000002000000000001' (Nullable = false) (Size = 16)
+:p3='0x01000000000000000000000000000001' (Nullable = false) (Size = 16)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -202,9 +193,11 @@ END;",
             base.DatabaseGeneratedAttribute_autogenerates_values_when_set_to_identity();
 
             Assert.Equal(
-                @":p0='' (Size = 10) (DbType = String)
+                @":p0='' (Size = 10)
 :p1='Third' (Nullable = false) (Size = 2000)
-:p2='0x00000000000000000000000000000003' (Nullable = false)
+:p2='0x00000000000000000000000000000003' (Nullable = false) (Size = 16)
+:p3='Third Additional Name' (Size = 2000)
+:p4='Third Name' (Size = 2000)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -219,8 +212,8 @@ BEGIN
 
 listSample_0 := efSample_0();
 listSample_0.extend(1);
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (:p0, :p1, :p2)
+INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"", ""AdditionalDetails_Name"", ""Details_Name"")
+VALUES (:p0, :p1, :p2, :p3, :p4)
 RETURNING ""UniqueNo"" INTO listSample_0(1);
 OPEN :cur1 FOR SELECT listSample_0(1).UniqueNo FROM DUAL;
 END;",
@@ -235,7 +228,9 @@ END;",
             Assert.Equal(
                 @":p0='Short' (Size = 10)
 :p1='ValidString' (Nullable = false) (Size = 2000)
-:p2='0x00000000000000000000000000000001' (Nullable = false)
+:p2='0x00000000000000000000000000000001' (Nullable = false) (Size = 16)
+:p3='Third Additional Name' (Size = 2000)
+:p4='Third Name' (Size = 2000)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -250,15 +245,17 @@ BEGIN
 
 listSample_0 := efSample_0();
 listSample_0.extend(1);
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (:p0, :p1, :p2)
+INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"", ""AdditionalDetails_Name"", ""Details_Name"")
+VALUES (:p0, :p1, :p2, :p3, :p4)
 RETURNING ""UniqueNo"" INTO listSample_0(1);
 OPEN :cur1 FOR SELECT listSample_0(1).UniqueNo FROM DUAL;
 END;
 
 :p0='VeryVeryVeryVeryVeryVeryLongString'
 :p1='ValidString' (Nullable = false) (Size = 2000)
-:p2='0x00000000000000000000000000000002' (Nullable = false)
+:p2='0x00000000000000000000000000000002' (Nullable = false) (Size = 16)
+:p3='Third Additional Name' (Size = 2000)
+:p4='Third Name' (Size = 2000)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -273,8 +270,8 @@ BEGIN
 
 listSample_0 := efSample_0();
 listSample_0.extend(1);
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (:p0, :p1, :p2)
+INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"", ""AdditionalDetails_Name"", ""Details_Name"")
+VALUES (:p0, :p1, :p2, :p3, :p4)
 RETURNING ""UniqueNo"" INTO listSample_0(1);
 OPEN :cur1 FOR SELECT listSample_0(1).UniqueNo FROM DUAL;
 END;",
@@ -300,9 +297,11 @@ END;",
             base.RequiredAttribute_for_property_throws_while_inserting_null_value();
 
             Assert.Equal(
-                @":p0='' (Size = 10) (DbType = String)
+                @":p0='' (Size = 10)
 :p1='ValidString' (Nullable = false) (Size = 2000)
-:p2='0x00000000000000000000000000000001' (Nullable = false)
+:p2='0x00000000000000000000000000000001' (Nullable = false) (Size = 16)
+:p3='Two' (Size = 2000)
+:p4='One' (Size = 2000)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -317,15 +316,17 @@ BEGIN
 
 listSample_0 := efSample_0();
 listSample_0.extend(1);
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (:p0, :p1, :p2)
+INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"", ""AdditionalDetails_Name"", ""Details_Name"")
+VALUES (:p0, :p1, :p2, :p3, :p4)
 RETURNING ""UniqueNo"" INTO listSample_0(1);
 OPEN :cur1 FOR SELECT listSample_0(1).UniqueNo FROM DUAL;
 END;
 
-:p0='' (Size = 10) (DbType = String)
-:p1='' (Nullable = false) (Size = 2000) (DbType = String)
-:p2='0x00000000000000000000000000000002' (Nullable = false)
+:p0='' (Size = 10)
+:p1='' (Nullable = false) (Size = 2000)
+:p2='0x00000000000000000000000000000002' (Nullable = false) (Size = 16)
+:p3='Two' (Size = 2000)
+:p4='One' (Size = 2000)
 cur1='' (Nullable = false) (Direction = Output) (DbType = Object)
 
 DECLARE
@@ -340,8 +341,8 @@ BEGIN
 
 listSample_0 := efSample_0();
 listSample_0.extend(1);
-INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
-VALUES (:p0, :p1, :p2)
+INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"", ""AdditionalDetails_Name"", ""Details_Name"")
+VALUES (:p0, :p1, :p2, :p3, :p4)
 RETURNING ""UniqueNo"" INTO listSample_0(1);
 OPEN :cur1 FOR SELECT listSample_0(1).UniqueNo FROM DUAL;
 END;",

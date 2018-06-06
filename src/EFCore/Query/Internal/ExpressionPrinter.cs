@@ -7,12 +7,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors;
+using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 
 namespace Microsoft.EntityFrameworkCore.Query.Internal
@@ -24,7 +26,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
     public class ExpressionPrinter : ExpressionVisitorBase, IExpressionPrinter
     {
         private readonly IndentedStringBuilder _stringBuilder;
-        private readonly List<ConstantPrinterBase> _constantPrinters;
         private readonly Dictionary<ParameterExpression, string> _parametersInScope;
 
         private readonly Dictionary<ExpressionType, string> _binaryOperandMap = new Dictionary<ExpressionType, string>
@@ -42,13 +43,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             { ExpressionType.Add, " + " },
             { ExpressionType.Subtract, " - " },
             { ExpressionType.Multiply, " * " },
-            { ExpressionType.Divide, " * " },
+            { ExpressionType.Divide, " / " },
             { ExpressionType.Modulo, " % " },
             { ExpressionType.And, " & " },
             { ExpressionType.Or, " | " }
         };
 
         private bool _highlightNonreducibleNodes;
+        private bool _reduceBeforePrinting;
 
         private const string HighlightLeft = " ---> ";
         private const string HighlightRight = " <--- ";
@@ -66,12 +68,20 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected ExpressionPrinter(List<ConstantPrinterBase> constantPrinters)
+        protected List<ConstantPrinterBase> ConstantPrinters = new List<ConstantPrinterBase>();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected ExpressionPrinter(List<ConstantPrinterBase> additionalConstantPrinters)
         {
             _stringBuilder = new IndentedStringBuilder();
             _parametersInScope = new Dictionary<ParameterExpression, string>();
-            _constantPrinters = new List<ConstantPrinterBase>(constantPrinters);
-            _constantPrinters.AddRange(
+
+            ConstantPrinters.AddRange(additionalConstantPrinters);
+
+            ConstantPrinters.AddRange(
                 new List<ConstantPrinterBase>
                 {
                     new EntityQueryableConstantPrinter(),
@@ -102,6 +112,24 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual bool PrintConnections { get; set; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool GenerateUniqueQsreIds { get; set; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual List<IQuerySource> VisitedQuerySources { get; } = new List<IQuerySource>();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         protected virtual void Append([NotNull] string message) => _stringBuilder.Append(message);
 
         /// <summary>
@@ -122,36 +150,62 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string Print(Expression expression, bool removeFormatting = false, int? characterLimit = null)
+        public virtual string Print(
+            Expression expression,
+            bool removeFormatting = false,
+            int? characterLimit = null,
+            bool printConnections = true)
         {
-            return PrintInternal(expression, removeFormatting, characterLimit, highlightNonreducibleNodes: false);
+            return PrintInternal(
+                expression,
+                removeFormatting,
+                characterLimit,
+                highlightNonreducibleNodes: false,
+                reduceBeforePrinting: false,
+                generateUniqueQsreIds: false,
+                printConnections: printConnections);
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string PrintDebug(Expression expression, bool highlightNonreducibleNodes = true)
+        public virtual string PrintDebug(
+            Expression expression,
+            bool highlightNonreducibleNodes = true,
+            bool reduceBeforePrinting = true,
+            bool generateUniqueQsreIds = true,
+            bool printConnections = true)
         {
             return PrintInternal(
                 expression,
                 removeFormatting: false,
                 characterLimit: null,
-                highlightNonreducibleNodes: highlightNonreducibleNodes);
+                highlightNonreducibleNodes: highlightNonreducibleNodes,
+                reduceBeforePrinting: reduceBeforePrinting,
+                generateUniqueQsreIds: generateUniqueQsreIds,
+                printConnections: printConnections);
         }
 
         private string PrintInternal(
             Expression expression,
             bool removeFormatting,
             int? characterLimit,
-            bool highlightNonreducibleNodes)
+            bool highlightNonreducibleNodes,
+            bool reduceBeforePrinting,
+            bool generateUniqueQsreIds,
+            bool printConnections)
         {
             _stringBuilder.Clear();
             _parametersInScope.Clear();
 
             RemoveFormatting = removeFormatting;
             CharacterLimit = characterLimit;
+            GenerateUniqueQsreIds = generateUniqueQsreIds;
+            PrintConnections = printConnections;
+
             _highlightNonreducibleNodes = highlightNonreducibleNodes;
+            _reduceBeforePrinting = reduceBeforePrinting;
 
             Visit(expression);
 
@@ -331,6 +385,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         protected override Expression VisitBlock(BlockExpression blockExpression)
         {
             AppendLine();
+
+            if (PrintConnections)
+            {
+                _stringBuilder.SuspendCurrentNode();
+            }
+
             AppendLine("{");
             _stringBuilder.IncrementIndent();
 
@@ -360,7 +420,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             }
 
             _stringBuilder.DecrementIndent();
-            AppendLine("}");
+            Append("}");
+
+            if (PrintConnections)
+            {
+                _stringBuilder.ReconnectCurrentNode();
+            }
 
             return blockExpression;
         }
@@ -390,12 +455,22 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         protected override Expression VisitConstant(ConstantExpression constantExpression)
         {
-            foreach (var constantPrinter in _constantPrinters)
+            if (PrintConnections)
+            {
+                _stringBuilder.SuspendCurrentNode();
+            }
+
+            foreach (var constantPrinter in ConstantPrinters)
             {
                 if (constantPrinter.TryPrintConstant(constantExpression, _stringBuilder, RemoveFormatting))
                 {
                     break;
                 }
+            }
+
+            if (PrintConnections)
+            {
+                _stringBuilder.ReconnectCurrentNode();
             }
 
             return constantExpression;
@@ -536,6 +611,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             "ReferenceEquals"
         };
 
+        private static readonly List<string> _nonConnectableMethods = new List<string>
+        {
+            "GetValueFromEntity",
+            "StartTracking",
+            "SetRelationshipSnapshotValue",
+            "SetRelationshipIsLoaded",
+            "Add"
+        };
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -570,7 +654,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         ? methodCallExpression.Method.GetParameters().Select(p => p.Name).ToList()
                         : new List<string>();
 
-                _stringBuilder.IncrementIndent();
+                if (!isSimpleMethodOrProperty)
+                {
+                    var shouldPrintConnections = PrintConnections && !_nonConnectableMethods.Contains(methodCallExpression.Method.Name);
+                    _stringBuilder.IncrementIndent(shouldPrintConnections);
+                }
+
                 for (var i = 0; i < methodCallExpression.Arguments.Count; i++)
                 {
                     var argument = methodCallExpression.Arguments[i];
@@ -578,6 +667,12 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     if (!isSimpleMethodOrProperty)
                     {
                         _stringBuilder.Append(argumentNames[i] + ": ");
+                    }
+
+                    if (i == methodCallExpression.Arguments.Count - 1
+                        && !isSimpleMethodOrProperty)
+                    {
+                        _stringBuilder.DisconnectCurrentNode();
                     }
 
                     Visit(argument);
@@ -588,13 +683,21 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     }
                 }
 
-                _stringBuilder.DecrementIndent();
+                if (!isSimpleMethodOrProperty)
+                {
+                    _stringBuilder.DecrementIndent();
+                }
             }
 
             Append(")");
 
             return methodCallExpression;
         }
+
+        private static bool IsAnonymousType(Type type)
+            => type.Name.StartsWith("<>")
+               && type.GetCustomAttributes(typeof(CompilerGeneratedAttribute), inherit: false).Length > 0
+               && type.Name.Contains("AnonymousType");
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -603,14 +706,41 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         protected override Expression VisitNew(NewExpression newExpression)
         {
             _stringBuilder.Append("new ");
-            _stringBuilder.Append(newExpression.Type.ShortDisplayName());
 
-            var appendAction = newExpression.Arguments.Count > 1 ? (Action<string>)AppendLine : Append;
-            appendAction("(");
-            _stringBuilder.IncrementIndent();
+            var isComplex = newExpression.Arguments.Count > 1;
+            var appendAction = isComplex ? (Action<string>)AppendLine : Append;
+
+            var isAnonymousType = IsAnonymousType(newExpression.Type);
+            if (!isAnonymousType)
+            {
+                _stringBuilder.Append(newExpression.Type.ShortDisplayName());
+                appendAction("(");
+            }
+            else
+            {
+                appendAction("{ ");
+            }
+
+            if (isComplex)
+            {
+                _stringBuilder.IncrementIndent();
+            }
+
             VisitArguments(newExpression.Arguments, appendAction);
-            _stringBuilder.DecrementIndent();
-            _stringBuilder.Append(")");
+
+            if (isComplex)
+            {
+                _stringBuilder.DecrementIndent();
+            }
+
+            if (!isAnonymousType)
+            {
+                _stringBuilder.Append(")");
+            }
+            else
+            {
+                _stringBuilder.Append(" }");
+            }
 
             return newExpression;
         }
@@ -621,13 +751,36 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         /// </summary>
         protected override Expression VisitNewArray(NewArrayExpression newArrayExpression)
         {
-            var appendAction = newArrayExpression.Expressions.Count > 1 ? (Action<string>)AppendLine : Append;
+            var isComplex = newArrayExpression.Expressions.Count > 1;
+            var appendAction = isComplex ? (Action<string>)AppendLine : Append;
+
             appendAction("new " + newArrayExpression.Type.GetElementType().ShortDisplayName() + "[]");
+
+            if (PrintConnections)
+            {
+                _stringBuilder.SuspendCurrentNode();
+            }
+
             appendAction("{ ");
-            _stringBuilder.IncrementIndent();
+
+            if (isComplex)
+            {
+                _stringBuilder.IncrementIndent();
+            }
+
             VisitArguments(newArrayExpression.Expressions, appendAction, lastSeparator: " ");
-            _stringBuilder.DecrementIndent();
+
+            if (isComplex)
+            {
+                _stringBuilder.DecrementIndent();
+            }
+
             Append("}");
+
+            if (PrintConnections)
+            {
+                _stringBuilder.ReconnectCurrentNode();
+            }
 
             return newArrayExpression;
         }
@@ -756,23 +909,43 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 StringBuilder.Append(HighlightLeft);
             }
 
-            switch (extensionExpression)
+            if (_reduceBeforePrinting && extensionExpression.CanReduce)
             {
-                case QuerySourceReferenceExpression qsre:
-                    StringBuilder.Append(qsre);
-                    break;
+                var reduced = extensionExpression.Reduce();
+                Visit(reduced);
 
-                case NullConditionalExpression nullConditional:
-                    VisitNullConditionalExpression(nullConditional);
-                    break;
+                return extensionExpression;
+            }
 
-                case NullConditionalEqualExpression nullConditionalEqualExpression:
-                    VisitNullConditionalEqualExpression(nullConditionalEqualExpression);
-                    break;
+            if (extensionExpression is IPrintable printable)
+            {
+                printable.Print(this);
+            }
+            else
+            {
+                switch (extensionExpression)
+                {
+                    case QuerySourceReferenceExpression qsre:
+                        if (GenerateUniqueQsreIds)
+                        {
+                            var index = VisitedQuerySources.IndexOf(qsre.ReferencedQuerySource);
+                            StringBuilder.Append("[" + qsre.ReferencedQuerySource.ItemName + "{" + index + "}]");
+                        }
+                        else
+                        {
+                            StringBuilder.Append(qsre);
+                        }
 
-                default:
-                    UnhandledExpressionType(extensionExpression);
-                    break;
+                        break;
+
+                    case SubQueryExpression subqueryExpression:
+                        VisitSubqueryExpression(subqueryExpression);
+                        break;
+
+                    default:
+                        UnhandledExpressionType(extensionExpression);
+                        break;
+                }
             }
 
             if (_highlightNonreducibleNodes && !extensionExpression.CanReduce)
@@ -783,50 +956,21 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             return extensionExpression;
         }
 
-        private void VisitNullConditionalExpression(NullConditionalExpression nullConditionalExpression)
+        private void VisitSubqueryExpression(SubQueryExpression subqueryExpression)
         {
-            if (nullConditionalExpression.AccessOperation is MemberExpression memberExpression)
-            {
-                Visit(nullConditionalExpression.Caller);
-                _stringBuilder.Append("?." + memberExpression.Member.Name);
-            }
-            else if (nullConditionalExpression.AccessOperation is MethodCallExpression methodCallExpression)
-            {
-                if (methodCallExpression.Object != null)
-                {
-                    Visit(nullConditionalExpression.Caller);
-                    _stringBuilder.Append("?." + methodCallExpression.Method.Name + "(");
-                    VisitArguments(methodCallExpression.Arguments, s => _stringBuilder.Append(s));
-                    _stringBuilder.Append(")");
-                }
-
-                var method = methodCallExpression.Method;
-
-                _stringBuilder.Append(method.DeclaringType?.Name + "." + method.Name + "(?");
-                Visit(nullConditionalExpression.Caller);
-                _stringBuilder.Append("?, ");
-                VisitArguments(methodCallExpression.Arguments.Skip(1).ToList(), s => _stringBuilder.Append(s));
-                _stringBuilder.Append(")");
-            }
-            else
-            {
-                _stringBuilder.Append("?");
-                Visit(nullConditionalExpression.AccessOperation);
-                _stringBuilder.Append("?");
-            }
+            _stringBuilder.Append(subqueryExpression.QueryModel.Print());
         }
 
-        private void VisitNullConditionalEqualExpression(NullConditionalEqualExpression nullConditionalEqualExpression)
-        {
-            Visit(nullConditionalEqualExpression.OuterKey);
-            _stringBuilder.Append(" ?= ");
-            Visit(nullConditionalEqualExpression.InnerKey);
-        }
-
-        private void VisitArguments(IList<Expression> arguments, Action<string> appendAction, string lastSeparator = "")
+        private void VisitArguments(IList<Expression> arguments, Action<string> appendAction, string lastSeparator = "", bool areConnected = false)
         {
             for (var i = 0; i < arguments.Count; i++)
             {
+                if (areConnected && i == arguments.Count - 1)
+                {
+                    Append("");
+                    _stringBuilder.DisconnectCurrentNode();
+                }
+
                 Visit(arguments[i]);
                 appendAction(i == arguments.Count - 1 ? lastSeparator : ", ");
             }
@@ -945,7 +1089,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     }
 
                     stringBuilder.DecrementIndent();
-                    appendAction(stringBuilder, "}");
+
+                    stringBuilder.Append("}");
 
                     return;
                 }

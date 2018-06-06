@@ -5,8 +5,9 @@ using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -14,7 +15,9 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     /// </summary>
     public class SqlServerDateTimeTypeMapping : DateTimeTypeMapping
     {
+        private const string DateFormatConst = "{0:yyyy-MM-dd}";
         private const string DateTimeFormatConst = "{0:yyyy-MM-ddTHH:mm:ss.fffK}";
+        private const string DateTime2FormatConst = "{0:yyyy-MM-ddTHH:mm:ss.fffffffK}";
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -23,7 +26,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public SqlServerDateTimeTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, dbType)
         {
         }
 
@@ -31,11 +34,8 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public SqlServerDateTimeTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null)
-            : base(storeType, converter, dbType)
+        protected SqlServerDateTimeTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
@@ -55,23 +55,22 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         }
 
         /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
+        ///     Creates a copy of this mapping.
         /// </summary>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new SqlServerDateTimeTypeMapping(storeType, Converter, DbType);
+        /// <param name="parameters"> The parameters for this mapping. </param>
+        /// <returns> The newly created mapping. </returns>
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new SqlServerDateTimeTypeMapping(parameters);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new SqlServerDateTimeTypeMapping(StoreType, ComposeConverter(converter), DbType);
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        protected override string SqlLiteralFormatString => "'" + DateTimeFormatConst + "'";
+        protected override string SqlLiteralFormatString
+            => StoreType == "date"
+                ? "'" + DateFormatConst + "'"
+                : (StoreType == "datetime"
+                    ? "'" + DateTimeFormatConst + "'"
+                    : "'" + DateTime2FormatConst + "'");
     }
 }

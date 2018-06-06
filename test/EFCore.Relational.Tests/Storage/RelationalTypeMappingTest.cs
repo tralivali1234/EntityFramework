@@ -5,10 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
-using Microsoft.EntityFrameworkCore.Internal;
+using System.Reflection;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Storage
 {
     public abstract class RelationalTypeMappingTest
@@ -20,8 +23,18 @@ namespace Microsoft.EntityFrameworkCore.Storage
             {
             }
 
-            public override Type ModelType { get; } = typeof(object);
-            public override Type StoreType { get; } = typeof(object);
+            public override Type ModelClrType { get; } = typeof(object);
+            public override Type ProviderClrType { get; } = typeof(object);
+        }
+
+        protected class FakeValueComparer : ValueComparer<object>
+        {
+            public FakeValueComparer()
+                : base(false)
+            {
+            }
+
+            public override Type Type { get; } = typeof(object);
         }
 
         [Theory]
@@ -46,9 +59,11 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var mapping = (RelationalTypeMapping)Activator.CreateInstance(
                 mappingType,
-                "<original>",
-                new FakeValueConverter(),
-                DbType.VarNumeric);
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.CreateInstance,
+                null,
+                new[] { FakeTypeMapping.CreateParameters(clrType) },
+                null,
+                null);
 
             var clone = mapping.Clone("<clone>", null);
 
@@ -59,7 +74,10 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Assert.Null(clone.Size);
             Assert.NotNull(mapping.Converter);
             Assert.Same(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(mapping.KeyComparer, clone.KeyComparer);
             Assert.Same(typeof(object), clone.ClrType);
+            Assert.Equal(StoreTypePostfix.PrecisionAndScale, clone.StoreTypePostfix);
 
             var newConverter = new FakeValueConverter();
             clone = (RelationalTypeMapping)mapping.Clone(newConverter);
@@ -70,7 +88,10 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Assert.Equal(DbType.VarNumeric, clone.DbType);
             Assert.Null(clone.Size);
             Assert.NotSame(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(mapping.KeyComparer, clone.KeyComparer);
             Assert.Same(typeof(object), clone.ClrType);
+            Assert.Equal(StoreTypePostfix.PrecisionAndScale, clone.StoreTypePostfix);
         }
 
         [Theory]
@@ -79,36 +100,54 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var mapping = (RelationalTypeMapping)Activator.CreateInstance(
                 mappingType,
-                "<original>",
-                new FakeValueConverter(),
-                DbType.VarNumeric,
-                33);
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.CreateInstance,
+                null,
+                new[]
+                {
+                    FakeTypeMapping.CreateParameters(
+                        clrType,
+                        size: 33,
+                        fixedLength: true,
+                        storeTypePostfix: StoreTypePostfix.Size)
+                },
+                null,
+                null);
 
             var clone = mapping.Clone("<clone>", 66);
 
             Assert.NotSame(mapping, clone);
             Assert.Same(mapping.GetType(), clone.GetType());
-            Assert.Equal("<original>", mapping.StoreType);
-            Assert.Equal("<clone>", clone.StoreType);
+            Assert.Equal("<original>(33)", mapping.StoreType);
+            Assert.Equal("<clone>(66)", clone.StoreType);
             Assert.Equal(DbType.VarNumeric, clone.DbType);
             Assert.Equal(33, mapping.Size);
             Assert.Equal(66, clone.Size);
             Assert.NotNull(mapping.Converter);
             Assert.Same(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(mapping.KeyComparer, clone.KeyComparer);
             Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+            Assert.Equal(StoreTypePostfix.Size, clone.StoreTypePostfix);
 
             var newConverter = new FakeValueConverter();
             clone = (RelationalTypeMapping)mapping.Clone(newConverter);
 
             Assert.NotSame(mapping, clone);
             Assert.Same(mapping.GetType(), clone.GetType());
-            Assert.Equal("<original>", mapping.StoreType);
-            Assert.Equal("<original>", clone.StoreType);
+            Assert.Equal("<original>(33)", mapping.StoreType);
+            Assert.Equal("<original>(33)", clone.StoreType);
             Assert.Equal(DbType.VarNumeric, clone.DbType);
             Assert.Equal(33, mapping.Size);
             Assert.Equal(33, clone.Size);
             Assert.NotSame(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(mapping.KeyComparer, clone.KeyComparer);
             Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+            Assert.Equal(StoreTypePostfix.Size, clone.StoreTypePostfix);
         }
 
         [Theory]
@@ -117,18 +156,26 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var mapping = (RelationalTypeMapping)Activator.CreateInstance(
                 mappingType,
-                "<original>",
-                new FakeValueConverter(),
-                DbType.VarNumeric,
-                false,
-                33);
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.CreateInstance,
+                null,
+                new[]
+                {
+                    FakeTypeMapping.CreateParameters(
+                        clrType,
+                        size: 33,
+                        unicide: false,
+                        fixedLength: true,
+                        storeTypePostfix: StoreTypePostfix.Size)
+                },
+                null,
+                null);
 
             var clone = mapping.Clone("<clone>", 66);
 
             Assert.NotSame(mapping, clone);
             Assert.Same(mapping.GetType(), clone.GetType());
-            Assert.Equal("<original>", mapping.StoreType);
-            Assert.Equal("<clone>", clone.StoreType);
+            Assert.Equal("<original>(33)", mapping.StoreType);
+            Assert.Equal("<clone>(66)", clone.StoreType);
             Assert.Equal(DbType.VarNumeric, clone.DbType);
             Assert.Equal(33, mapping.Size);
             Assert.Equal(66, clone.Size);
@@ -136,41 +183,66 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Assert.False(clone.IsUnicode);
             Assert.NotNull(mapping.Converter);
             Assert.Same(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(mapping.KeyComparer, clone.KeyComparer);
             Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+            Assert.Equal(StoreTypePostfix.Size, clone.StoreTypePostfix);
 
             var newConverter = new FakeValueConverter();
             clone = (RelationalTypeMapping)mapping.Clone(newConverter);
 
             Assert.NotSame(mapping, clone);
             Assert.Same(mapping.GetType(), clone.GetType());
-            Assert.Equal("<original>", mapping.StoreType);
-            Assert.Equal("<original>", clone.StoreType);
+            Assert.Equal("<original>(33)", mapping.StoreType);
+            Assert.Equal("<original>(33)", clone.StoreType);
             Assert.Equal(DbType.VarNumeric, clone.DbType);
             Assert.Equal(33, mapping.Size);
             Assert.Equal(33, clone.Size);
             Assert.False(mapping.IsUnicode);
             Assert.False(clone.IsUnicode);
             Assert.NotSame(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(mapping.KeyComparer, clone.KeyComparer);
             Assert.Same(typeof(object), clone.ClrType);
-        }
-
-        [Fact]
-        public void Cannot_compose_converters_with_mismatched_types()
-        {
-            Assert.Equal(
-                CoreStrings.ConverterCloneNotImplemented("FakeTypeMapping"),
-                Assert.Throws<NotImplementedException>(
-                    () => new FakeTypeMapping().Clone(new FakeValueConverter())).Message);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+            Assert.Equal(StoreTypePostfix.Size, clone.StoreTypePostfix);
         }
 
         private class FakeTypeMapping : RelationalTypeMapping
         {
+            private FakeTypeMapping(RelationalTypeMappingParameters parameters)
+                : base(parameters)
+            {
+            }
+
             public FakeTypeMapping()
                 : base("storeType", typeof(object))
             {
             }
 
-            public override RelationalTypeMapping Clone(string storeType, int? size) => throw new NotImplementedException();
+            public static object CreateParameters(
+                Type clrType,
+                int? size = null,
+                bool unicide = false,
+                bool fixedLength = false,
+                StoreTypePostfix storeTypePostfix = StoreTypePostfix.PrecisionAndScale)
+            {
+                return new RelationalTypeMappingParameters(
+                    new CoreTypeMappingParameters(
+                        clrType,
+                        new FakeValueConverter(),
+                        new FakeValueComparer(),
+                        new FakeValueComparer()),
+                    "<original>",
+                    storeTypePostfix,
+                    System.Data.DbType.VarNumeric,
+                    size: size,
+                    unicode: unicide,
+                    fixedLength: fixedLength);
+            }
         }
 
         [Fact]
@@ -283,6 +355,13 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var literal = new BoolTypeMapping("bool").GenerateSqlLiteral(false);
             Assert.Equal("0", literal);
+        }
+
+        [Fact]
+        public virtual void GenerateSqlLiteral_returns_string_literal()
+        {
+            var literal = new StringTypeMapping("string").GenerateSqlLiteral("Text");
+            Assert.Equal("'Text'", literal);
         }
 
         [Fact]
@@ -428,7 +507,68 @@ namespace Microsoft.EntityFrameworkCore.Storage
         }
 
         [Fact]
-        public void Primary_key_type_mapping_is_picked_up_by_FK_without_going_through_store_type()
+        public virtual void GenerateSqlLiteral_for_Float_works_for_range_limits()
+        {
+            var typeMapping = new FloatTypeMapping("float", DbType.Single);
+            var literal = typeMapping.GenerateSqlLiteral(float.MinValue);
+            Assert.Equal("-3.40282347E+38", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(float.MaxValue);
+            Assert.Equal("3.40282347E+38", literal);
+        }
+
+        [Fact]
+        public virtual void GenerateSqlLiteral_for_Float_works_for_special_values()
+        {
+            var typeMapping = new FloatTypeMapping("float", DbType.Single);
+            var literal = typeMapping.GenerateSqlLiteral(float.NaN);
+            Assert.Equal("NaN", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(float.PositiveInfinity);
+            Assert.Equal("Infinity", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(float.NegativeInfinity);
+            Assert.Equal("-Infinity", literal);
+        }
+
+        [Fact]
+        public virtual void GenerateSqlLiteral_for_Double_works_for_range_limits()
+        {
+            var typeMapping = new DoubleTypeMapping("double", DbType.Double);
+            var literal = typeMapping.GenerateSqlLiteral(double.MinValue);
+            Assert.Equal("-1.7976931348623157E+308", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(double.MaxValue);
+            Assert.Equal("1.7976931348623157E+308", literal);
+        }
+
+        [Fact]
+        public virtual void GenerateSqlLiteral_for_Double_works_for_special_values()
+        {
+            var typeMapping = new DoubleTypeMapping("double", DbType.Double);
+            var literal = typeMapping.GenerateSqlLiteral(double.NaN);
+            Assert.Equal("NaN", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(double.PositiveInfinity);
+            Assert.Equal("Infinity", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(double.NegativeInfinity);
+            Assert.Equal("-Infinity", literal);
+        }
+
+        [Fact]
+        public virtual void GenerateSqlLiteral_for_Decimal_works_for_range_limits()
+        {
+            var typeMapping = new DecimalTypeMapping("decimal", DbType.Decimal);
+            var literal = typeMapping.GenerateSqlLiteral(decimal.MinValue);
+            Assert.Equal("-79228162514264337593543950335.0", literal);
+
+            literal = typeMapping.GenerateSqlLiteral(decimal.MaxValue);
+            Assert.Equal("79228162514264337593543950335.0", literal);
+        }
+
+        [Fact]
+        public virtual void Primary_key_type_mapping_is_picked_up_by_FK_without_going_through_store_type()
         {
             using (var context = new FruityContext(ContextOptions))
             {
@@ -447,6 +587,35 @@ namespace Microsoft.EntityFrameworkCore.Storage
 
             public DbSet<Banana> Bananas { get; set; }
             public DbSet<Kiwi> Kiwi { get; set; }
+        }
+
+        [Fact]
+        public virtual void Primary_key_type_mapping_can_differ_from_FK()
+        {
+            using (var context = new MismatchedFruityContext(ContextOptions))
+            {
+                Assert.Equal(
+                    typeof(short),
+                    context.Model.FindEntityType(typeof(Banana)).FindProperty("Id").FindMapping().Converter.ProviderClrType);
+                Assert.Null(context.Model.FindEntityType(typeof(Kiwi)).FindProperty("Id").FindMapping().Converter);
+            }
+        }
+
+        private class MismatchedFruityContext : FruityContext
+        {
+            public MismatchedFruityContext(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            protected override void OnModelCreating(ModelBuilder modelBuilder)
+            {
+                base.OnModelCreating(modelBuilder);
+
+                modelBuilder.Entity<Banana>().Property(e => e.Id).HasConversion<short>();
+                modelBuilder.Entity<Kiwi>().Property(e => e.Id).HasConversion<int>();
+                modelBuilder.Entity<Kiwi>().HasOne(e => e.Banana).WithMany(e => e.Kiwis).HasForeignKey(e => e.Id);
+            }
         }
 
         private class Banana

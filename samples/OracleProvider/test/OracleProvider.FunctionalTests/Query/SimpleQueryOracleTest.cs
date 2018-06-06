@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,6 +20,48 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Fixture.TestSqlLoggerFactory.Clear();
             //Fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
+        }
+
+        public override void Query_backed_by_database_view()
+        {
+            // TODO: #10680
+            //base.Query_backed_by_database_view();
+        }
+
+        public override void QueryType_with_defining_query()
+        {
+            // TODO: #10680
+            //base.QueryType_with_defining_query();
+        }
+
+        public override void QueryType_select_where_navigation()
+        {
+            // TODO: #10680
+            //base.QueryType_select_where_navigation();
+        }
+
+        public override void QueryType_select_where_navigation_multi_level()
+        {
+            // TODO: #10680
+            //base.QueryType_select_where_navigation_multi_level();
+        }
+
+        public override void QueryType_with_included_nav()
+        {
+            // TODO: #10680
+            //base.QueryType_with_included_nav();
+        }
+
+        public override void QueryType_with_included_navs_multi_level()
+        {
+            // TODO: #10680
+            //base.QueryType_with_included_navs_multi_level();
+        }
+
+        public override void QueryType_with_mixed_tracking()
+        {
+            // TODO: #10680
+            //base.QueryType_with_mixed_tracking();
         }
 
         public override void Select_nested_collection_multi_level5()
@@ -42,6 +85,12 @@ namespace Microsoft.EntityFrameworkCore.Query
             // Oracle doesn't short-circuit AND
         }
 
+        [ConditionalFact(Skip = "See issue#10563")]
+        public override void Indexof_with_emptystring()
+        {
+            base.Indexof_with_emptystring();
+        }
+
         public override void DefaultIfEmpty_in_subquery_nested()
         {
             AssertQuery<Customer, Order>(
@@ -53,6 +102,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                      orderby o1.CustomerID, o1.OrderID, o2.OrderDate
                      select new { c.CustomerID, o1.OrderID, o2.OrderDate }),
                 e => e.CustomerID + " " + e.OrderID);
+        }
+
+        [ConditionalFact(Skip = "See issue#10520")]
+        public override void Where_datetime_today()
+        {
+            base.Where_datetime_today();
         }
 
         public override void Shaper_command_caching_when_parameter_names_different()
@@ -1026,7 +1081,7 @@ ORDER BY ""e1"".""EmployeeID"" NULLS FIRST");
             base.Select_DTO_distinct_translated_to_server();
 
             AssertSql(
-                @"SELECT DISTINCT 1
+                @"SELECT 1
 FROM ""Orders"" ""o""
 WHERE ""o"".""OrderID"" < 10300");
         }
@@ -1982,10 +2037,10 @@ ORDER BY ""Id1"" NULLS FIRST");
             base.Comparing_different_entity_types_using_Equals();
 
             AssertSql(
-                @"SELECT ""c"".""CustomerID"", ""c"".""Address"", ""c"".""City"", ""c"".""CompanyName"", ""c"".""ContactName"", ""c"".""ContactTitle"", ""c"".""Country"", ""c"".""Fax"", ""c"".""Phone"", ""c"".""PostalCode"", ""c"".""Region"", ""o"".""OrderID"", ""o"".""CustomerID"", ""o"".""EmployeeID"", ""o"".""OrderDate""
+                @"SELECT ""c"".""CustomerID""
 FROM ""Customers"" ""c""
 CROSS JOIN ""Orders"" ""o""
-WHERE (""c"".""CustomerID"" = N' ALFKI') AND (""o"".""CustomerID"" = N'ALFKI')");
+WHERE 0 = 1");
         }
 
         public override void Comparing_entity_to_null_using_Equals()
@@ -1993,9 +2048,9 @@ WHERE (""c"".""CustomerID"" = N' ALFKI') AND (""o"".""CustomerID"" = N'ALFKI')")
             base.Comparing_entity_to_null_using_Equals();
 
             AssertSql(
-                @"SELECT ""c"".""CustomerID"", ""c"".""Address"", ""c"".""City"", ""c"".""CompanyName"", ""c"".""ContactName"", ""c"".""ContactTitle"", ""c"".""Country"", ""c"".""Fax"", ""c"".""Phone"", ""c"".""PostalCode"", ""c"".""Region""
+                @"SELECT ""c"".""CustomerID""
 FROM ""Customers"" ""c""
-WHERE ""c"".""CustomerID"" LIKE N'A' || N'%' AND (SUBSTR(""c"".""CustomerID"", 1, LENGTH(N'A')) = N'A')
+WHERE (""c"".""CustomerID"" LIKE N'A' || N'%' AND (SUBSTR(""c"".""CustomerID"", 1, LENGTH(N'A')) = N'A')) AND ""c"".""CustomerID"" IS NOT NULL
 ORDER BY ""c"".""CustomerID"" NULLS FIRST");
         }
 
@@ -2028,10 +2083,10 @@ ORDER BY ""Id1"" NULLS FIRST, ""Id2"" NULLS FIRST");
             base.Comparing_non_matching_entities_using_Equals();
 
             AssertSql(
-                @"SELECT ""c"".""CustomerID"" ""Id1"", ""c"".""Address"", ""c"".""City"", ""c"".""CompanyName"", ""c"".""ContactName"", ""c"".""ContactTitle"", ""c"".""Country"", ""c"".""Fax"", ""c"".""Phone"", ""c"".""PostalCode"", ""c"".""Region"", ""o"".""OrderID"" ""Id2"", ""o"".""CustomerID"", ""o"".""EmployeeID"", ""o"".""OrderDate""
+                @"SELECT ""c"".""CustomerID"" ""Id1"", ""o"".""OrderID"" ""Id2""
 FROM ""Customers"" ""c""
 CROSS JOIN ""Orders"" ""o""
-WHERE ""c"".""CustomerID"" = N'ALFKI'");
+WHERE 0 = 1");
         }
 
         public override void Comparing_non_matching_collection_navigations_using_Equals()
@@ -2131,6 +2186,18 @@ ORDER BY ""c"".""CustomerID"" NULLS FIRST");
 FROM ""Customers"" ""c""
 WHERE ""c"".""CustomerID"" LIKE N'A' || N'%' AND (SUBSTR(""c"".""CustomerID"", 1, LENGTH(N'A')) = N'A')
 ORDER BY ""c"".""CustomerID"" DESC");
+        }
+
+        [ConditionalFact(Skip = "See issue#10513")]
+        public override void OrderBy_empty_list_contains()
+        {
+            base.OrderBy_empty_list_contains();
+        }
+
+        [ConditionalFact(Skip = "See issue#10513")]
+        public override void OrderBy_empty_list_does_not_contains()
+        {
+            base.OrderBy_empty_list_does_not_contains();
         }
 
         private void AssertSql(params string[] expected)

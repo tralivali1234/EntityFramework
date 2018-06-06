@@ -2,9 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Internal
@@ -89,6 +91,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Note: only use this to find the property/field that defines the property in the model. Use
+        // GetMemberInfo to get the property/field to use, which may be different.
+        public static MemberInfo GetIdentifyingMemberInfo(
+            [NotNull] this IPropertyBase propertyBase)
+            => propertyBase.PropertyInfo ?? (MemberInfo)propertyBase.FieldInfo;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static MemberInfo GetMemberInfo(
             [NotNull] this IPropertyBase propertyBase,
             bool forConstruction,
@@ -154,10 +166,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     {
                         if (!isCollectionNav)
                         {
-                            errorMessage = CoreStrings.NoBackingField(
-                                propertyBase.Name, propertyBase.DeclaringType.DisplayName(), nameof(PropertyAccessMode));
+                            errorMessage = GetNoFieldErrorMessage(propertyBase);
                             return false;
                         }
+
                         return true;
                     }
                 }
@@ -219,10 +231,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     if (!forSet
                         || !isCollectionNav)
                     {
-                        errorMessage = CoreStrings.NoBackingField(
-                            propertyBase.Name, propertyBase.DeclaringType.DisplayName(), nameof(PropertyAccessMode));
+                        errorMessage = GetNoFieldErrorMessage(propertyBase);
                         return false;
                     }
+
                     return true;
                 }
 
@@ -234,6 +246,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         errorMessage = CoreStrings.ReadonlyField(fieldInfo.Name, propertyBase.DeclaringType.DisplayName());
                         return false;
                     }
+
                     return true;
                 }
 
@@ -270,6 +283,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
             memberInfo = getterProperty;
             return true;
+        }
+
+        private static string GetNoFieldErrorMessage(IPropertyBase propertyBase)
+        {
+            var constructorBinding = (ConstructorBinding)propertyBase.DeclaringType[CoreAnnotationNames.ConstructorBinding];
+
+            return constructorBinding != null
+                   && constructorBinding.ParameterBindings
+                       .OfType<ServiceParameterBinding>()
+                       .Any(b => b.ServiceType == typeof(ILazyLoader))
+                ? CoreStrings.NoBackingFieldLazyLoading(
+                    propertyBase.Name, propertyBase.DeclaringType.DisplayName())
+                : CoreStrings.NoBackingField(
+                    propertyBase.Name, propertyBase.DeclaringType.DisplayName(), nameof(PropertyAccessMode));
         }
 
         /// <summary>

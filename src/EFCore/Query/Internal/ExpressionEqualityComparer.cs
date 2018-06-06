@@ -21,6 +21,19 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
     public class ExpressionEqualityComparer : IEqualityComparer<Expression>
     {
         /// <summary>
+        ///     Creates a new <see cref="ExpressionEqualityComparer" />.
+        /// </summary>
+        private ExpressionEqualityComparer()
+        {
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static ExpressionEqualityComparer Instance => InnerExpressionEqualityComparer.Instance;
+
+        /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
@@ -216,6 +229,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                     {
                                         hashCode += (hashCode * 397) ^ GetHashCode(memberListBinding.Initializers[j].Arguments);
                                     }
+
                                     break;
                                 default:
                                     throw new NotImplementedException();
@@ -258,11 +272,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         {
                             hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalExpression.AccessOperation);
                         }
-                        else if (obj is NullConditionalEqualExpression nullConditionalEqualExpression)
+                        else if (obj is NullSafeEqualExpression nullConditionalEqualExpression)
                         {
-                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.OuterNullProtection);
-                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.OuterKey);
-                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.InnerKey);
+                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.OuterKeyNullCheck);
+                            hashCode += (hashCode * 397) ^ GetHashCode(nullConditionalEqualExpression.EqualExpression);
                         }
                         else
                         {
@@ -429,12 +442,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     return false;
                 }
 
-                if (a.Value is EnumerableQuery
-                    && b.Value is EnumerableQuery)
-                {
-                    return false; // EnumerableQueries are opaque
-                }
-
                 if (a.IsEntityQueryable()
                     && b.IsEntityQueryable()
                     && a.Value.GetType() == b.Value.GetType())
@@ -582,18 +589,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         nullConditionalExpressionB.AccessOperation);
                 }
 
-                if (a is NullConditionalEqualExpression nullConditionalEqualExpressionA
-                    && b is NullConditionalEqualExpression nullConditionalEqualExpressionB)
+                if (a is NullSafeEqualExpression nullConditionalEqualExpressionA
+                    && b is NullSafeEqualExpression nullConditionalEqualExpressionB)
                 {
                     return Compare(
-                               nullConditionalEqualExpressionA.OuterNullProtection,
-                               nullConditionalEqualExpressionB.OuterNullProtection)
+                               nullConditionalEqualExpressionA.OuterKeyNullCheck,
+                               nullConditionalEqualExpressionB.OuterKeyNullCheck)
                            && Compare(
-                               nullConditionalEqualExpressionA.OuterKey,
-                               nullConditionalEqualExpressionB.OuterKey)
-                           && Compare(
-                               nullConditionalEqualExpressionA.InnerKey,
-                               nullConditionalEqualExpressionB.InnerKey);
+                               nullConditionalEqualExpressionA.EqualExpression,
+                               nullConditionalEqualExpressionB.EqualExpression);
                 }
 
                 return a.Equals(b);
@@ -749,6 +753,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     return false;
                 }
             }
+        }
+
+        private sealed class InnerExpressionEqualityComparer
+        {
+            static InnerExpressionEqualityComparer()
+            {
+            }
+
+            internal static readonly ExpressionEqualityComparer Instance = new ExpressionEqualityComparer();
         }
     }
 }

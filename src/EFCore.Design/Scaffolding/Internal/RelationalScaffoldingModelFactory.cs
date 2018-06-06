@@ -80,7 +80,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             _tableNamer = new CSharpUniqueNamer<DatabaseTable>(
                 useDatabaseNames
                     ? (Func<DatabaseTable, string>)(t => t.Name)
-                    : t => _candidateNamingService.GenerateCandidateIdentifier(t.Name),
+                    : t => _candidateNamingService.GenerateCandidateIdentifier(t),
                 _cSharpUtilities,
                 useDatabaseNames
                     ? (Func<string, string>)null
@@ -88,7 +88,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             _dbSetNamer = new CSharpUniqueNamer<DatabaseTable>(
                 useDatabaseNames
                     ? (Func<DatabaseTable, string>)(t => t.Name)
-                    : t => _candidateNamingService.GenerateCandidateIdentifier(t.Name),
+                    : t => _candidateNamingService.GenerateCandidateIdentifier(t),
                 _cSharpUtilities,
                 useDatabaseNames
                     ? (Func<string, string>)null
@@ -148,7 +148,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                     _columnNamers.Add(
                         table,
                         new CSharpUniqueNamer<DatabaseColumn>(
-                            c => _candidateNamingService.GenerateCandidateIdentifier(c.Name),
+                            c => _candidateNamingService.GenerateCandidateIdentifier(c),
                             usedNames,
                             _cSharpUtilities,
                             singularizePluralizer: null));
@@ -367,7 +367,8 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 clrType = clrType.MakeNullable();
             }
 
-            if (clrType == typeof(bool) && column.DefaultValueSql != null)
+            if (clrType == typeof(bool)
+                && column.DefaultValueSql != null)
             {
                 _reporter.WriteWarning(
                     DesignStrings.NonNullableBoooleanColumnHasDefaultConstraint(column.DisplayName()));
@@ -388,6 +389,11 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             if (typeScaffoldingInfo.ScaffoldUnicode.HasValue)
             {
                 property.IsUnicode(typeScaffoldingInfo.ScaffoldUnicode.Value);
+            }
+
+            if (typeScaffoldingInfo.ScaffoldFixedLength == true)
+            {
+                property.IsFixedLength();
             }
 
             if (typeScaffoldingInfo.ScaffoldMaxLength.HasValue)
@@ -728,6 +734,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                             .ToList()
                             .ForEach(tuple => tuple.property.IsNullable = false);
                     }
+
                     principalKey = principalEntityType.AddKey(principalProperties);
                 }
                 else
@@ -851,13 +858,19 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 column.IsKeyOrIndex(),
                 column.IsRowVersion());
 
+            if (typeScaffoldingInfo == null)
+            {
+                return null;
+            }
+
             if (column.GetUnderlyingStoreType() != null)
             {
                 return new TypeScaffoldingInfo(
                     typeScaffoldingInfo.ClrType,
                     inferred: false,
                     scaffoldUnicode: typeScaffoldingInfo.ScaffoldUnicode,
-                    scaffoldMaxLength: typeScaffoldingInfo.ScaffoldMaxLength);
+                    scaffoldMaxLength: typeScaffoldingInfo.ScaffoldMaxLength,
+                    scaffoldFixedLength: typeScaffoldingInfo.ScaffoldFixedLength);
             }
 
             return typeScaffoldingInfo;
@@ -886,7 +899,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         }
 
         // TODO use CSharpUniqueNamer
-        private string NavigationUniquifier([NotNull] string proposedIdentifier, [CanBeNull] ICollection<string> existingIdentifiers)
+        private static string NavigationUniquifier([NotNull] string proposedIdentifier, [CanBeNull] ICollection<string> existingIdentifiers)
         {
             if (existingIdentifiers == null
                 || !existingIdentifiers.Contains(proposedIdentifier))

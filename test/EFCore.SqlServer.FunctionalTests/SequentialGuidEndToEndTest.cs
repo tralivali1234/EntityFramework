@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class SequentialGuidEndToEndTest : IDisposable
@@ -26,7 +27,11 @@ namespace Microsoft.EntityFrameworkCore
 
                 for (var i = 0; i < 50; i++)
                 {
-                    context.Add(new Pegasus { Name = "Rainbow Dash " + i });
+                    context.Add(
+                        new Pegasus
+                        {
+                            Name = "Rainbow Dash " + i
+                        });
                 }
 
                 await context.SaveChangesAsync();
@@ -58,7 +63,14 @@ namespace Microsoft.EntityFrameworkCore
 
                 for (var i = 0; i < 50; i++)
                 {
-                    guids.Add(context.Add(new Pegasus { Name = "Rainbow Dash " + i, Index = i, Id = Guid.NewGuid() }).Entity.Id);
+                    guids.Add(
+                        context.Add(
+                            new Pegasus
+                            {
+                                Name = "Rainbow Dash " + i,
+                                Index = i,
+                                Id = Guid.NewGuid()
+                            }).Entity.Id);
                 }
 
                 await context.SaveChangesAsync();

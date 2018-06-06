@@ -61,7 +61,14 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             foreach (var setInfo in Dependencies.SetFinder.FindSets(context))
             {
-                modelBuilder.Entity(setInfo.ClrType);
+                if (setInfo.IsQueryType)
+                {
+                    modelBuilder.Query(setInfo.ClrType);
+                }
+                else
+                {
+                    modelBuilder.Entity(setInfo.ClrType);
+                }
             }
         }
     }

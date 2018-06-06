@@ -15,7 +15,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             IsLoaded = 3
         }
 
-        internal struct StateData
+        internal readonly struct StateData
         {
             private const int BitsPerInt = 32;
             private const int BitsForEntityState = 3;
@@ -53,8 +53,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
             public EntityState EntityState
             {
-                get { return (EntityState)(_bits[0] & EntityStateMask); }
-                set { _bits[0] = (_bits[0] & ~EntityStateMask) | (int)value; }
+                get => (EntityState)(_bits[0] & EntityStateMask);
+                set => _bits[0] = (_bits[0] & ~EntityStateMask) | (int)value;
             }
 
             public bool IsPropertyFlagged(int propertyIndex, PropertyFlag propertyFlag)

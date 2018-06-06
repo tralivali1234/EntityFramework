@@ -5,14 +5,15 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Query.ExpressionTranslators.Internal
 {
     public class OracleStringTrimStartTranslator : IMethodCallTranslator
     {
         // Method defined in netcoreapp2.0 only
         private static readonly MethodInfo _methodInfoWithoutArgs
-            = typeof(string).GetRuntimeMethod(nameof(string.TrimStart), new Type[] { });
+            = typeof(string).GetRuntimeMethod(nameof(string.TrimStart), Array.Empty<Type>());
 
         // Method defined in netstandard2.0
         private static readonly MethodInfo _methodInfoWithCharArrayArg

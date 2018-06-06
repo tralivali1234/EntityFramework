@@ -7,9 +7,10 @@ using Microsoft.EntityFrameworkCore.TestModels.Inheritance;
 using Xunit;
 using Xunit.Abstractions;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Query
 {
-    public class InheritanceSqlServerTest : InheritanceTestBase<InheritanceSqlServerFixture>
+    public class InheritanceSqlServerTest : InheritanceRelationalTestBase<InheritanceSqlServerFixture>
     {
         public InheritanceSqlServerTest(InheritanceSqlServerFixture fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
@@ -55,6 +56,30 @@ WHERE [d].[Discriminator] = N'Lilt'",
                 @"SELECT TOP(2) [d].[Id], [d].[Discriminator], [d].[CaffeineGrams], [d].[HasMilk]
 FROM [Drink] AS [d]
 WHERE [d].[Discriminator] = N'Tea'");
+        }
+
+        public override void FromSql_on_root()
+        {
+            base.FromSql_on_root();
+
+            AssertSql(
+                @"SELECT [a].[Species], [a].[CountryId], [a].[Discriminator], [a].[Name], [a].[EagleId], [a].[IsFlightless], [a].[Group], [a].[FoundOn]
+FROM (
+    select * from ""Animal""
+) AS [a]
+WHERE [a].[Discriminator] IN (N'Kiwi', N'Eagle')");
+        }
+
+        public override void FromSql_on_derived()
+        {
+            base.FromSql_on_derived();
+
+            AssertSql(
+                @"SELECT [a].[Species], [a].[CountryId], [a].[Discriminator], [a].[Name], [a].[EagleId], [a].[IsFlightless], [a].[Group]
+FROM (
+    select * from ""Animal""
+) AS [a]
+WHERE [a].[Discriminator] = N'Eagle'");
         }
 
         public override void Can_query_all_types_when_shared_column()
@@ -185,6 +210,17 @@ WHERE [a].[Discriminator] IN (N'Kiwi', N'Eagle')
 ORDER BY [a].[Species]");
         }
 
+        public override void Can_query_all_animal_views()
+        {
+            base.Can_query_all_animal_views();
+
+            AssertSql(
+                @"SELECT [av].[CountryId], [av].[Discriminator], [av].[Name], [av].[EagleId], [av].[IsFlightless], [av].[Group], [av].[FoundOn]
+FROM [Animal] AS [av]
+WHERE [av].[Discriminator] IN (N'Kiwi', N'Eagle')
+ORDER BY [av].[CountryId]");
+        }
+
         public override void Can_query_all_plants()
         {
             base.Can_query_all_plants();
@@ -280,6 +316,7 @@ WHERE [c.Animals].[Discriminator] IN (N'Kiwi', N'Eagle')
 ORDER BY [t].[Name], [t].[Id]");
         }
 
+#if !Test20
         public override void Can_use_of_type_kiwi_where_north_on_derived_property()
         {
             base.Can_use_of_type_kiwi_where_north_on_derived_property();
@@ -287,7 +324,7 @@ ORDER BY [t].[Name], [t].[Id]");
             AssertSql(
                 @"SELECT [x].[Species], [x].[CountryId], [x].[Discriminator], [x].[Name], [x].[EagleId], [x].[IsFlightless], [x].[FoundOn]
 FROM [Animal] AS [x]
-WHERE ([x].[Discriminator] = N'Kiwi') AND ([x].[FoundOn] = 0)");
+WHERE ([x].[Discriminator] = N'Kiwi') AND ([x].[FoundOn] = CAST(0 AS tinyint))");
         }
 
         public override void Can_use_of_type_kiwi_where_south_on_derived_property()
@@ -297,8 +334,9 @@ WHERE ([x].[Discriminator] = N'Kiwi') AND ([x].[FoundOn] = 0)");
             AssertSql(
                 @"SELECT [x].[Species], [x].[CountryId], [x].[Discriminator], [x].[Name], [x].[EagleId], [x].[IsFlightless], [x].[FoundOn]
 FROM [Animal] AS [x]
-WHERE ([x].[Discriminator] = N'Kiwi') AND ([x].[FoundOn] = 1)");
+WHERE ([x].[Discriminator] = N'Kiwi') AND ([x].[FoundOn] = CAST(1 AS tinyint))");
         }
+#endif
 
         public override void Discriminator_used_when_projection_over_derived_type()
         {
@@ -343,7 +381,7 @@ WHERE [c].[Id] = 1",
 @p1='1'
 @p2='Kiwi' (Nullable = false) (Size = 4000)
 @p3='Little spotted kiwi' (Size = 4000)
-@p4='' (Size = 100) (DbType = String)
+@p4='' (Size = 100)
 @p5='True'
 @p6='0' (Size = 1)
 
@@ -377,6 +415,21 @@ SELECT @@ROWCOUNT;",
                 @"SELECT COUNT(*)
 FROM [Animal] AS [k]
 WHERE ([k].[Discriminator] = N'Kiwi') AND (RIGHT([k].[Species], LEN(N'owenii')) = N'owenii')");
+        }
+
+        public override void Byte_enum_value_constant_used_in_projection()
+        {
+#if !Test20
+            base.Byte_enum_value_constant_used_in_projection();
+
+            AssertSql(
+                @"SELECT CASE
+    WHEN [k].[IsFlightless] = 1
+    THEN CAST(0 AS tinyint) ELSE CAST(1 AS tinyint)
+END
+FROM [Animal] AS [k]
+WHERE [k].[Discriminator] = N'Kiwi'");
+#endif
         }
 
         protected override void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)

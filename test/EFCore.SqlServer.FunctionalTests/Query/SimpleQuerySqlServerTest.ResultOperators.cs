@@ -8,6 +8,20 @@ namespace Microsoft.EntityFrameworkCore.Query
 {
     public partial class SimpleQuerySqlServerTest
     {
+        public override void Union_with_custom_projection()
+        {
+            base.Union_with_custom_projection();
+
+            AssertSql(
+                @"SELECT [c1].[CustomerID], [c1].[Address], [c1].[City], [c1].[CompanyName], [c1].[ContactName], [c1].[ContactTitle], [c1].[Country], [c1].[Fax], [c1].[Phone], [c1].[PostalCode], [c1].[Region]
+FROM [Customers] AS [c1]
+WHERE [c1].[CompanyName] LIKE N'A' + N'%' AND (LEFT([c1].[CompanyName], LEN(N'A')) = N'A')",
+                //
+                @"SELECT [c2].[CustomerID], [c2].[Address], [c2].[City], [c2].[CompanyName], [c2].[ContactName], [c2].[ContactTitle], [c2].[Country], [c2].[Fax], [c2].[Phone], [c2].[PostalCode], [c2].[Region]
+FROM [Customers] AS [c2]
+WHERE [c2].[CompanyName] LIKE N'B' + N'%' AND (LEFT([c2].[CompanyName], LEN(N'B')) = N'B')");
+        }
+
         public override void Select_All()
         {
             base.Select_All();
@@ -164,7 +178,7 @@ FROM [Orders] AS [o]");
             base.Average_with_division_on_decimal();
 
             AssertSql(
-                @"SELECT AVG(CAST([od].[Quantity] / 2.09 AS decimal(18, 2)))
+                @"SELECT AVG([od].[Quantity] / 2.09)
 FROM [Order Details] AS [od]");
         }
 
@@ -173,7 +187,7 @@ FROM [Order Details] AS [od]");
             base.Average_with_division_on_decimal_no_significant_digits();
 
             AssertSql(
-                @"SELECT AVG(CAST([od].[Quantity] / 2.0 AS decimal(18, 2)))
+                @"SELECT AVG([od].[Quantity] / 2.0)
 FROM [Order Details] AS [od]");
         }
 
@@ -182,7 +196,7 @@ FROM [Order Details] AS [od]");
             base.Average_with_coalesce();
 
             AssertSql(
-                @"SELECT AVG(CAST(COALESCE([p].[UnitPrice], 0.0) AS decimal(18, 2)))
+                @"SELECT AVG(COALESCE([p].[UnitPrice], 0.0))
 FROM [Products] AS [p]
 WHERE [p].[ProductID] < 40");
         }
@@ -205,7 +219,7 @@ FROM [Customers] AS [c]");
             base.Average_on_float_column();
 
             AssertSql(
-                @"SELECT CAST(AVG(CAST([od].[Discount] AS real)) AS real)
+                @"SELECT CAST(AVG([od].[Discount]) AS real)
 FROM [Order Details] AS [od]
 WHERE [od].[ProductID] = 1");
         }
@@ -221,7 +235,7 @@ WHERE [o].[OrderID] < 10300",
                 //
                 @"@_outer_OrderID='10248'
 
-SELECT CAST(AVG(CAST([od0].[Discount] AS real)) AS real)
+SELECT CAST(AVG([od0].[Discount]) AS real)
 FROM [Order Details] AS [od0]
 WHERE @_outer_OrderID = [od0].[OrderID]");
 
@@ -236,7 +250,7 @@ WHERE @_outer_OrderID = [od0].[OrderID]");
 
             AssertSql(
                 @"SELECT [o].[OrderID], (
-    SELECT CAST(AVG(CAST([od].[Discount] AS real)) AS real)
+    SELECT CAST(AVG([od].[Discount]) AS real)
     FROM [Order Details] AS [od]
     WHERE [o].[OrderID] = [od].[OrderID]
 ) AS [Sum]
@@ -762,6 +776,16 @@ FROM [Customers] AS [c]
 WHERE [c].[CustomerID] IN (N'ABCDE', N'ALFKI')");
         }
 
+        public override void Contains_with_local_list_closure_all_null()
+        {
+            base.Contains_with_local_list_closure_all_null();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] IS NULL");
+        }
+
         public override void Contains_with_local_list_inline()
         {
             base.Contains_with_local_list_inline();
@@ -939,6 +963,201 @@ ORDER BY [o].[OrderID]");
                 @"SELECT AVG(CAST([o].[OrderID] AS float))
 FROM [Orders] AS [o]
 WHERE [o].[CustomerID] LIKE N'A' + N'%' AND (LEFT([o].[CustomerID], LEN(N'A')) = N'A')");
+        }
+
+        public override void Max_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            base.Max_with_non_matching_types_in_projection_introduces_explicit_cast();
+
+            AssertSql(
+                @"SELECT MAX(CAST([o].[OrderID] AS bigint))
+FROM [Orders] AS [o]
+WHERE [o].[CustomerID] LIKE N'A' + N'%' AND (LEFT([o].[CustomerID], LEN(N'A')) = N'A')");
+        }
+
+        public override void Min_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            base.Min_with_non_matching_types_in_projection_introduces_explicit_cast();
+
+            AssertSql(
+                @"SELECT MIN(CAST([o].[OrderID] AS bigint))
+FROM [Orders] AS [o]
+WHERE [o].[CustomerID] LIKE N'A' + N'%' AND (LEFT([o].[CustomerID], LEN(N'A')) = N'A')");
+        }
+
+        public override void OrderBy_Take_Last_gives_correct_result()
+        {
+            base.OrderBy_Take_Last_gives_correct_result();
+
+            AssertSql(
+                @"@__p_0='20'
+
+SELECT TOP(1) [t].*
+FROM (
+    SELECT TOP(@__p_0) [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+    ORDER BY [c].[CustomerID]
+) AS [t]
+ORDER BY [t].[CustomerID] DESC");
+        }
+
+        public override void OrderBy_Skip_Last_gives_correct_result()
+        {
+            base.OrderBy_Skip_Last_gives_correct_result();
+
+            AssertSql(
+                @"@__p_0='20'
+
+SELECT TOP(1) [t].*
+FROM (
+    SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+    ORDER BY [c].[CustomerID]
+    OFFSET @__p_0 ROWS
+) AS [t]
+ORDER BY [t].[CustomerID] DESC");
+        }
+
+        public override void Contains_over_entityType_should_rewrite_to_identity_equality()
+        {
+            base.Contains_over_entityType_should_rewrite_to_identity_equality();
+
+            AssertSql(
+                @"SELECT TOP(2) [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderID] = 10248",
+                //
+                @"@__p_0_OrderID='10248'
+
+SELECT CASE
+    WHEN @__p_0_OrderID IN (
+        SELECT [o].[OrderID]
+        FROM [Orders] AS [o]
+        WHERE [o].[CustomerID] = N'VINET'
+    )
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END");
+        }
+
+        public override void Contains_over_entityType_should_materialize_when_composite()
+        {
+            base.Contains_over_entityType_should_materialize_when_composite();
+
+            AssertSql(
+                @"SELECT TOP(1) [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]
+WHERE ([o].[OrderID] = 10248) AND ([o].[ProductID] = 42)",
+                //
+                @"SELECT [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]
+WHERE [o].[ProductID] = 42");
+        }
+
+        public override void Paging_operation_on_string_doesnt_issue_warning()
+        {
+            base.Paging_operation_on_string_doesnt_issue_warning();
+
+            Assert.DoesNotContain(
+                CoreStrings.LogFirstWithoutOrderByAndFilter.GenerateMessage(
+                    @"(from char <generated>_1 in [c].CustomerID select [<generated>_1]).FirstOrDefault()"), Fixture.TestSqlLoggerFactory.Log);
+        }
+
+        public override void Project_constant_Sum()
+        {
+            base.Project_constant_Sum();
+
+            AssertSql(
+                @"SELECT 1
+FROM [Employees] AS [e]");
+        }
+
+        public override void Where_subquery_any_equals_operator()
+        {
+            base.Where_subquery_any_equals_operator();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_any_equals()
+        {
+            base.Where_subquery_any_equals();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_any_equals_static()
+        {
+            base.Where_subquery_any_equals_static();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_where_any()
+        {
+            base.Where_subquery_where_any();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE ([c].[City] = N'México D.F.') AND [c].[CustomerID] IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_all_not_equals_operator()
+        {
+            base.Where_subquery_all_not_equals_operator();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] NOT IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_all_not_equals()
+        {
+            base.Where_subquery_all_not_equals();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] NOT IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_all_not_equals_static()
+        {
+            base.Where_subquery_all_not_equals_static();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] NOT IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Where_subquery_where_all()
+        {
+            base.Where_subquery_where_all();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE ([c].[City] = N'México D.F.') AND [c].[CustomerID] NOT IN (N'ABCDE', N'ALFKI', N'ANATR')");
+        }
+
+        public override void Cast_to_same_Type_Count_works()
+        {
+            base.Cast_to_same_Type_Count_works();
+
+            AssertSql(
+                @"SELECT COUNT(*)
+FROM [Customers] AS [c]");
         }
     }
 }

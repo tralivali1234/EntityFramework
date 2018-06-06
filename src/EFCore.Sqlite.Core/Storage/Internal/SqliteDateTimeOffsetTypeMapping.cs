@@ -3,8 +3,9 @@
 
 using System.Data;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.Sqlite.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -12,7 +13,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     /// </summary>
     public class SqliteDateTimeOffsetTypeMapping : DateTimeOffsetTypeMapping
     {
-        private const string DateTimeOffsetFormatConst = @"{0:yyyy\-MM\-dd HH\:mm\:ss.FFFFFFFzzz}";
+        private const string DateTimeOffsetFormatConst = @"'{0:yyyy\-MM\-dd HH\:mm\:ss.FFFFFFFzzz}'";
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -21,7 +22,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         public SqliteDateTimeOffsetTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, dbType)
         {
         }
 
@@ -29,32 +30,23 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public SqliteDateTimeOffsetTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null)
-            : base(storeType, converter, dbType)
+        protected SqliteDateTimeOffsetTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
+        ///     Creates a copy of this mapping.
         /// </summary>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new SqliteDateTimeOffsetTypeMapping(storeType, Converter, DbType);
+        /// <param name="parameters"> The parameters for this mapping. </param>
+        /// <returns> The newly created mapping. </returns>
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new SqliteDateTimeOffsetTypeMapping(parameters);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new SqliteDateTimeOffsetTypeMapping(StoreType, ComposeConverter(converter), DbType);
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        protected override string SqlLiteralFormatString => "'" + DateTimeOffsetFormatConst + "'";
+        protected override string SqlLiteralFormatString => DateTimeOffsetFormatConst;
     }
 }

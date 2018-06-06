@@ -21,7 +21,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public void Dispose()
         {
             //Assert for all tests that OFFSET or FETCH is never used
-            Assert.All(Fixture.TestSqlLoggerFactory.SqlStatements, t => Assert.DoesNotContain("OFFSET", t));
+            Assert.All(Fixture.TestSqlLoggerFactory.SqlStatements, t => Assert.DoesNotMatch("\\W+OFFSET", t));
             Assert.All(Fixture.TestSqlLoggerFactory.SqlStatements, t => Assert.DoesNotContain("FETCH", t));
         }
 
@@ -253,6 +253,30 @@ FROM (
 WHERE ([t].[__RowNumber__] > @__p_0) AND ([t].[__RowNumber__] <= (@__p_0 + @__p_1))");
         }
 
+        public override void OrderBy_skip_skip_take()
+        {
+            base.OrderBy_skip_skip_take();
+
+            AssertSql(
+                @"@__p_0='5'
+@__p_1='8'
+@__p_2='3'
+
+SELECT [t1].*
+FROM (
+    SELECT [t].*, ROW_NUMBER() OVER(ORDER BY [t].[ContactTitle], [t].[ContactName]) AS [__RowNumber__1]
+    FROM (
+        SELECT [t0].[CustomerID], [t0].[Address], [t0].[City], [t0].[CompanyName], [t0].[ContactName], [t0].[ContactTitle], [t0].[Country], [t0].[Fax], [t0].[Phone], [t0].[PostalCode], [t0].[Region]
+        FROM (
+            SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region], ROW_NUMBER() OVER(ORDER BY [c].[ContactTitle], [c].[ContactName]) AS [__RowNumber__]
+            FROM [Customers] AS [c]
+        ) AS [t0]
+        WHERE [t0].[__RowNumber__] > @__p_0
+    ) AS [t]
+) AS [t1]
+WHERE ([t1].[__RowNumber__1] > @__p_1) AND ([t1].[__RowNumber__1] <= (@__p_1 + @__p_2))");
+        }
+
         public override void OrderBy_skip_take_take()
         {
             base.OrderBy_skip_take_take();
@@ -279,13 +303,12 @@ ORDER BY [t].[ContactTitle], [t].[ContactName]");
             base.OrderBy_skip_take_take_take_take();
 
             AssertSql(
-                @"@__p_4='5'
+                @"@__p_0='5'
 @__p_3='8'
 @__p_2='10'
-@__p_0='5'
 @__p_1='15'
 
-SELECT TOP(@__p_4) [t1].*
+SELECT TOP(@__p_0) [t1].*
 FROM (
     SELECT TOP(@__p_3) [t0].*
     FROM (
@@ -314,7 +337,6 @@ ORDER BY [t1].[ContactTitle], [t1].[ContactName]");
 @__p_1='15'
 @__p_2='2'
 @__p_3='8'
-@__p_4='5'
 
 SELECT [t3].*
 FROM (
@@ -335,7 +357,7 @@ FROM (
         WHERE ([t2].[__RowNumber__1] > @__p_2) AND ([t2].[__RowNumber__1] <= (@__p_2 + @__p_3))
     ) AS [t0]
 ) AS [t3]
-WHERE [t3].[__RowNumber__2] > @__p_4");
+WHERE [t3].[__RowNumber__2] > @__p_0");
         }
 
         public override void OrderBy_skip_take_distinct()
@@ -396,11 +418,10 @@ FROM (
             base.OrderBy_coalesce_skip_take_distinct_take();
 
             AssertSql(
-                @"@__p_2='5'
-@__p_0='5'
+                @"@__p_0='5'
 @__p_1='15'
 
-SELECT DISTINCT TOP(@__p_2) [t].*
+SELECT DISTINCT TOP(@__p_0) [t].*
 FROM (
     SELECT [t0].[ProductID], [t0].[Discontinued], [t0].[ProductName], [t0].[SupplierID], [t0].[UnitPrice], [t0].[UnitsInStock]
     FROM (
@@ -511,9 +532,9 @@ SELECT CASE
     WHEN EXISTS (
         SELECT 1
         FROM (
-            SELECT [t0].*
+            SELECT [t0].[CustomerID], [t0].[Address], [t0].[City], [t0].[CompanyName], [t0].[ContactName], [t0].[ContactTitle], [t0].[Country], [t0].[Fax], [t0].[Phone], [t0].[PostalCode], [t0].[Region]
             FROM (
-                SELECT [c].*, ROW_NUMBER() OVER(ORDER BY [c].[CustomerID]) AS [__RowNumber__]
+                SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region], ROW_NUMBER() OVER(ORDER BY [c].[CustomerID]) AS [__RowNumber__]
                 FROM [Customers] AS [c]
             ) AS [t0]
             WHERE ([t0].[__RowNumber__] > @__p_0) AND ([t0].[__RowNumber__] <= (@__p_0 + @__p_1))
@@ -534,7 +555,7 @@ SELECT CASE
     WHEN EXISTS (
         SELECT 1
         FROM (
-            SELECT TOP(@__p_0) [c].*
+            SELECT TOP(@__p_0) [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
             FROM [Customers] AS [c]
             ORDER BY [c].[CustomerID]
         ) AS [t]
@@ -877,7 +898,7 @@ WHERE ([t].[__RowNumber__] > @__p_0) AND ([t].[__RowNumber__] <= (@__p_0 + @__p_
             base.Projection_in_a_subquery_should_be_liftable();
 
             AssertSql(
-  @"@__p_0='1'
+                @"@__p_0='1'
 
 SELECT [t].[EmployeeID]
 FROM (

@@ -70,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
                 return _scopedProvider.GetService<IModelSource>().GetModel(
                     _currentContext.Context,
-                    _scopedProvider.GetService<IConventionSetBuilder>(),
+                    new CompositeConventionSetBuilder(_scopedProvider.GetService<IEnumerable<IConventionSetBuilder>>().ToList()),
                     _scopedProvider.GetService<IModelValidator>());
             }
             finally

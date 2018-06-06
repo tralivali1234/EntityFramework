@@ -13,7 +13,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
-using Remotion.Linq.Clauses;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 {
@@ -24,6 +23,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
     public class MaterializerFactory : IMaterializerFactory
     {
         private readonly IEntityMaterializerSource _entityMaterializerSource;
+
+        private static readonly MethodInfo _getValueBufferMethod
+            = typeof(MaterializationContext).GetProperty(nameof(MaterializationContext.ValueBuffer)).GetMethod;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -41,11 +43,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual Expression<Func<ValueBuffer, object>> CreateMaterializer(
+        public virtual LambdaExpression CreateMaterializer(
             IEntityType entityType,
             SelectExpression selectExpression,
             Func<IProperty, SelectExpression, int> projectionAdder,
-            IQuerySource querySource,
             out Dictionary<Type, int[]> typeIndexMap)
         {
             Check.NotNull(entityType, nameof(entityType));
@@ -54,57 +55,39 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 
             typeIndexMap = null;
 
-            var valueBufferParameter
-                = Expression.Parameter(typeof(ValueBuffer), "valueBuffer");
+            var materializationContextParameter
+                = Expression.Parameter(typeof(MaterializationContext), "materializationContext");
 
-            var concreteEntityTypes
-                = entityType.GetConcreteTypesInHierarchy().ToList();
+            var concreteEntityTypes = entityType.GetConcreteTypesInHierarchy().ToList();
+            var firstEntityType = concreteEntityTypes[0];
+            var indexMap = new int[firstEntityType.PropertyCount()];
 
-            var indexMap = new int[concreteEntityTypes[0].PropertyCount()];
-            var propertyIndex = 0;
-
-            foreach (var property in concreteEntityTypes[0].GetProperties())
+            foreach (var property in firstEntityType.GetProperties())
             {
-                indexMap[propertyIndex++]
-                    = projectionAdder(property, selectExpression);
+                indexMap[property.GetIndex()] = projectionAdder(property, selectExpression);
             }
 
             var materializer
                 = _entityMaterializerSource
                     .CreateMaterializeExpression(
-                        concreteEntityTypes[0], valueBufferParameter, indexMap);
-
-            if (concreteEntityTypes.Count == 1
-                && concreteEntityTypes[0].RootType() == concreteEntityTypes[0])
-            {
-                return Expression.Lambda<Func<ValueBuffer, object>>(materializer, valueBufferParameter);
-            }
-
-            var discriminatorProperty = concreteEntityTypes[0].Relational().DiscriminatorProperty;
-
-            var discriminatorColumn
-                = selectExpression.Projection.Last(c => (c as ColumnExpression)?.Property == discriminatorProperty);
-
-            var firstDiscriminatorValue
-                = Expression.Constant(
-                    concreteEntityTypes[0].Relational().DiscriminatorValue,
-                    discriminatorColumn.Type);
-
-            var discriminatorPredicate
-                = Expression.Equal(discriminatorColumn, firstDiscriminatorValue);
+                        firstEntityType, materializationContextParameter, indexMap);
 
             if (concreteEntityTypes.Count == 1)
             {
-                selectExpression.Predicate
-                    = new DiscriminatorPredicateExpression(discriminatorPredicate, querySource);
-
-                return Expression.Lambda<Func<ValueBuffer, object>>(materializer, valueBufferParameter);
+                return Expression.Lambda(materializer, materializationContextParameter);
             }
+
+            var discriminatorProperty = firstEntityType.Relational().DiscriminatorProperty;
+
+            var firstDiscriminatorValue
+                = Expression.Constant(
+                    firstEntityType.Relational().DiscriminatorValue,
+                    discriminatorProperty.ClrType);
 
             var discriminatorValueVariable
                 = Expression.Variable(discriminatorProperty.ClrType);
 
-            var returnLabelTarget = Expression.Label(typeof(object));
+            var returnLabelTarget = Expression.Label(entityType.ClrType);
 
             var blockExpressions
                 = new Expression[]
@@ -113,9 +96,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                         discriminatorValueVariable,
                         _entityMaterializerSource
                             .CreateReadValueExpression(
-                                valueBufferParameter,
+                                Expression.Call(materializationContextParameter, _getValueBufferMethod),
                                 discriminatorProperty.ClrType,
-                                discriminatorProperty.GetIndex(),
+                                indexMap[discriminatorProperty.GetIndex()],
                                 discriminatorProperty)),
                     Expression.IfThenElse(
                         Expression.Equal(discriminatorValueVariable, firstDiscriminatorValue),
@@ -123,7 +106,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                         Expression.Throw(
                             Expression.Call(
                                 _createUnableToDiscriminateException,
-                                Expression.Constant(concreteEntityTypes[0])))),
+                                Expression.Constant(firstEntityType)))),
                     Expression.Label(
                         returnLabelTarget,
                         Expression.Default(returnLabelTarget.Type))
@@ -132,13 +115,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             foreach (var concreteEntityType in concreteEntityTypes.Skip(1))
             {
                 indexMap = new int[concreteEntityType.PropertyCount()];
-                propertyIndex = 0;
+
                 var shadowPropertyExists = false;
 
                 foreach (var property in concreteEntityType.GetProperties())
                 {
-                    indexMap[propertyIndex++]
-                        = projectionAdder(property, selectExpression);
+                    indexMap[property.GetIndex()] = projectionAdder(property, selectExpression);
 
                     shadowPropertyExists = shadowPropertyExists || property.IsShadowProperty;
                 }
@@ -156,30 +138,23 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var discriminatorValue
                     = Expression.Constant(
                         concreteEntityType.Relational().DiscriminatorValue,
-                        discriminatorColumn.Type);
+                        discriminatorProperty.ClrType);
 
                 materializer
                     = _entityMaterializerSource
-                        .CreateMaterializeExpression(concreteEntityType, valueBufferParameter, indexMap);
+                        .CreateMaterializeExpression(
+                            concreteEntityType, materializationContextParameter, indexMap);
 
                 blockExpressions[1]
                     = Expression.IfThenElse(
                         Expression.Equal(discriminatorValueVariable, discriminatorValue),
                         Expression.Return(returnLabelTarget, materializer),
                         blockExpressions[1]);
-
-                discriminatorPredicate
-                    = Expression.OrElse(
-                        Expression.Equal(discriminatorColumn, discriminatorValue),
-                        discriminatorPredicate);
             }
 
-            selectExpression.Predicate
-                = new DiscriminatorPredicateExpression(discriminatorPredicate, querySource);
-
-            return Expression.Lambda<Func<ValueBuffer, object>>(
+            return Expression.Lambda(
                 Expression.Block(new[] { discriminatorValueVariable }, blockExpressions),
-                valueBufferParameter);
+                materializationContextParameter);
         }
 
         private static readonly MethodInfo _createUnableToDiscriminateException

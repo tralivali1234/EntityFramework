@@ -30,6 +30,7 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
                 _provider.Value,
                 _connection.Value,
                 _outputDir.Value(),
+                _contextDir.Value(),
                 _context.Value(),
                 _schemas.Values,
                 _tables.Values,
@@ -44,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Tools.Commands
             return base.Execute();
         }
 
-        private void ReportJsonResults(IDictionary result)
+        private static void ReportJsonResults(IDictionary result)
         {
             Reporter.WriteData("{");
             Reporter.WriteData("  \"contextFile\": " + Json.Literal(result["ContextFile"] as string) + ",");

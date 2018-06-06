@@ -217,7 +217,7 @@ namespace Microsoft.EntityFrameworkCore.Tools.Properties
             => GetString("MigrationsRemoveDescription");
 
         /// <summary>
-        ///     Don't check to see if the migration has been applied to the database.
+        ///     Revert the migration if it has been applied to the database.
         /// </summary>
         public static string MigrationsRemoveForceDescription
             => GetString("MigrationsRemoveForceDescription");
@@ -437,10 +437,16 @@ namespace Microsoft.EntityFrameworkCore.Tools.Properties
             => GetString("LanguageDescription");
 
         /// <summary>
-        ///     Revert the migration if it has been applied to the database.
+        ///     The directory to put DbContext file in. Paths are relative to the project directory.
         /// </summary>
-        public static string MigrationsRemoveRevertDescription
-            => GetString("MigrationsRemoveRevertDescription");
+        public static string ContextDirDescription
+            => GetString("ContextDirDescription");
+
+        /// <summary>
+        ///     The working directory of the tool invoking this command.
+        /// </summary>
+        public static string WorkingDirDescription
+            => GetString("WorkingDirDescription");
 
         private static string GetString(string name, params string[] formatterNames)
         {

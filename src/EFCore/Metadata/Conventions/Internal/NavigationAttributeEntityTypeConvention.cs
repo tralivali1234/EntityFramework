@@ -5,8 +5,8 @@ using System;
 using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
@@ -23,17 +23,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         IEntityTypeMemberIgnoredConvention
         where TAttribute : Attribute
     {
-        private readonly ITypeMapper _typeMapper;
+        private readonly IMemberClassifier _memberClassifier;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected NavigationAttributeEntityTypeConvention([NotNull] ITypeMapper typeMapper)
+        protected NavigationAttributeEntityTypeConvention(
+            [NotNull] IMemberClassifier memberClassifier)
         {
-            Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(memberClassifier, nameof(memberClassifier));
 
-            _typeMapper = typeMapper;
+            _memberClassifier = memberClassifier;
         }
 
         /// <summary>
@@ -48,23 +49,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                 return entityTypeBuilder;
             }
 
-            foreach (var navigationPropertyInfo in entityType.ClrType.GetRuntimeProperties().OrderBy(p => p.Name))
+            foreach (var navigationPropertyInfo in entityType.GetRuntimeProperties().Values.OrderBy(p => p.Name))
             {
-                var targetClrType = FindCandidateNavigationPropertyType(navigationPropertyInfo);
+                var targetClrType = FindCandidateNavigationWithAttributePropertyType(navigationPropertyInfo);
                 if (targetClrType == null)
                 {
                     continue;
                 }
 
-                var attributes = navigationPropertyInfo.GetCustomAttributes<TAttribute>(true);
-                if (attributes != null)
+                var attributes = navigationPropertyInfo.GetCustomAttributes<TAttribute>(inherit: true);
+                foreach (var attribute in attributes)
                 {
-                    foreach (var attribute in attributes)
+                    if (Apply(entityTypeBuilder, navigationPropertyInfo, targetClrType, attribute) == null)
                     {
-                        if (Apply(entityTypeBuilder, navigationPropertyInfo, targetClrType, attribute) == null)
-                        {
-                            return null;
-                        }
+                        return null;
                     }
                 }
             }
@@ -85,21 +83,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             foreach (var navigationPropertyInfo in type.GetRuntimeProperties().OrderBy(p => p.Name))
             {
-                var targetClrType = FindCandidateNavigationPropertyType(navigationPropertyInfo);
+                var targetClrType = FindCandidateNavigationWithAttributePropertyType(navigationPropertyInfo);
                 if (targetClrType == null)
                 {
                     continue;
                 }
 
                 var attributes = navigationPropertyInfo.GetCustomAttributes<TAttribute>(true);
-                if (attributes != null)
+                foreach (var attribute in attributes)
                 {
-                    foreach (var attribute in attributes)
+                    if (!Apply(modelBuilder, type, navigationPropertyInfo, targetClrType, attribute))
                     {
-                        if (!Apply(modelBuilder, type, navigationPropertyInfo, targetClrType, attribute))
-                        {
-                            return false;
-                        }
+                        return false;
                     }
                 }
             }
@@ -111,24 +106,23 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual InternalRelationshipBuilder Apply(InternalRelationshipBuilder relationshipBuilder, Navigation navigation)
+        public virtual InternalRelationshipBuilder Apply(
+            InternalRelationshipBuilder relationshipBuilder, Navigation navigation)
         {
-            var navigationPropertyInfo = navigation.PropertyInfo;
-            if (navigationPropertyInfo == null)
+            var navigationPropertyInfo = navigation.GetIdentifyingMemberInfo();
+            if (navigationPropertyInfo == null
+                || !Attribute.IsDefined(navigationPropertyInfo, typeof(TAttribute), inherit: true))
             {
                 return relationshipBuilder;
             }
 
             var attributes = navigationPropertyInfo.GetCustomAttributes<TAttribute>(true);
-            if (attributes != null)
+            foreach (var attribute in attributes)
             {
-                foreach (var attribute in attributes)
+                relationshipBuilder = Apply(relationshipBuilder, navigation, attribute);
+                if (relationshipBuilder == null)
                 {
-                    relationshipBuilder = Apply(relationshipBuilder, navigation, attribute);
-                    if (relationshipBuilder == null)
-                    {
-                        return null;
-                    }
+                    return null;
                 }
             }
 
@@ -141,29 +135,26 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         /// </summary>
         public virtual bool Apply(InternalEntityTypeBuilder entityTypeBuilder, EntityType oldBaseType)
         {
-            var clrType = entityTypeBuilder.Metadata.ClrType;
-            if (clrType == null)
+            var entityType = entityTypeBuilder.Metadata;
+            if (!entityType.HasClrType())
             {
                 return true;
             }
 
-            foreach (var navigationPropertyInfo in clrType.GetRuntimeProperties().OrderBy(p => p.Name))
+            foreach (var navigationPropertyInfo in entityType.GetRuntimeProperties().Values.OrderBy(p => p.Name))
             {
-                var targetClrType = FindCandidateNavigationPropertyType(navigationPropertyInfo);
+                var targetClrType = FindCandidateNavigationWithAttributePropertyType(navigationPropertyInfo);
                 if (targetClrType == null)
                 {
                     continue;
                 }
 
                 var attributes = navigationPropertyInfo.GetCustomAttributes<TAttribute>(true);
-                if (attributes != null)
+                foreach (var attribute in attributes)
                 {
-                    foreach (var attribute in attributes)
+                    if (!Apply(entityTypeBuilder, oldBaseType, navigationPropertyInfo, targetClrType, attribute))
                     {
-                        if (!Apply(entityTypeBuilder, oldBaseType, navigationPropertyInfo, targetClrType, attribute))
-                        {
-                            return false;
-                        }
+                        return false;
                     }
                 }
             }
@@ -178,29 +169,27 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         public virtual bool Apply(InternalEntityTypeBuilder entityTypeBuilder, string ignoredMemberName)
         {
             var navigationPropertyInfo =
-                entityTypeBuilder.Metadata.ClrType.GetRuntimeProperties().FirstOrDefault(p => p.Name == ignoredMemberName);
+                entityTypeBuilder.Metadata.GetRuntimeProperties()?.Find(ignoredMemberName);
             if (navigationPropertyInfo == null)
             {
                 return true;
             }
 
-            var targetClrType = FindCandidateNavigationPropertyType(navigationPropertyInfo);
+            var targetClrType = FindCandidateNavigationWithAttributePropertyType(navigationPropertyInfo);
             if (targetClrType == null)
             {
                 return true;
             }
 
             var attributes = navigationPropertyInfo.GetCustomAttributes<TAttribute>(true);
-            if (attributes != null)
+            foreach (var attribute in attributes)
             {
-                foreach (var attribute in attributes)
+                if (!ApplyIgnored(entityTypeBuilder, navigationPropertyInfo, targetClrType, attribute))
                 {
-                    if (!ApplyIgnored(entityTypeBuilder, navigationPropertyInfo, targetClrType, attribute))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
+
             return true;
         }
 
@@ -208,11 +197,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual Type FindCandidateNavigationPropertyType([NotNull] PropertyInfo propertyInfo)
-        {
-            Check.NotNull(propertyInfo, nameof(propertyInfo));
+        protected virtual Type FindCandidateNavigationPropertyType([NotNull] PropertyInfo propertyInfo)
+            => _memberClassifier.FindCandidateNavigationPropertyType(propertyInfo);
 
-            return propertyInfo.FindCandidateNavigationPropertyType(_typeMapper.IsTypeMapped);
+        private Type FindCandidateNavigationWithAttributePropertyType([NotNull] PropertyInfo propertyInfo)
+        {
+            var targetClrType = _memberClassifier.FindCandidateNavigationPropertyType(propertyInfo);
+            if (targetClrType == null
+                || !Attribute.IsDefined(propertyInfo, typeof(TAttribute), inherit: true))
+            {
+                return null;
+            }
+
+            return targetClrType;
         }
 
         /// <summary>

@@ -10,6 +10,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class CoreConventionSetBuilder : ICoreConventionSetBuilder
     {
         /// <summary>
@@ -36,37 +37,54 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var conventionSet = new ConventionSet();
 
-            var propertyDiscoveryConvention = new PropertyDiscoveryConvention(Dependencies.TypeMapper);
-            var keyDiscoveryConvention = new KeyDiscoveryConvention();
-            var inversePropertyAttributeConvention = new InversePropertyAttributeConvention(Dependencies.TypeMapper);
-            var relationshipDiscoveryConvention = new RelationshipDiscoveryConvention(Dependencies.TypeMapper);
+            var propertyDiscoveryConvention
+                = new PropertyDiscoveryConvention(
+                    Dependencies.TypeMappingSource);
+
+            var keyDiscoveryConvention
+                = new KeyDiscoveryConvention(Dependencies.Logger);
+
+            var inversePropertyAttributeConvention
+                = new InversePropertyAttributeConvention(Dependencies.MemberClassifier, Dependencies.Logger);
+
+            var relationshipDiscoveryConvention
+                = new RelationshipDiscoveryConvention(Dependencies.MemberClassifier, Dependencies.Logger);
+
+            var servicePropertyDiscoveryConvention
+                = new ServicePropertyDiscoveryConvention(Dependencies.TypeMappingSource, Dependencies.ParameterBindingFactories);
 
             conventionSet.EntityTypeAddedConventions.Add(new NotMappedEntityTypeAttributeConvention());
+            conventionSet.EntityTypeAddedConventions.Add(new OwnedEntityTypeAttributeConvention());
             conventionSet.EntityTypeAddedConventions.Add(new NotMappedMemberAttributeConvention());
             conventionSet.EntityTypeAddedConventions.Add(new BaseTypeDiscoveryConvention());
             conventionSet.EntityTypeAddedConventions.Add(propertyDiscoveryConvention);
+            conventionSet.EntityTypeAddedConventions.Add(servicePropertyDiscoveryConvention);
             conventionSet.EntityTypeAddedConventions.Add(keyDiscoveryConvention);
             conventionSet.EntityTypeAddedConventions.Add(inversePropertyAttributeConvention);
             conventionSet.EntityTypeAddedConventions.Add(relationshipDiscoveryConvention);
             conventionSet.EntityTypeAddedConventions.Add(new DerivedTypeDiscoveryConvention());
+
             conventionSet.EntityTypeIgnoredConventions.Add(inversePropertyAttributeConvention);
 
-            var foreignKeyIndexConvention = new ForeignKeyIndexConvention();
+            var foreignKeyIndexConvention = new ForeignKeyIndexConvention(Dependencies.Logger);
             var valueGeneratorConvention = new ValueGeneratorConvention();
 
             conventionSet.BaseEntityTypeChangedConventions.Add(propertyDiscoveryConvention);
+            conventionSet.BaseEntityTypeChangedConventions.Add(servicePropertyDiscoveryConvention);
             conventionSet.BaseEntityTypeChangedConventions.Add(keyDiscoveryConvention);
             conventionSet.BaseEntityTypeChangedConventions.Add(inversePropertyAttributeConvention);
             conventionSet.BaseEntityTypeChangedConventions.Add(relationshipDiscoveryConvention);
             conventionSet.BaseEntityTypeChangedConventions.Add(foreignKeyIndexConvention);
             conventionSet.BaseEntityTypeChangedConventions.Add(valueGeneratorConvention);
 
-            // An ambiguity might have been resolved
+            var foreignKeyPropertyDiscoveryConvention = new ForeignKeyPropertyDiscoveryConvention(Dependencies.Logger);
+
             conventionSet.EntityTypeMemberIgnoredConventions.Add(inversePropertyAttributeConvention);
             conventionSet.EntityTypeMemberIgnoredConventions.Add(relationshipDiscoveryConvention);
+            conventionSet.EntityTypeMemberIgnoredConventions.Add(foreignKeyPropertyDiscoveryConvention);
+            conventionSet.EntityTypeMemberIgnoredConventions.Add(servicePropertyDiscoveryConvention);
 
             var keyAttributeConvention = new KeyAttributeConvention();
-            var foreignKeyPropertyDiscoveryConvention = new ForeignKeyPropertyDiscoveryConvention();
             var backingFieldConvention = new BackingFieldConvention();
             var concurrencyCheckAttributeConvention = new ConcurrencyCheckAttributeConvention();
             var databaseGeneratedAttributeConvention = new DatabaseGeneratedAttributeConvention();
@@ -86,6 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             conventionSet.PropertyAddedConventions.Add(foreignKeyPropertyDiscoveryConvention);
             conventionSet.PropertyAddedConventions.Add(keyAttributeConvention);
 
+            conventionSet.PrimaryKeyChangedConventions.Add(foreignKeyPropertyDiscoveryConvention);
             conventionSet.PrimaryKeyChangedConventions.Add(valueGeneratorConvention);
 
             conventionSet.KeyAddedConventions.Add(foreignKeyPropertyDiscoveryConvention);
@@ -97,7 +116,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             var cascadeDeleteConvention = new CascadeDeleteConvention();
 
-            conventionSet.ForeignKeyAddedConventions.Add(new ForeignKeyAttributeConvention(Dependencies.TypeMapper));
+            conventionSet.ForeignKeyAddedConventions.Add(
+                new ForeignKeyAttributeConvention(Dependencies.MemberClassifier, Dependencies.Logger));
+
             conventionSet.ForeignKeyAddedConventions.Add(foreignKeyPropertyDiscoveryConvention);
             conventionSet.ForeignKeyAddedConventions.Add(keyDiscoveryConvention);
             conventionSet.ForeignKeyAddedConventions.Add(valueGeneratorConvention);
@@ -115,14 +136,23 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             conventionSet.ModelBuiltConventions.Add(new ModelCleanupConvention());
             conventionSet.ModelBuiltConventions.Add(keyAttributeConvention);
+            conventionSet.ModelBuiltConventions.Add(new ChangeTrackingStrategyConvention());
+            conventionSet.ModelBuiltConventions.Add(new ConstructorBindingConvention(Dependencies.ConstructorBindingFactory));
+            conventionSet.ModelBuiltConventions.Add(new TypeMappingConvention(Dependencies.TypeMappingSource));
             conventionSet.ModelBuiltConventions.Add(new IgnoredMembersValidationConvention());
-            conventionSet.ModelBuiltConventions.Add(new PropertyMappingValidationConvention(Dependencies.TypeMapper));
+
+            conventionSet.ModelBuiltConventions.Add(
+                new PropertyMappingValidationConvention(
+                    Dependencies.TypeMappingSource,
+                    Dependencies.MemberClassifier));
+
             conventionSet.ModelBuiltConventions.Add(new RelationshipValidationConvention());
             conventionSet.ModelBuiltConventions.Add(foreignKeyPropertyDiscoveryConvention);
-            conventionSet.ModelBuiltConventions.Add(new ChangeTrackingStrategyConvention());
+            conventionSet.ModelBuiltConventions.Add(servicePropertyDiscoveryConvention);
+            conventionSet.ModelBuiltConventions.Add(new CacheCleanupConvention());
 
             conventionSet.NavigationAddedConventions.Add(backingFieldConvention);
-            conventionSet.NavigationAddedConventions.Add(new RequiredNavigationAttributeConvention());
+            conventionSet.NavigationAddedConventions.Add(new RequiredNavigationAttributeConvention(Dependencies.Logger));
             conventionSet.NavigationAddedConventions.Add(inversePropertyAttributeConvention);
             conventionSet.NavigationAddedConventions.Add(foreignKeyPropertyDiscoveryConvention);
             conventionSet.NavigationAddedConventions.Add(relationshipDiscoveryConvention);

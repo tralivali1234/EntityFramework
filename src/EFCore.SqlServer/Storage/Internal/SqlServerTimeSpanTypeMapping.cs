@@ -5,8 +5,9 @@ using System.Data;
 using System.Data.Common;
 using System.Data.SqlClient;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -19,7 +20,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public SqlServerTimeSpanTypeMapping([NotNull] string storeType, DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, dbType)
         {
         }
 
@@ -27,27 +28,18 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public SqlServerTimeSpanTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null)
-            : base(storeType, converter, dbType)
+        protected SqlServerTimeSpanTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
+        ///     Creates a copy of this mapping.
         /// </summary>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new SqlServerTimeSpanTypeMapping(storeType, Converter, DbType);
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new SqlServerTimeSpanTypeMapping(StoreType, ComposeConverter(converter), DbType);
+        /// <param name="parameters"> The parameters for this mapping. </param>
+        /// <returns> The newly created mapping. </returns>
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new SqlServerTimeSpanTypeMapping(parameters);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

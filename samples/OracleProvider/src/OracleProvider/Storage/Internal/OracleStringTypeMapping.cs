@@ -5,47 +5,74 @@ using System;
 using System.Data;
 using System.Data.Common;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.Oracle.Storage.Internal
 {
     public class OracleStringTypeMapping : StringTypeMapping
     {
+        private const int UnicodeMax = 2000;
+        private const int AnsiMax = 4000;
+
         private readonly int _maxSpecificSize;
 
-        public OracleStringTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] DbType? dbType,
-            bool unicode = false,
-            int? size = null)
-            : this(storeType, null, dbType, unicode, size)
-        {
-        }
+        private readonly StoreTypePostfix? _storeTypePostfix;
 
         public OracleStringTypeMapping(
             [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
             [CanBeNull] DbType? dbType,
             bool unicode = false,
-            int? size = null)
-            : base(storeType, converter, dbType, unicode, size)
+            int? size = null,
+            bool fixedLength = false,
+            StoreTypePostfix? storeTypePostfix = null)
+            : this(
+                new RelationalTypeMappingParameters(
+                    new CoreTypeMappingParameters(typeof(string)),
+                    storeType,
+                    GetStoreTypePostfix(storeTypePostfix, unicode, size),
+                    dbType,
+                    unicode,
+                    size,
+                    fixedLength))
         {
-            _maxSpecificSize = CalculateSize(unicode, size);
+            _storeTypePostfix = storeTypePostfix;
         }
+
+        protected OracleStringTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
+        {
+            _maxSpecificSize = CalculateSize(parameters.Unicode, parameters.Size);
+        }
+
+        private static StoreTypePostfix GetStoreTypePostfix(
+            StoreTypePostfix? storeTypePostfix,
+            bool unicode,
+            int? size)
+            => storeTypePostfix
+               ?? (unicode
+                   ? size.HasValue && size <= UnicodeMax
+                       ? StoreTypePostfix.Size
+                       : StoreTypePostfix.None
+                   : size.HasValue && size <= AnsiMax
+                       ? StoreTypePostfix.Size
+                       : StoreTypePostfix.None);
 
         private static int CalculateSize(bool unicode, int? size)
             => unicode
-                ? size.HasValue && size < 2000
+                ? size.HasValue && size <= UnicodeMax
                     ? size.Value
-                    : 2000
-                : size.HasValue && size < 4000
+                    : UnicodeMax
+                : size.HasValue && size <= AnsiMax
                     ? size.Value
-                    : 4000;
+                    : AnsiMax;
 
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new OracleStringTypeMapping(storeType, Converter, DbType, IsUnicode, size);
+            => new OracleStringTypeMapping(
+                Parameters.WithStoreTypeAndSize(storeType, size, GetStoreTypePostfix(_storeTypePostfix, IsUnicode, size)));
 
         public override CoreTypeMapping Clone(ValueConverter converter)
-            => new OracleStringTypeMapping(StoreType, ComposeConverter(converter), DbType, IsUnicode, Size);
+            => new OracleStringTypeMapping(Parameters.WithComposedConverter(converter));
 
         protected override void ConfigureParameter(DbParameter parameter)
         {
@@ -55,7 +82,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
             // 0 to avoid SQL client size inference.
 
             var value = parameter.Value;
-            var length = (value as string)?.Length ?? (value as byte[])?.Length;
+            var length = (value as string)?.Length;
 
             try
             {

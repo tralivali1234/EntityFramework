@@ -4,13 +4,13 @@
     <TargetFrameworks>netcoreapp2.0;net461</TargetFrameworks>
     <Description>Entity Framework Core Command-line Tools</Description>
     <OutputType>Exe</OutputType>
-    <AssemblyName Condition="'$(Platform)' == 'x86'">ef.x86</AssemblyName>
     <IsPackable>false</IsPackable>
     <RootNamespace>Microsoft.EntityFrameworkCore.Tools</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\Shared\CodeAnnotations.cs" />
+    <Compile Include="..\EFCore\Internal\ProductInfo.cs" />
     <Compile Include="..\EFCore.Design\Design\IOperationReportHandler.cs" />
     <Compile Include="..\EFCore.Design\Design\IOperationResultHandler.cs" />
     <Compile Include="..\EFCore.Design\Design\OperationReportHandler.cs" />
@@ -40,8 +40,8 @@
     </Compile>
   </ItemGroup>
 
-  <Target Name="BuildX86" AfterTargets="Build" Condition=" '$(Platform)' != 'x86' ">
-    <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="Platform=x86;Configuration=$(Configuration);BuildNumber=$(BuildNumber)" Targets="Build" />
+  <Target Name="BuildX86" AfterTargets="Build" Condition=" '$(TargetFramework)' == 'net461' And '$(Platform)' != 'x86' ">
+    <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="TargetFramework=$(TargetFramework);Platform=x86;Configuration=$(Configuration);BuildNumber=$(BuildNumber)" Targets="Build" />
   </Target>
 
 </Project>

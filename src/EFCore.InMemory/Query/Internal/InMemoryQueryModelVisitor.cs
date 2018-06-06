@@ -7,9 +7,10 @@ using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Query;
 using Microsoft.EntityFrameworkCore.Storage;
 
-namespace Microsoft.EntityFrameworkCore.Query.Internal
+namespace Microsoft.EntityFrameworkCore.InMemory.Query.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -49,7 +50,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             QueryContext queryContext,
             IEntityType entityType,
             IKey key,
-            Func<IEntityType, ValueBuffer, object> materializer,
+            Func<IEntityType, MaterializationContext, object> materializer,
             bool queryStateManager)
             where TEntity : class
             => ((InMemoryQueryContext)queryContext).Store
@@ -58,19 +59,21 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     t =>
                         t.Rows.Select(
                             vs =>
-                                {
-                                    var valueBuffer = new ValueBuffer(vs);
+                            {
+                                var valueBuffer = new ValueBuffer(vs);
 
-                                    return (TEntity)queryContext
-                                        .QueryBuffer
-                                        .GetEntity(
-                                            key,
-                                            new EntityLoadInfo(
+                                return (TEntity)queryContext
+                                    .QueryBuffer
+                                    .GetEntity(
+                                        key,
+                                        new EntityLoadInfo(
+                                            new MaterializationContext(
                                                 valueBuffer,
-                                                vr => materializer(t.EntityType, vr)),
-                                            queryStateManager,
-                                            throwOnNullKey: false);
-                                }));
+                                                queryContext.Context),
+                                            c => materializer(t.EntityType, c)),
+                                        queryStateManager,
+                                        throwOnNullKey: false);
+                            }));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

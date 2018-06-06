@@ -79,12 +79,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 var newLeft = Visit(node.Left);
                 var newRight = Visit(node.Right);
 
-                if (newLeft is ConstantExpression leftConstant && (bool?)leftConstant.Value == true)
+                if (newLeft is ConstantExpression leftConstant
+                    && (bool?)leftConstant.Value == true)
                 {
                     return newRight.Type == typeof(bool) ? newRight : Expression.Convert(newRight, typeof(bool));
                 }
 
-                if (newRight is ConstantExpression rightConstant && (bool?)rightConstant.Value == true)
+                if (newRight is ConstantExpression rightConstant
+                    && (bool?)rightConstant.Value == true)
                 {
                     return newLeft.Type == typeof(bool) ? newLeft : Expression.Convert(newLeft, typeof(bool));
                 }
@@ -95,7 +97,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return base.VisitBinary(node);
         }
 
-        private bool NegatedNullableExpression(Expression expression)
+        private static bool NegatedNullableExpression(Expression expression)
         {
             var unaryExpression = expression.RemoveConvert() as UnaryExpression;
 

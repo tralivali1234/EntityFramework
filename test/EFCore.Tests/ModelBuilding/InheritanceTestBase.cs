@@ -3,11 +3,14 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
+// ReSharper disable MemberHidesStaticFromOuterClass
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
@@ -74,7 +77,12 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             {
                 var modelBuilder = CreateModelBuilder();
 
-                modelBuilder.Entity<SelfRefManyToOneDerived>();
+                modelBuilder.Entity<SelfRefManyToOneDerived>().HasData(
+                    new SelfRefManyToOneDerived
+                    {
+                        Id = 1,
+                        SelfRefId = 1
+                    });
                 modelBuilder.Entity<SelfRefManyToOne>();
 
                 modelBuilder.Validate();
@@ -144,6 +152,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var dependentEntityBuilder = modelBuilder.Entity<Order>();
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.SpecialCustomer));
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
 
                 Assert.Same(principalEntityBuilder.Metadata, derivedPrincipalEntityBuilder.Metadata.BaseType);
                 Assert.Same(dependentEntityBuilder.Metadata, derivedDependentEntityBuilder.Metadata.BaseType);
@@ -189,6 +198,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.BackOrder));
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.SpecialCustomer));
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
                 var otherDerivedDependentEntityBuilder = modelBuilder.Entity<BackOrder>();
                 otherDerivedDependentEntityBuilder.Ignore(nameof(BackOrder.SpecialOrder));
 
@@ -237,6 +247,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.BackOrder));
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.SpecialCustomer));
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
                 var otherDerivedDependentEntityBuilder = modelBuilder.Entity<BackOrder>();
                 otherDerivedDependentEntityBuilder.Ignore(nameof(BackOrder.SpecialOrder));
 
@@ -269,6 +280,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 dependentEntityBuilder.Ignore(nameof(Order.Customer));
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.BackOrder));
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
                 var otherDerivedPrincipalEntityBuilder = modelBuilder.Entity<OtherCustomer>();
 
                 derivedPrincipalEntityBuilder
@@ -298,6 +310,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.BackOrder));
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.SpecialCustomer));
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
 
                 principalEntityBuilder
                     .HasOne(e => (SpecialOrder)e.Order)
@@ -320,6 +333,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
                 var principalEntityBuilder = modelBuilder.Entity<OrderCombination>();
                 principalEntityBuilder.Ignore(nameof(OrderCombination.SpecialOrder));
+                principalEntityBuilder.Ignore(nameof(OrderCombination.Details));
                 var dependentEntityBuilder = modelBuilder.Entity<Order>();
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.BackOrder));
@@ -350,6 +364,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.BackOrder));
                 derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.SpecialCustomer));
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
                 var otherDerivedDependentEntityBuilder = modelBuilder.Entity<BackOrder>();
                 otherDerivedDependentEntityBuilder.Ignore(nameof(BackOrder.SpecialOrder));
 
@@ -383,6 +398,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 dependentEntityBuilder.Ignore(e => e.Customer);
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
                 derivedDependentEntityBuilder.Ignore(e => e.SpecialCustomerId);
+                derivedDependentEntityBuilder.Ignore(e => e.ShippingAddress);
 
                 dependentEntityBuilder
                     .HasOne<SpecialCustomer>()
@@ -410,6 +426,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var dependentEntityBuilder = modelBuilder.Entity<Order>();
                 dependentEntityBuilder.Ignore(nameof(Order.Customer));
                 var derivedDependentEntityBuilder = modelBuilder.Entity<SpecialOrder>();
+                derivedDependentEntityBuilder.Ignore(nameof(SpecialOrder.ShippingAddress));
                 dependentEntityBuilder.Property<int?>("SpecialCustomerId");
 
                 derivedPrincipalEntityBuilder
@@ -438,7 +455,6 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 modelBuilder.Ignore<OrderDetails>();
                 modelBuilder.Ignore<BackOrder>();
                 modelBuilder.Ignore<SpecialCustomer>();
-                modelBuilder.Ignore<SpecialOrder>();
 
                 var principalEntityBuilder = modelBuilder.Entity<Customer>();
                 var derivedPrincipalEntityBuilder = modelBuilder.Entity<OtherCustomer>();
@@ -446,12 +462,30 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var derivedDependentEntityBuilder = modelBuilder.Entity<BackOrder>();
 
                 principalEntityBuilder.HasMany(c => c.Orders).WithOne(o => o.Customer)
-                    .HasForeignKey(o => new { o.CustomerId, o.AnotherCustomerId })
-                    .HasPrincipalKey(c => new { c.Id, c.AlternateKey });
+                    .HasForeignKey(
+                        o => new
+                        {
+                            o.CustomerId,
+                            o.AnotherCustomerId
+                        })
+                    .HasPrincipalKey(
+                        c => new
+                        {
+                            c.Id,
+                            c.AlternateKey
+                        });
 
                 derivedPrincipalEntityBuilder.HasMany<BackOrder>().WithOne()
-                    .HasForeignKey(o => new { o.CustomerId })
-                    .HasPrincipalKey(c => new { c.Id });
+                    .HasForeignKey(
+                        o => new
+                        {
+                            o.CustomerId
+                        })
+                    .HasPrincipalKey(
+                        c => new
+                        {
+                            c.Id
+                        });
 
                 var dependentEntityType = dependentEntityBuilder.Metadata;
                 var derivedDependentEntityType = derivedDependentEntityBuilder.Metadata;
@@ -487,9 +521,21 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 AssertEqual(initialIndexes, derivedDependentEntityType.GetIndexes());
                 AssertEqual(initialForeignKeys, derivedDependentEntityType.GetForeignKeys());
 
+                Assert.Equal(1, modelBuilder.Log.Count);
+                Assert.Equal(LogLevel.Debug, modelBuilder.Log[0].Level);
+                Assert.Equal(CoreStrings.LogRedundantIndexRemoved.GenerateMessage("{'CustomerId'}", "{'CustomerId', 'AnotherCustomerId'}"), modelBuilder.Log[0].Message);
+
                 principalEntityBuilder.HasOne<Order>().WithOne()
-                    .HasPrincipalKey<Customer>(c => new { c.Id })
-                    .HasForeignKey<Order>(o => new { o.CustomerId });
+                    .HasPrincipalKey<Customer>(
+                        c => new
+                        {
+                            c.Id
+                        })
+                    .HasForeignKey<Order>(
+                        o => new
+                        {
+                            o.CustomerId
+                        });
 
                 fk = dependentEntityType.GetForeignKeys().Single(foreignKey => foreignKey.DependentToPrincipal == null);
                 Assert.Equal(2, dependentEntityType.GetIndexes().Count());
@@ -505,19 +551,31 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 modelBuilder.Ignore<OrderDetails>();
                 modelBuilder.Ignore<BackOrder>();
                 modelBuilder.Ignore<SpecialCustomer>();
-                modelBuilder.Ignore<SpecialOrder>();
 
-                var principalEntityBuilder = modelBuilder.Entity<Customer>();
+                modelBuilder.Entity<Customer>();
                 var derivedPrincipalEntityBuilder = modelBuilder.Entity<OtherCustomer>();
                 var dependentEntityBuilder = modelBuilder.Entity<Order>();
                 var derivedDependentEntityBuilder = modelBuilder.Entity<BackOrder>();
 
-                dependentEntityBuilder.HasIndex(o => new { o.CustomerId, o.AnotherCustomerId })
+                dependentEntityBuilder.HasIndex(
+                        o => new
+                        {
+                            o.CustomerId,
+                            o.AnotherCustomerId
+                        })
                     .IsUnique();
 
                 derivedPrincipalEntityBuilder.HasMany<BackOrder>().WithOne()
-                    .HasPrincipalKey(c => new { c.Id })
-                    .HasForeignKey(o => new { o.CustomerId });
+                    .HasPrincipalKey(
+                        c => new
+                        {
+                            c.Id
+                        })
+                    .HasForeignKey(
+                        o => new
+                        {
+                            o.CustomerId
+                        });
 
                 modelBuilder.Validate();
 
@@ -534,6 +592,10 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var initialKeys = backOrderClone.GetKeys().ToList();
                 var initialIndexes = backOrderClone.GetIndexes().ToList();
                 var initialForeignKeys = backOrderClone.GetForeignKeys().ToList();
+
+                var indexRemoveMessage =
+                    CoreStrings.LogRedundantIndexRemoved.GenerateMessage("{'CustomerId'}", "{'CustomerId', 'AnotherCustomerId'}");
+                Assert.Equal(1, modelBuilder.Log.Count(l => l.Message == indexRemoveMessage));
 
                 derivedDependentEntityBuilder.HasBaseType(null);
 
@@ -557,7 +619,14 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 AssertEqual(initialIndexes, derivedDependentEntityType.GetIndexes());
                 AssertEqual(initialForeignKeys, derivedDependentEntityType.GetForeignKeys());
 
-                dependentEntityBuilder.HasIndex(o => new { o.CustomerId, o.AnotherCustomerId })
+                Assert.Equal(2, modelBuilder.Log.Count(l => l.Message == indexRemoveMessage));
+
+                dependentEntityBuilder.HasIndex(
+                        o => new
+                        {
+                            o.CustomerId,
+                            o.AnotherCustomerId
+                        })
                     .IsUnique(false);
 
                 Assert.True(dependentEntityType.GetIndexes().All(i => !i.IsUnique));
@@ -610,9 +679,20 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 var modelBuilder = CreateModelBuilder();
                 modelBuilder.Entity<SpecialBookLabel>();
                 modelBuilder.Entity<AnotherBookLabel>();
+                modelBuilder.Entity<Book>().HasOne<SpecialBookLabel>().WithOne().HasForeignKey<Book>();
                 modelBuilder.Ignore<BookLabel>();
 
-                Assert.Null(modelBuilder.Model.FindEntityType(typeof(BookLabel).FullName));
+                var model = modelBuilder.Model;
+                Assert.Null(model.FindEntityType(typeof(BookLabel).FullName));
+                foreach (var entityType in model.GetEntityTypes())
+                {
+                    Assert.Empty(
+                        entityType.GetForeignKeys()
+                            .Where(fk => fk.PrincipalEntityType.ClrType == typeof(BookLabel)));
+                    Assert.Empty(
+                        entityType.GetForeignKeys()
+                            .Where(fk => fk.PrincipalKey.DeclaringEntityType.ClrType == typeof(BookLabel)));
+                }
             }
 
             [Fact]
@@ -683,13 +763,13 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             {
                 var modelBuilder = CreateModelBuilder();
 
-                var derivedEntityType = modelBuilder.Entity<DerivedTypeWithKeyAnnotation>().Metadata;
+                var derivedEntityType = (EntityType)modelBuilder.Entity<DerivedTypeWithKeyAnnotation>().Metadata;
                 var baseEntityType = (EntityType)modelBuilder.Entity<BaseTypeWithKeyAnnotation>().Metadata;
 
                 Assert.Equal(baseEntityType, derivedEntityType.BaseType);
                 Assert.Equal(ConfigurationSource.DataAnnotation, baseEntityType.GetPrimaryKeyConfigurationSource());
                 Assert.Equal(ConfigurationSource.DataAnnotation, baseEntityType.FindNavigation(nameof(BaseTypeWithKeyAnnotation.Navigation)).ForeignKey.GetConfigurationSource());
-                Assert.Equal(ConfigurationSource.Convention, baseEntityType.GetBaseTypeConfigurationSource());
+                Assert.Equal(ConfigurationSource.Convention, derivedEntityType.GetBaseTypeConfigurationSource());
             }
 
             [Fact]

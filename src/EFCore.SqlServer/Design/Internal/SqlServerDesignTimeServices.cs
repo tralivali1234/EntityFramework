@@ -1,13 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Scaffolding;
-using Microsoft.EntityFrameworkCore.Scaffolding.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Scaffolding.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Microsoft.EntityFrameworkCore.Design.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Design.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -21,9 +22,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         /// </summary>
         public virtual void ConfigureDesignTimeServices(IServiceCollection serviceCollection)
             => serviceCollection
-                .AddSingleton<IRelationalTypeMapper, SqlServerTypeMapper>()
+                .AddSingleton<IRelationalTypeMappingSource, SqlServerTypeMappingSource>()
                 .AddSingleton<IDatabaseModelFactory, SqlServerDatabaseModelFactory>()
-                .AddSingleton<IScaffoldingProviderCodeGenerator, SqlServerScaffoldingCodeGenerator>()
+                .AddSingleton<IProviderConfigurationCodeGenerator, SqlServerCodeGenerator>()
                 .AddSingleton<IAnnotationCodeGenerator, SqlServerAnnotationCodeGenerator>();
     }
 }

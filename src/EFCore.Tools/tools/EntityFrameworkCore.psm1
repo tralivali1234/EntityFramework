@@ -197,9 +197,6 @@ Register-TabExpansion Remove-Migration @{
     Removes the last migration.
 
 .PARAMETER Force
-    Don't check to see if the migration has been applied to the database. Always implied on UWP apps.
-
-.PARAMETER Revert
     Revert the migration if it has been applied to the database.
 
 .PARAMETER Context
@@ -218,7 +215,7 @@ Register-TabExpansion Remove-Migration @{
 function Remove-Migration
 {
     [CmdletBinding(PositionalBinding = $false)]
-    param([switch] $Force, [switch] $Revert, [string] $Context, [string] $Project, [string] $StartupProject)
+    param([switch] $Force, [string] $Context, [string] $Project, [string] $StartupProject)
 
     $dteProject = GetProject $Project
     $dteStartupProject = GetStartupProject $StartupProject $dteProject
@@ -228,11 +225,6 @@ function Remove-Migration
     if ($Force)
     {
         $params += '--force'
-    }
-
-    if ($Revert)
-    {
-        $params += '--revert'
     }
 
     $params += GetParams $Context
@@ -259,6 +251,7 @@ Register-TabExpansion Scaffold-DbContext @{
     Project = { GetProjects }
     StartupProject = { GetProjects }
     OutputDir = { <# Disabled. Otherwise, paths would be relative to the solution directory. #> }
+    ContextDir = { <# Disabled. Otherwise, paths would be relative to the solution directory. #> }
 }
 
 <#
@@ -276,6 +269,9 @@ Register-TabExpansion Scaffold-DbContext @{
 
 .PARAMETER OutputDir
     The directory to put files in. Paths are relative to the project directory.
+
+.PARAMETER ContextDir
+    The directory to put DbContext file in. Paths are relative to the project directory.
 
 .PARAMETER Context
     The name of the DbContext to generate.
@@ -313,6 +309,7 @@ function Scaffold-DbContext
         [Parameter(Position = 1, Mandatory = $true)]
         [string] $Provider,
         [string] $OutputDir,
+        [string] $ContextDir,
         [string] $Context,
         [string[]] $Schemas = @(),
         [string[]] $Tables = @(),
@@ -330,6 +327,11 @@ function Scaffold-DbContext
     if ($OutputDir)
     {
         $params += '--output-dir', $OutputDir
+    }
+
+    if ($ContextDir)
+    {
+        $params += '--context-dir', $ContextDir
     }
 
     if ($Context)
@@ -638,13 +640,15 @@ function GetStartupProject($name, $fallbackProject)
         }
         else
         {
-            Write-Verbose 'More than one startup project found.'
+            Write-Warning 'Multiple startup projects set.'
         }
     }
     else
     {
-        Write-Verbose 'No startup project found.'
+        Write-Warning 'No startup project set.'
     }
+    
+    Write-Warning "Using project '$($fallbackProject.ProjectName)' as the startup project."
 
     return $fallbackProject
 }
@@ -751,8 +755,7 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
     }
 
     $startupProjectDir = GetProperty $startupProject.Properties 'FullPath'
-    $activeConfiguration = $startupProject.ConfigurationManager.ActiveConfiguration
-    $outputPath = GetProperty $activeConfiguration.Properties 'OutputPath'
+    $outputPath = GetProperty $startupProject.ConfigurationManager.ActiveConfiguration.Properties 'OutputPath'
     $targetDir = Join-Path $startupProjectDir $outputPath -Resolve | Convert-Path
     $startupTargetFileName = GetOutputFileName $startupProject
     $startupTargetPath = Join-Path $targetDir $startupTargetFileName
@@ -765,11 +768,11 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
         $platformTarget = GetPlatformTarget $startupProject
         if ($platformTarget -eq 'x86')
         {
-            $exePath = Join-Path $PSScriptRoot 'net461\ef.x86.exe'
+            $exePath = Join-Path $PSScriptRoot 'net461\win-x86\ef.exe'
         }
         elseif ($platformTarget -in 'AnyCPU', 'x64')
         {
-            $exePath = Join-Path $PSScriptRoot 'net461\ef.exe'
+            $exePath = Join-Path $PSScriptRoot 'net461\any\ef.exe'
         }
         else
         {
@@ -786,26 +789,18 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
         $projectAssetsFile = GetCpsProperty $startupProject 'ProjectAssetsFile'
         $runtimeConfig = Join-Path $targetDir ($startupTargetName + '.runtimeconfig.json')
         $runtimeFrameworkVersion = GetCpsProperty $startupProject 'RuntimeFrameworkVersion'
-        $efPath = Join-Path $PSScriptRoot 'netcoreapp2.0\ef.dll'
+        $efPath = Join-Path $PSScriptRoot 'netcoreapp2.0\any\ef.dll'
 
         $dotnetParams = 'exec', '--depsfile', $depsFile
 
         if ($projectAssetsFile)
         {
-            # NB: -Raw is here to support ConvertFrom-Json on PowerShell 3.0
-            $projectAssets = Get-Content $projectAssetsFile -Raw | ConvertFrom-Json
+            # NB: Don't use Get-Content. It doesn't handle UTF-8 without a signature
+            # NB: Don't use ReadAllLines. ConvertFrom-Json won't work on PowerShell 3.0
+            $projectAssets = [IO.File]::ReadAllText($projectAssetsFile) | ConvertFrom-Json
             $projectAssets.packageFolders.psobject.Properties.Name | %{
                 $dotnetParams += '--additionalprobingpath', $_.TrimEnd('\')
             }
-        }
-
-        if (!(Test-Path $runtimeConfig))
-        {
-            $configuration = $activeConfiguration.ConfigurationName
-            $platformTarget = GetPlatformTarget $startupProject
-            $projectPath = $startupProject.FullName
-
-            dotnet msbuild /t:GenerateBuildRuntimeConfigurationFiles "/p:GenerateRuntimeConfigurationFiles=True;Configuration=$configuration;Platform=$platformTarget" /verbosity:quiet /nologo $projectPath | Out-Null
         }
 
         if (Test-Path $runtimeConfig)
@@ -847,7 +842,8 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
         '--assembly', $targetPath,
         '--startup-assembly', $startupTargetPath,
         '--project-dir', $projectDir,
-        '--language', $language
+        '--language', $language,
+        '--working-dir', $PWD.Path
 
     if (IsWeb $startupProject)
     {
@@ -867,6 +863,7 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
         CreateNoWindow = $true;
         RedirectStandardOutput = $true;
         StandardOutputEncoding = [Text.Encoding]::UTF8;
+        RedirectStandardError = $true;
         WorkingDirectory = $startupProjectDir;
     }
 
@@ -874,7 +871,7 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
 
     $process = [Diagnostics.Process]::Start($startInfo)
 
-    while ($line = $process.StandardOutput.ReadLine())
+    while (($line = $process.StandardOutput.ReadLine()) -ne $null)
     {
         $level = $null
         $text = $null
@@ -909,6 +906,11 @@ function EF($project, $startupProject, $params, [switch] $skipBuild)
 
     if ($process.ExitCode)
     {
+        while (($line = $process.StandardError.ReadLine()) -ne $null)
+        {
+            WriteErrorLine $line
+        }
+
         exit
     }
 }

@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Migrations.Internal
@@ -40,21 +41,21 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             var sourceModelBuilder = CreateModelBuilder();
             buildCommonAction(sourceModelBuilder);
             buildSourceAction(sourceModelBuilder);
+            sourceModelBuilder.GetInfrastructure().Metadata.Validate();
 
             var targetModelBuilder = CreateModelBuilder();
             buildCommonAction(targetModelBuilder);
             buildTargetAction(targetModelBuilder);
+            targetModelBuilder.GetInfrastructure().Metadata.Validate();
 
-            var ctx = RelationalTestHelpers.Instance.CreateContext(targetModelBuilder.Model);
-            var modelDiffer = CreateModelDiffer(ctx);
+            var modelDiffer = CreateModelDiffer(targetModelBuilder.Model);
 
             var operationsUp = modelDiffer.GetDifferences(sourceModelBuilder.Model, targetModelBuilder.Model);
             assertActionUp(operationsUp);
 
             if (assertActionDown != null)
             {
-                ctx = RelationalTestHelpers.Instance.CreateContext(sourceModelBuilder.Model);
-                modelDiffer = CreateModelDiffer(ctx);
+                modelDiffer = CreateModelDiffer(sourceModelBuilder.Model);
 
                 var operationsDown = modelDiffer.GetDifferences(targetModelBuilder.Model, sourceModelBuilder.Model);
                 assertActionDown(operationsDown);
@@ -62,9 +63,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         }
 
         protected void AssertMultidimensionalArray<T>(T[,] values, params Action<T>[] assertions)
-        {
-            Assert.Collection(ToOnedimensionalArray(values), assertions);
-        }
+            => Assert.Collection(ToOnedimensionalArray(values), assertions);
 
         protected static T[] ToOnedimensionalArray<T>(T[,] values, bool firstDimension = false)
         {
@@ -83,57 +82,48 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
             return result;
         }
 
-        protected abstract ModelBuilder CreateModelBuilder();
+        protected static T[][] ToJaggedArray<T>(T[,] twoDimensionalArray, bool firstDimension = false)
+        {
+            var rowsFirstIndex = twoDimensionalArray.GetLowerBound(0);
+            var rowsLastIndex = twoDimensionalArray.GetUpperBound(0);
+            var numberOfRows = rowsLastIndex - rowsFirstIndex + 1;
 
-        protected virtual MigrationsModelDiffer CreateModelDiffer(DbContext ctx)
-            => new MigrationsModelDiffer(
-                new ConcreteTypeMapper(
-                    new CoreTypeMapperDependencies(),
-                    new RelationalTypeMapperDependencies()),
+            var columnsFirstIndex = twoDimensionalArray.GetLowerBound(1);
+            var columnsLastIndex = twoDimensionalArray.GetUpperBound(1);
+            var numberOfColumns = columnsLastIndex - columnsFirstIndex + 1;
+
+            var jaggedArray = new T[numberOfRows][];
+            for (var i = 0; i < numberOfRows; i++)
+            {
+                jaggedArray[i] = new T[numberOfColumns];
+
+                for (var j = 0; j < numberOfColumns; j++)
+                {
+                    jaggedArray[i][j] = twoDimensionalArray[i + rowsFirstIndex, j + columnsFirstIndex];
+                }
+            }
+
+            return jaggedArray;
+        }
+
+        protected abstract TestHelpers TestHelpers { get; }
+        protected virtual ModelBuilder CreateModelBuilder() => TestHelpers.CreateConventionBuilder();
+        protected virtual IModelValidator CreateModelValidator() => TestHelpers.CreateContextServices().GetRequiredService<IModelValidator>();
+
+        protected virtual MigrationsModelDiffer CreateModelDiffer(IModel model)
+        {
+            var ctx = TestHelpers.CreateContext(
+                TestHelpers.AddProviderOptions(new DbContextOptionsBuilder())
+                    .UseModel(model).EnableSensitiveDataLogging().Options);
+            return new MigrationsModelDiffer(
+                new TestRelationalTypeMappingSource(
+                    TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                    TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()),
                 new MigrationsAnnotationProvider(
                     new MigrationsAnnotationProviderDependencies()),
                 ctx.GetService<IChangeDetector>(),
                 ctx.GetService<StateManagerDependencies>(),
                 ctx.GetService<CommandBatchPreparerDependencies>());
-
-        private class ConcreteTypeMapper : RelationalTypeMapper
-        {
-            public ConcreteTypeMapper(
-                CoreTypeMapperDependencies coreDependencies,
-                RelationalTypeMapperDependencies dependencies)
-                : base(coreDependencies, dependencies)
-            {
-            }
-
-            public override RelationalTypeMapping FindMapping(Type clrType)
-                => clrType == typeof(string)
-                    ? new StringTypeMapping("varchar(4000)", dbType: null, unicode: false, size: 4000)
-                    : base.FindMapping(clrType);
-
-            protected override RelationalTypeMapping FindCustomMapping(IProperty property)
-                => property.ClrType == typeof(string) && (property.GetMaxLength().HasValue || property.IsUnicode().HasValue)
-                    ? new StringTypeMapping(((property.IsUnicode() ?? true) ? "n" : "") + "varchar(" + (property.GetMaxLength() ?? 767) + ")", dbType: null, unicode: false, size: property.GetMaxLength())
-                    : base.FindCustomMapping(property);
-
-            private readonly IReadOnlyDictionary<Type, RelationalTypeMapping> _simpleMappings
-                = new Dictionary<Type, RelationalTypeMapping>
-                {
-                    { typeof(int), new IntTypeMapping("int") },
-                    { typeof(bool), new BoolTypeMapping("boolean") }
-                };
-
-            private readonly IReadOnlyDictionary<string, IList<RelationalTypeMapping>> _simpleNameMappings
-                = new Dictionary<string, IList<RelationalTypeMapping>>
-                {
-                    { "varchar", new List<RelationalTypeMapping> { new StringTypeMapping("varchar") } },
-                    { "bigint", new List<RelationalTypeMapping> { new LongTypeMapping("bigint") } }
-                };
-
-            protected override IReadOnlyDictionary<Type, RelationalTypeMapping> GetClrTypeMappings()
-                => _simpleMappings;
-
-            protected override IReadOnlyDictionary<string, IList<RelationalTypeMapping>> GetMultipleStoreTypeMappings()
-                => _simpleNameMappings;
         }
     }
 }

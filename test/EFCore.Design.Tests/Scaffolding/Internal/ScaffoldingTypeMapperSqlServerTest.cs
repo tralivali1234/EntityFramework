@@ -3,10 +3,13 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Scaffolding.Internal;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable CheckNamespace
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class ScaffoldingTypeMapperSqlServerTest
@@ -18,7 +21,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("int", isKeyOrIndex, rowVersion: false);
 
-            AssertMapping<int>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<int>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Theory]
@@ -28,7 +31,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("bigint", isKeyOrIndex, rowVersion: false);
 
-            AssertMapping<long>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<long>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Theory]
@@ -38,7 +41,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("bit", isKeyOrIndex, rowVersion: false);
 
-            AssertMapping<bool>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<bool>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Theory]
@@ -48,7 +51,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("datetime", isKeyOrIndex, rowVersion: false);
 
-            AssertMapping<DateTime>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<DateTime>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Theory]
@@ -58,7 +61,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("datetime2", isKeyOrIndex, rowVersion: false);
 
-            AssertMapping<DateTime>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<DateTime>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -66,7 +69,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(max)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -74,15 +77,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(200)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: true, maxLength: 200, unicode: null);
-        }
-
-        [Fact]
-        public void Maps_normal_binary_max_column()
-        {
-            var mapping = CreateMapper().FindMapping("binary(max)", keyOrIndex: false, rowVersion: false);
-
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -90,7 +85,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("binary(200)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: true);
         }
 
         [Fact]
@@ -98,7 +93,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(max)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -106,7 +101,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(200)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: true, maxLength: 200, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -114,15 +109,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(900)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null);
-        }
-
-        [Fact]
-        public void Maps_key_binary_max_column()
-        {
-            var mapping = CreateMapper().FindMapping("binary(max)", keyOrIndex: true, rowVersion: false);
-
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -130,7 +117,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("binary(200)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: true);
         }
 
         [Fact]
@@ -138,7 +125,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("binary(900)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: true);
         }
 
         [Fact]
@@ -146,7 +133,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("rowversion", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -154,7 +141,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(max)", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -162,7 +149,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(200)", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -170,7 +157,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varbinary(8)", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -178,7 +165,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("binary(max)", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -186,7 +173,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("binary(200)", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -194,7 +181,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("binary(8)", keyOrIndex: false, rowVersion: true);
 
-            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<byte[]>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -202,7 +189,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("nvarchar(max)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -210,7 +197,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("nvarchar(200)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: null);
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -218,7 +205,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varchar(max)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: false);
+            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: false, fixedLength: null);
         }
 
         [Fact]
@@ -226,7 +213,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varchar(200)", keyOrIndex: false, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: false);
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: false, fixedLength: null);
         }
 
         [Fact]
@@ -234,7 +221,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("nvarchar(max)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -242,7 +229,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("nvarchar(200)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: null);
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -250,7 +237,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varchar(max)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -258,7 +245,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varchar(200)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: false);
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: false, fixedLength: null);
         }
 
         [Fact]
@@ -266,7 +253,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("nvarchar(450)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: null);
+            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: null);
         }
 
         [Fact]
@@ -274,7 +261,71 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("varchar(900)", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: false);
+            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: false, fixedLength: null);
+        }
+
+        [Fact]
+        public void Maps_normal_nchar_sized_column()
+        {
+            var mapping = CreateMapper().FindMapping("nchar(200)", keyOrIndex: false, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_normal_char_sized_column()
+        {
+            var mapping = CreateMapper().FindMapping("char(200)", keyOrIndex: false, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: false, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_key_nchar_max_column()
+        {
+            var mapping = CreateMapper().FindMapping("nchar(max)", keyOrIndex: true, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_key_nchar_sized_column()
+        {
+            var mapping = CreateMapper().FindMapping("nchar(200)", keyOrIndex: true, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: null, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_key_char_max_column()
+        {
+            var mapping = CreateMapper().FindMapping("char(max)", keyOrIndex: true, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_key_char_sized_column()
+        {
+            var mapping = CreateMapper().FindMapping("char(200)", keyOrIndex: true, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: true, maxLength: 200, unicode: false, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_key_nchar_default_sized_column()
+        {
+            var mapping = CreateMapper().FindMapping("nchar(450)", keyOrIndex: true, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: null, fixedLength: true);
+        }
+
+        [Fact]
+        public void Maps_key_char_default_sized_column()
+        {
+            var mapping = CreateMapper().FindMapping("char(900)", keyOrIndex: true, rowVersion: false);
+
+            AssertMapping<string>(mapping, inferred: true, maxLength: null, unicode: false, fixedLength: true);
         }
 
         [Fact]
@@ -282,10 +333,10 @@ namespace Microsoft.EntityFrameworkCore
         {
             var mapping = CreateMapper().FindMapping("text", keyOrIndex: true, rowVersion: false);
 
-            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null);
+            AssertMapping<string>(mapping, inferred: false, maxLength: null, unicode: null, fixedLength: null);
         }
 
-        private static void AssertMapping<T>(TypeScaffoldingInfo mapping, bool inferred, int? maxLength, bool? unicode)
+        private static void AssertMapping<T>(TypeScaffoldingInfo mapping, bool inferred, int? maxLength, bool? unicode, bool? fixedLength)
         {
             Assert.Same(typeof(T), mapping.ClrType);
             Assert.Equal(inferred, mapping.IsInferred);
@@ -295,8 +346,8 @@ namespace Microsoft.EntityFrameworkCore
 
         private static ScaffoldingTypeMapper CreateMapper()
             => new ScaffoldingTypeMapper(
-                new SqlServerTypeMapper(
-                    new CoreTypeMapperDependencies(),
-                    new RelationalTypeMapperDependencies()));
+                new SqlServerTypeMappingSource(
+                    TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                    TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()));
     }
 }

@@ -4,8 +4,9 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Query.ExpressionTranslators.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -29,9 +30,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                     {
                         methodCallExpression.Object,
                         // Accommodate for SQL Server assumption of 1-based string indexes
-                        methodCallExpression.Arguments[0].NodeType == ExpressionType.Constant
-                            ? (Expression)Expression.Constant(
-                                (int)((ConstantExpression)methodCallExpression.Arguments[0]).Value + 1)
+                        methodCallExpression.Arguments[0] is ConstantExpression constantExpression
+                        && constantExpression.Value is int value
+                            ? (Expression)Expression.Constant(value + 1)
                             : Expression.Add(
                                 methodCallExpression.Arguments[0],
                                 Expression.Constant(1)),

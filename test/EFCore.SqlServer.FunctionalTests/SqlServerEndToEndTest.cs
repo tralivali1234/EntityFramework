@@ -36,29 +36,81 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var nownNum1 = new NownNum { Id = 77.0m, TheWalrus = "Crying" };
-                var nownNum2 = new NownNum { Id = 78.0m, TheWalrus = "Walrus" };
+                var nownNum1 = new NownNum
+                {
+                    Id = 77.0m,
+                    TheWalrus = "Crying"
+                };
+                var nownNum2 = new NownNum
+                {
+                    Id = 78.0m,
+                    TheWalrus = "Walrus"
+                };
 
-                var numNum1 = new NumNum { TheWalrus = "I" };
-                var numNum2 = new NumNum { TheWalrus = "Am" };
+                var numNum1 = new NumNum
+                {
+                    TheWalrus = "I"
+                };
+                var numNum2 = new NumNum
+                {
+                    TheWalrus = "Am"
+                };
 
-                var anNum1 = new AnNum { TheWalrus = "Goo goo" };
-                var anNum2 = new AnNum { TheWalrus = "g'joob" };
+                var anNum1 = new AnNum
+                {
+                    TheWalrus = "Goo goo"
+                };
+                var anNum2 = new AnNum
+                {
+                    TheWalrus = "g'joob"
+                };
 
-                var adNum1 = new AdNum { TheWalrus = "Eggman" };
-                var adNum2 = new AdNum { TheWalrus = "Eggmen" };
+                var adNum1 = new AdNum
+                {
+                    TheWalrus = "Eggman"
+                };
+                var adNum2 = new AdNum
+                {
+                    TheWalrus = "Eggmen"
+                };
 
-                var byteNownNum1 = new ByteNownNum { Id = 77, Lucy = "Tangerine" };
-                var byteNownNum2 = new ByteNownNum { Id = 78, Lucy = "Trees" };
+                var byteNownNum1 = new ByteNownNum
+                {
+                    Id = 77,
+                    Lucy = "Tangerine"
+                };
+                var byteNownNum2 = new ByteNownNum
+                {
+                    Id = 78,
+                    Lucy = "Trees"
+                };
 
-                var byteNum1 = new ByteNum { Lucy = "Marmalade" };
-                var byteNum2 = new ByteNum { Lucy = "Skies" };
+                var byteNum1 = new ByteNum
+                {
+                    Lucy = "Marmalade"
+                };
+                var byteNum2 = new ByteNum
+                {
+                    Lucy = "Skies"
+                };
 
-                var byteAnNum1 = new ByteAnNum { Lucy = "Cellophane" };
-                var byteAnNum2 = new ByteAnNum { Lucy = "Flowers" };
+                var byteAnNum1 = new ByteAnNum
+                {
+                    Lucy = "Cellophane"
+                };
+                var byteAnNum2 = new ByteAnNum
+                {
+                    Lucy = "Flowers"
+                };
 
-                var byteAdNum1 = new ByteAdNum { Lucy = "Kaleidoscope" };
-                var byteAdNum2 = new ByteAdNum { Lucy = "Eyes" };
+                var byteAdNum1 = new ByteAdNum
+                {
+                    Lucy = "Kaleidoscope"
+                };
+                var byteAdNum2 = new ByteAdNum
+                {
+                    Lucy = "Eyes"
+                };
 
                 decimal[] preSaveValues;
                 byte[] preSaveByteValues;
@@ -73,14 +125,10 @@ namespace Microsoft.EntityFrameworkCore
                         byteNownNum1, byteNownNum2, byteNum1, byteNum2, byteAdNum1, byteAdNum2, byteAnNum1, byteAnNum2);
 
                     preSaveValues = new[]
-                    {
-                        numNum1.Id, numNum2.Id, adNum1.Id, adNum2.Id, anNum1.Id, anNum2.Id
-                    };
+                        { numNum1.Id, numNum2.Id, adNum1.Id, adNum2.Id, anNum1.Id, anNum2.Id };
 
                     preSaveByteValues = new[]
-                    {
-                        byteNum1.Id, byteNum2.Id, byteAdNum1.Id, byteAdNum2.Id, byteAnNum1.Id, byteAnNum2.Id
-                    };
+                        { byteNum1.Id, byteNum2.Id, byteAdNum1.Id, byteAdNum2.Id, byteAnNum1.Id, byteAnNum2.Id };
 
                     context.SaveChanges();
                 }
@@ -236,14 +284,34 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
             {
-                var sNum1 = new SNum { TheWalrus = "I" };
-                var sNum2 = new SNum { TheWalrus = "Am" };
+                var sNum1 = new SNum
+                {
+                    TheWalrus = "I"
+                };
+                var sNum2 = new SNum
+                {
+                    TheWalrus = "Am"
+                };
 
-                var enNum1 = new EnNum { TheWalrus = "Goo goo", Id = ENum.BNum };
-                var enNum2 = new EnNum { TheWalrus = "g'joob", Id = ENum.CNum };
+                var enNum1 = new EnNum
+                {
+                    TheWalrus = "Goo goo",
+                    Id = ENum.BNum
+                };
+                var enNum2 = new EnNum
+                {
+                    TheWalrus = "g'joob",
+                    Id = ENum.CNum
+                };
 
-                var bNum1 = new BNum { TheWalrus = "Eggman" };
-                var bNum2 = new BNum { TheWalrus = "Eggmen" };
+                var bNum1 = new BNum
+                {
+                    TheWalrus = "Eggman"
+                };
+                var bNum2 = new BNum
+                {
+                    TheWalrus = "Eggmen"
+                };
 
                 var options = Fixture.CreateOptions(testDatabase);
                 using (var context = new ENumContext(options))
@@ -524,7 +592,12 @@ namespace Microsoft.EntityFrameworkCore
                 {
                     context.Database.EnsureCreated();
 
-                    context.Characters.Add(new PlayerCharacter(new Level { Game = new Game() }));
+                    context.Characters.Add(
+                        new PlayerCharacter(
+                            new Level
+                            {
+                                Game = new Game()
+                            }));
 
                     context.SaveChanges();
                 }
@@ -539,6 +612,177 @@ namespace Microsoft.EntityFrameworkCore
                     Assert.NotNull(character.Game);
                     Assert.NotNull(character.Level);
                     Assert.NotNull(character.Level.Game);
+                }
+            }
+        }
+
+        [Fact]
+        public void Adding_an_item_to_a_collection_marks_it_as_modified()
+        {
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
+            {
+                var options = Fixture.CreateOptions(testDatabase);
+
+                using (var context = new GameDbContext(options))
+                {
+                    context.Database.EnsureCreated();
+
+                    var player = new PlayerCharacter(
+                        new Level
+                        {
+                            Game = new Game()
+                        });
+
+                    var weapon = new Item
+                    {
+                        Id = 1,
+                        Game = player.Game
+                    };
+
+                    context.Characters.Add(player);
+
+                    context.SaveChanges();
+
+                    player.Items.Add(weapon);
+
+                    context.ChangeTracker.DetectChanges();
+
+                    Assert.True(context.Entry(player).Collection(p => p.Items).IsModified);
+                }
+            }
+        }
+
+        [Fact]
+        public void Can_set_reference_twice()
+        {
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
+            {
+                var options = Fixture.CreateOptions(testDatabase);
+
+                using (var context = new GameDbContext(options))
+                {
+                    context.Database.EnsureCreated();
+
+                    var player = new PlayerCharacter(
+                        new Level
+                        {
+                            Game = new Game()
+                        });
+
+                    var weapon = new Item
+                    {
+                        Id = 1,
+                        Game = player.Game
+                    };
+
+                    player.Items.Add(weapon);
+                    context.Characters.Add(player);
+
+                    context.SaveChanges();
+
+                    player.CurrentWeapon = weapon;
+                    context.SaveChanges();
+
+                    player.CurrentWeapon = null;
+                    context.SaveChanges();
+
+                    player.CurrentWeapon = weapon;
+                    context.SaveChanges();
+                }
+
+                using (var context = new GameDbContext(options))
+                {
+                    var player = context.Characters
+                        .Include(c => c.Items)
+                        .ToList().Single();
+
+                    Assert.Equal(player.Items.Single(), player.CurrentWeapon);
+                }
+            }
+        }
+
+        [Fact]
+        public void Can_include_on_loaded_entity()
+        {
+            using (var testDatabase = SqlServerTestStore.CreateInitialized(DatabaseName))
+            {
+                var options = Fixture.CreateOptions(testDatabase);
+
+                using (var context = new GameDbContext(options))
+                {
+                    context.Database.EnsureCreated();
+
+                    var player = new PlayerCharacter(
+                        new Level
+                        {
+                            Game = new Game()
+                        });
+
+                    var weapon = new Item
+                    {
+                        Id = 1,
+                        Game = player.Game
+                    };
+
+                    player.Items.Add(weapon);
+
+                    player.Items.Add(
+                        new Item
+                        {
+                            Id = 2,
+                            Game = player.Game
+                        });
+
+                    context.Characters.Add(player);
+
+                    context.SaveChanges();
+
+                    player.CurrentWeapon = weapon;
+
+                    context.SaveChanges();
+                }
+
+                using (var context = new GameDbContext(options))
+                {
+                    var player = context.Characters
+                        .Include(p => p.CurrentWeapon)
+                        .Single();
+
+                    Assert.Equal(1, player.Items.Count);
+
+                    context.Attach(player);
+
+                    Assert.Equal(1, player.Items.Count);
+
+                    context.Levels
+                        .Include(l => l.Actors)
+                        .ThenInclude(a => a.Items)
+                        .Load();
+
+                    Assert.Equal(2, player.Items.Count);
+                }
+
+                using (var context = new GameDbContext(options))
+                {
+                    var player = context.Characters
+                        .Include(p => p.CurrentWeapon)
+                        .AsNoTracking()
+                        .Single();
+
+                    Assert.Equal(0, player.Items.Count);
+
+                    context.Entry(player.CurrentWeapon).Property("ActorId").CurrentValue = 0;
+
+                    context.Attach(player);
+
+                    Assert.Equal(1, player.Items.Count);
+
+                    context.Levels
+                        .Include(l => l.Actors)
+                        .ThenInclude(a => a.Items)
+                        .Load();
+
+                    Assert.Equal(2, player.Items.Count);
                 }
             }
         }
@@ -559,6 +803,7 @@ namespace Microsoft.EntityFrameworkCore
             public virtual Level Level { get; set; }
             public virtual int GameId { get; private set; }
             public virtual Game Game { get; set; }
+            public virtual ICollection<Item> Items { get; set; } = new HashSet<Item>();
         }
 
         public class PlayerCharacter : Actor
@@ -586,6 +831,8 @@ namespace Microsoft.EntityFrameworkCore
 
             public virtual int MaxMP { get; set; }
             public virtual int MP { get; set; }
+
+            public virtual Item CurrentWeapon { get; set; }
         }
 
         public class Level
@@ -593,6 +840,22 @@ namespace Microsoft.EntityFrameworkCore
             public virtual int Id { get; set; }
             public virtual int GameId { get; set; }
             public virtual Game Game { get; set; }
+            public virtual ICollection<Actor> Actors { get; set; } = new HashSet<Actor>();
+            public virtual ICollection<Item> Items { get; set; } = new HashSet<Item>();
+        }
+
+        public class Item
+        {
+            public virtual int Id { get; set; }
+            public virtual int GameId { get; set; }
+            public virtual Game Game { get; set; }
+            public virtual Level Level { get; set; }
+            public virtual Actor Actor { get; set; }
+        }
+
+        public class Container : Item
+        {
+            public virtual ICollection<Item> Items { get; set; } = new HashSet<Item>();
         }
 
         public class Game
@@ -612,36 +875,74 @@ namespace Microsoft.EntityFrameworkCore
             public DbSet<Game> Games { get; set; }
             public DbSet<Level> Levels { get; set; }
             public DbSet<PlayerCharacter> Characters { get; set; }
+            public DbSet<Item> Items { get; set; }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Level>(eb => { eb.HasKey(l => new { l.GameId, l.Id }); });
+                modelBuilder.Entity<Level>(
+                    eb =>
+                    {
+                        eb.HasKey(
+                            l => new
+                            {
+                                l.GameId,
+                                l.Id
+                            });
+                    });
 
                 modelBuilder.Entity<Actor>(
                     eb =>
-                        {
-                            eb.HasKey(a => new { a.GameId, a.Id });
-                            eb.HasOne(a => a.Level)
-                                .WithMany()
-                                .HasForeignKey(nameof(Actor.GameId), "LevelId")
-                                .IsRequired();
-                        });
+                    {
+                        eb.HasKey(
+                            a => new
+                            {
+                                a.GameId,
+                                a.Id
+                            });
+                        eb.HasOne(a => a.Level)
+                            .WithMany(l => l.Actors)
+                            .HasForeignKey(nameof(Actor.GameId), "LevelId")
+                            .IsRequired();
 
-                modelBuilder.Entity<PlayerCharacter>();
+                        eb.HasMany(a => a.Items)
+                            .WithOne(i => i.Actor)
+                            .HasForeignKey(nameof(Item.GameId), "ActorId");
+                    });
+
+                modelBuilder.Entity<PlayerCharacter>(
+                    eb =>
+                    {
+                        eb.HasOne(p => p.CurrentWeapon)
+                            .WithOne()
+                            .HasForeignKey<PlayerCharacter>(nameof(PlayerCharacter.GameId), "CurrentWeaponId");
+                    });
+
+                modelBuilder.Entity<Item>(
+                    eb =>
+                    {
+                        eb.HasKey(
+                            l => new
+                            {
+                                l.GameId,
+                                l.Id
+                            });
+                    });
+
+                modelBuilder.Entity<Container>();
 
                 modelBuilder.Entity<Game>(
                     eb =>
-                        {
-                            eb.Property(g => g.Id)
-                                .ValueGeneratedOnAdd();
-                            eb.HasMany(g => g.Levels)
-                                .WithOne(l => l.Game)
-                                .HasForeignKey(l => l.GameId);
-                            eb.HasMany(g => g.Actors)
-                                .WithOne(a => a.Game)
-                                .HasForeignKey(a => a.GameId)
-                                .OnDelete(DeleteBehavior.Restrict);
-                        });
+                    {
+                        eb.Property(g => g.Id)
+                            .ValueGeneratedOnAdd();
+                        eb.HasMany(g => g.Levels)
+                            .WithOne(l => l.Game)
+                            .HasForeignKey(l => l.GameId);
+                        eb.HasMany(g => g.Actors)
+                            .WithOne(a => a.Game)
+                            .HasForeignKey(a => a.GameId)
+                            .OnDelete(DeleteBehavior.Restrict);
+                    });
             }
         }
 
@@ -676,8 +977,16 @@ namespace Microsoft.EntityFrameworkCore
 
                 using (var context = new SchemaContext(options))
                 {
-                    context.Add(new Jack { MyKey = 1 });
-                    context.Add(new Black { MyKey = 2 });
+                    context.Add(
+                        new Jack
+                        {
+                            MyKey = 1
+                        });
+                    context.Add(
+                        new Black
+                        {
+                            MyKey = 2
+                        });
                     context.SaveChanges();
                 }
 
@@ -832,15 +1141,15 @@ namespace Microsoft.EntityFrameworkCore
                     TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9BF"),
                     NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 777),
                     ToEat = 64,
-                    //CupOfChar = 'C', // TODO: Conversion failed when converting the nvarchar value 'C' to data type int.
+                    CupOfChar = 'C',
                     OrNothing = 0.123456789,
                     Fuse = 777,
                     WayRound = 9876543210,
-                    //NotToEat = -64, // TODO: The parameter data type of SByte is invalid.
+                    NotToEat = -64,
                     Away = 0.12345f,
-                    //OrULong = 888, // TODO: The parameter data type of UInt16 is invalid.
-                    //OrUSkint = 8888888, // TODO: The parameter data type of UInt32 is invalid.
-                    //OrUShort = 888888888888888, // TODO: The parameter data type of UInt64 is invalid.
+                    OrULong = 888,
+                    OrUSkint = 8888888,
+                    OrUShort = 888888888888888,
                     AndChew = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }
                 }).Entity;
             var blog2 = context.Add(
@@ -851,15 +1160,15 @@ namespace Microsoft.EntityFrameworkCore
                     TheGu = new Guid("0456AEF1-B7FC-47AA-8102-975D6BA3A9CF"),
                     NotFigTime = new DateTime(1973, 9, 3, 0, 10, 33, 778),
                     ToEat = 65,
-                    //CupOfChar = 'D', // TODO: Conversion failed when converting the nvarchar value 'C' to data type int.
+                    CupOfChar = 'D',
                     OrNothing = 0.987654321,
                     Fuse = 778,
                     WayRound = 98765432100,
-                    //NotToEat = -64, // TODO: The parameter data type of SByte is invalid.
+                    NotToEat = -64,
                     Away = 0.12345f,
-                    //OrULong = 888, // TODO: The parameter data type of UInt16 is invalid.
-                    //OrUSkint = 8888888, // TODO: The parameter data type of UInt32 is invalid.
-                    //OrUShort = 888888888888888, // TODO: The parameter data type of UInt64 is invalid.
+                    OrULong = 888,
+                    OrUSkint = 8888888,
+                    OrUShort = 888888888888888,
                     AndChew = new byte[16]
                 }).Entity;
             await context.SaveChangesAsync();
@@ -880,10 +1189,10 @@ namespace Microsoft.EntityFrameworkCore
             {
                 modelBuilder.Entity<Customer>(
                     b =>
-                        {
-                            b.HasKey(c => c.CustomerID);
-                            b.ToTable("Customers");
-                        });
+                    {
+                        b.HasKey(c => c.CustomerID);
+                        b.ToTable("Customers");
+                    });
             }
         }
 
@@ -912,19 +1221,19 @@ namespace Microsoft.EntityFrameworkCore
 
             public byte ToEat { get; set; }
 
-            //public char CupOfChar { get; set; }
+            public char CupOfChar { get; set; }
             public double OrNothing { get; set; }
 
             public short Fuse { get; set; }
 
             public long WayRound { get; set; }
 
-            //public sbyte NotToEat { get; set; }
+            public sbyte NotToEat { get; set; }
             public float Away { get; set; }
 
-            //public ushort OrULong { get; set; }
-            //public uint OrUSkint { get; set; }
-            //public ulong OrUShort { get; set; }
+            public ushort OrULong { get; set; }
+            public uint OrUSkint { get; set; }
+            public ulong OrUShort { get; set; }
             public byte[] AndChew { get; set; }
         }
 
@@ -946,6 +1255,7 @@ namespace Microsoft.EntityFrameworkCore
                 {
                     modelBuilder.HasChangeTrackingStrategy(ChangeTrackingStrategy.ChangedNotifications);
                 }
+
                 modelBuilder.Entity<TBlog>().ToTable("Blog", "dbo");
             }
 
@@ -962,19 +1272,19 @@ namespace Microsoft.EntityFrameworkCore
 
             byte ToEat { get; set; }
 
-            //char CupOfChar { get; set; }
+            char CupOfChar { get; set; }
             double OrNothing { get; set; }
 
             short Fuse { get; set; }
 
             long WayRound { get; set; }
 
-            //sbyte NotToEat { get; set; }
+            sbyte NotToEat { get; set; }
             float Away { get; set; }
 
-            //ushort OrULong { get; set; }
-            //uint OrUSkint { get; set; }
-            //ulong OrUShort { get; set; }
+            ushort OrULong { get; set; }
+            uint OrUSkint { get; set; }
+            ulong OrUShort { get; set; }
             byte[] AndChew { get; set; }
         }
 
@@ -988,19 +1298,19 @@ namespace Microsoft.EntityFrameworkCore
 
             private byte _toEat;
 
-            //private char _cupOfChar;
+            private char _cupOfChar;
             private double _orNothing;
 
             private short _fuse;
 
             private long _wayRound;
 
-            //private sbyte _notToEat;
+            private sbyte _notToEat;
             private float _away;
 
-            //private ushort _orULong;
-            //private uint _orUSkint;
-            //private ulong _orUShort;
+            private ushort _orULong;
+            private uint _orUSkint;
+            private ulong _orUShort;
             private byte[] _andChew;
 
             public int Id
@@ -1087,19 +1397,19 @@ namespace Microsoft.EntityFrameworkCore
                 }
             }
 
-            //public char CupOfChar
-            //{
-            //    get { return _cupOfChar; }
-            //    set
-            //    {
-            //        if (_cupOfChar != value)
-            //        {
-            //            NotifyChanging();
-            //            _cupOfChar = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public char CupOfChar
+            {
+                get { return _cupOfChar; }
+                set
+                {
+                    if (_cupOfChar != value)
+                    {
+                        NotifyChanging();
+                        _cupOfChar = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
             public double OrNothing
             {
@@ -1143,19 +1453,19 @@ namespace Microsoft.EntityFrameworkCore
                 }
             }
 
-            //public sbyte NotToEat
-            //{
-            //    get { return _notToEat; }
-            //    set
-            //    {
-            //        if (_notToEat != value)
-            //        {
-            //            NotifyChanging();
-            //            _notToEat = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public sbyte NotToEat
+            {
+                get { return _notToEat; }
+                set
+                {
+                    if (_notToEat != value)
+                    {
+                        NotifyChanging();
+                        _notToEat = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
             public float Away
             {
@@ -1171,47 +1481,47 @@ namespace Microsoft.EntityFrameworkCore
                 }
             }
 
-            //public ushort OrULong
-            //{
-            //    get { return _orULong; }
-            //    set
-            //    {
-            //        if (_orULong != value)
-            //        {
-            //            NotifyChanging();
-            //            _orULong = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public ushort OrULong
+            {
+                get { return _orULong; }
+                set
+                {
+                    if (_orULong != value)
+                    {
+                        NotifyChanging();
+                        _orULong = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
-            //public uint OrUSkint
-            //{
-            //    get { return _orUSkint; }
-            //    set
-            //    {
-            //        if (_orUSkint != value)
-            //        {
-            //            NotifyChanging();
-            //            _orUSkint = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public uint OrUSkint
+            {
+                get { return _orUSkint; }
+                set
+                {
+                    if (_orUSkint != value)
+                    {
+                        NotifyChanging();
+                        _orUSkint = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
-            //public ulong OrUShort
-            //{
-            //    get { return _orUShort; }
-            //    set
-            //    {
-            //        if (_orUShort != value)
-            //        {
-            //            NotifyChanging();
-            //            _orUShort = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public ulong OrUShort
+            {
+                get { return _orUShort; }
+                set
+                {
+                    if (_orUShort != value)
+                    {
+                        NotifyChanging();
+                        _orUShort = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
             public byte[] AndChew
             {
@@ -1247,19 +1557,19 @@ namespace Microsoft.EntityFrameworkCore
 
             private byte _toEat;
 
-            //private char _cupOfChar;
+            private char _cupOfChar;
             private double _orNothing;
 
             private short _fuse;
 
             private long _wayRound;
 
-            //private sbyte _notToEat;
+            private sbyte _notToEat;
             private float _away;
 
-            //private ushort _orULong;
-            //private uint _orUSkint;
-            //private ulong _orUShort;
+            private ushort _orULong;
+            private uint _orUSkint;
+            private ulong _orUShort;
             private byte[] _andChew;
 
             public int Id
@@ -1340,18 +1650,18 @@ namespace Microsoft.EntityFrameworkCore
                 }
             }
 
-            //public char CupOfChar
-            //{
-            //    get { return _cupOfChar; }
-            //    set
-            //    {
-            //        if (_cupOfChar != value)
-            //        {
-            //            _cupOfChar = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public char CupOfChar
+            {
+                get { return _cupOfChar; }
+                set
+                {
+                    if (_cupOfChar != value)
+                    {
+                        _cupOfChar = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
             public double OrNothing
             {
@@ -1392,18 +1702,18 @@ namespace Microsoft.EntityFrameworkCore
                 }
             }
 
-            //public sbyte NotToEat
-            //{
-            //    get { return _notToEat; }
-            //    set
-            //    {
-            //        if (_notToEat != value)
-            //        {
-            //            _notToEat = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public sbyte NotToEat
+            {
+                get { return _notToEat; }
+                set
+                {
+                    if (_notToEat != value)
+                    {
+                        _notToEat = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
             public float Away
             {
@@ -1418,44 +1728,44 @@ namespace Microsoft.EntityFrameworkCore
                 }
             }
 
-            //public ushort OrULong
-            //{
-            //    get { return _orULong; }
-            //    set
-            //    {
-            //        if (_orULong != value)
-            //        {
-            //            _orULong = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public ushort OrULong
+            {
+                get { return _orULong; }
+                set
+                {
+                    if (_orULong != value)
+                    {
+                        _orULong = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
-            //public uint OrUSkint
-            //{
-            //    get { return _orUSkint; }
-            //    set
-            //    {
-            //        if (_orUSkint != value)
-            //        {
-            //            _orUSkint = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public uint OrUSkint
+            {
+                get { return _orUSkint; }
+                set
+                {
+                    if (_orUSkint != value)
+                    {
+                        _orUSkint = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
-            //public ulong OrUShort
-            //{
-            //    get { return _orUShort; }
-            //    set
-            //    {
-            //        if (_orUShort != value)
-            //        {
-            //            _orUShort = value;
-            //            NotifyChanged();
-            //        }
-            //    }
-            //}
+            public ulong OrUShort
+            {
+                get { return _orUShort; }
+                set
+                {
+                    if (_orUShort != value)
+                    {
+                        _orUShort = value;
+                        NotifyChanged();
+                    }
+                }
+            }
 
             public byte[] AndChew
             {

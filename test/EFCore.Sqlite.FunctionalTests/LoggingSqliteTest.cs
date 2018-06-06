@@ -3,13 +3,17 @@
 
 using System;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 using Xunit;
+#if Test20
+using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
+#else
+using Microsoft.EntityFrameworkCore.Sqlite.Infrastructure.Internal;
+#endif
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
-    public class LoggingSqliteTest : LoggingRelationalTest<SqliteDbContextOptionsBuilder, SqliteOptionsExtension>
+    public class LoggingSqliteTest : LoggingRelationalTestBase<SqliteDbContextOptionsBuilder, SqliteOptionsExtension>
     {
         [Fact]
         public void Logs_context_initialization_no_FKs()

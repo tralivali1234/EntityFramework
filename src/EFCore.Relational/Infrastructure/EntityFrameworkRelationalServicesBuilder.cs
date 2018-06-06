@@ -65,7 +65,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(IRelationalCommandBuilderFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IRawSqlCommandBuilder), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IMigrationsSqlGenerator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+#pragma warning disable 618
                 { typeof(IRelationalTypeMapper), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+#pragma warning restore 618
+                { typeof(IRelationalTypeMappingSource), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IRelationalValueBufferFactoryFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IMaterializerFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IShaperCommandContextFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
@@ -73,7 +76,8 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 { typeof(ISelectExpressionFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IExpressionFragmentTranslator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ISqlTranslatingExpressionVisitorFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
-                { typeof(IUpdateSqlGenerator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
+                { typeof(IUpdateSqlGenerator), new ServiceCharacteristics(ServiceLifetime.Scoped) },
+                { typeof(ISingletonUpdateSqlGenerator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IMemberTranslator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(ICompositeMethodCallTranslator), new ServiceCharacteristics(ServiceLifetime.Singleton) },
                 { typeof(IQuerySqlGeneratorFactory), new ServiceCharacteristics(ServiceLifetime.Singleton) },
@@ -141,7 +145,12 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             TryAdd<IMigrationsModelDiffer, MigrationsModelDiffer>();
             TryAdd<IMigrationsSqlGenerator, MigrationsSqlGenerator>();
             TryAdd<IExecutionStrategyFactory, RelationalExecutionStrategyFactory>();
+#pragma warning disable 618
+            TryAdd<IRelationalTypeMapper, ObsoleteRelationalTypeMapper>();
             TryAdd<ITypeMapper>(p => p.GetService<IRelationalTypeMapper>());
+#pragma warning restore 618
+            TryAdd<IRelationalTypeMappingSource, FallbackRelationalTypeMappingSource>();
+            TryAdd<ITypeMappingSource>(p => p.GetService<IRelationalTypeMappingSource>());
             TryAdd<IRelationalValueBufferFactoryFactory, TypedRelationalValueBufferFactoryFactory>();
             TryAdd<IDatabaseCreator>(p => p.GetService<IRelationalDatabaseCreator>());
             TryAdd<IDbContextTransactionManager>(p => p.GetService<IRelationalConnection>());
@@ -164,10 +173,20 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             TryAdd<IEvaluatableExpressionFilter, RelationalEvaluatableExpressionFilter>();
             TryAdd<IRelationalTransactionFactory, RelationalTransactionFactory>();
 
+            TryAdd<ISingletonUpdateSqlGenerator>(
+                p =>
+                {
+                    using (var scope = p.CreateScope())
+                    {
+                        return scope.ServiceProvider.GetService<IUpdateSqlGenerator>();
+                    }
+                });
+
             ServiceCollectionMap.GetInfrastructure()
                 .AddDependencySingleton<RelationalCompositeMemberTranslatorDependencies>()
                 .AddDependencySingleton<RelationalSqlGenerationHelperDependencies>()
                 .AddDependencySingleton<RelationalTypeMapperDependencies>()
+                .AddDependencySingleton<RelationalTypeMappingSourceDependencies>()
                 .AddDependencySingleton<RelationalCompositeExpressionFragmentTranslatorDependencies>()
                 .AddDependencySingleton<RelationalModelValidatorDependencies>()
                 .AddDependencySingleton<UpdateSqlGeneratorDependencies>()

@@ -28,41 +28,26 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public DateTimeOffsetTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : this(storeType, null, dbType)
+            : base(storeType, typeof(DateTimeOffset), dbType)
         {
         }
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="DateTimeOffsetTypeMapping" /> class.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="converter"> Converts types to and from the store whenever this mapping is used. </param>
-        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
-        public DateTimeOffsetTypeMapping(
-            [NotNull] string storeType,
-            [CanBeNull] ValueConverter converter,
-            DbType? dbType = null)
-            : base(storeType, typeof(DateTimeOffset), converter, dbType)
+        /// <param name="parameters"> Parameter object for <see cref="RelationalTypeMapping" />. </param>
+        protected DateTimeOffsetTypeMapping(RelationalTypeMappingParameters parameters)
+            : base(parameters)
         {
         }
 
         /// <summary>
         ///     Creates a copy of this mapping.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        /// <param name="parameters"> The parameters for this mapping. </param>
         /// <returns> The newly created mapping. </returns>
-        public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new DateTimeOffsetTypeMapping(storeType, Converter, DbType);
-
-        /// <summary>
-        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
-        ///    added.
-        /// </summary>
-        /// <param name="converter"> The converter to use. </param>
-        /// <returns> A new type mapping </returns>
-        public override CoreTypeMapping Clone(ValueConverter converter)
-            => new DateTimeOffsetTypeMapping(StoreType, ComposeConverter(converter), DbType);
+        protected override RelationalTypeMapping Clone(RelationalTypeMappingParameters parameters)
+            => new DateTimeOffsetTypeMapping(parameters);
 
         /// <summary>
         ///     Gets the string format to be used to generate SQL literals of this type.

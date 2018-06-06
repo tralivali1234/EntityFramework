@@ -7,8 +7,6 @@ using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
-using Microsoft.EntityFrameworkCore.Storage;
-using Remotion.Linq.Clauses;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
 {
@@ -22,11 +20,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        Expression<Func<ValueBuffer, object>> CreateMaterializer(
+        LambdaExpression CreateMaterializer(
             [NotNull] IEntityType entityType,
             [NotNull] SelectExpression selectExpression,
             [NotNull] Func<IProperty, SelectExpression, int> projectionAdder,
-            [CanBeNull] IQuerySource querySource,
             out Dictionary<Type, int[]> typeIndexMap);
     }
 }

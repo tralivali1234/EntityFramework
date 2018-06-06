@@ -5,8 +5,9 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Query.Expressions;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Query.ExpressionTranslators.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -16,7 +17,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
     {
         // Method defined in netcoreapp2.0 only
         private static readonly MethodInfo _methodInfoWithoutArgs
-            = typeof(string).GetRuntimeMethod(nameof(string.TrimStart), new Type[] { });
+            = typeof(string).GetRuntimeMethod(nameof(string.TrimStart), Array.Empty<Type>());
 
         // Method defined in netstandard2.0
         private static readonly MethodInfo _methodInfoWithCharArrayArg

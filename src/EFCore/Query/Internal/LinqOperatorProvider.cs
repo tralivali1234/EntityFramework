@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -20,6 +21,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    // Issue#11266 This type is being used by provider code. Do not break.
     public class LinqOperatorProvider : ILinqOperatorProvider
     {
         #region EnumerableAdapters
@@ -104,6 +106,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             public IEnumerator<T> GetEnumerator() => new EnumeratorExceptionInterceptor(this);
 
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
             [DebuggerStepThrough]
@@ -115,13 +118,17 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 public EnumeratorExceptionInterceptor(ExceptionInterceptor<T> exceptionInterceptor)
                 {
                     _exceptionInterceptor = exceptionInterceptor;
-
                 }
 
-                public T Current => _innerEnumerator.Current;
+                public T Current
+                {
+                    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+                    get => _innerEnumerator.Current;
+                }
 
                 object IEnumerator.Current => _innerEnumerator.Current;
 
+                [MethodImpl(MethodImplOptions.AggressiveInlining)]
                 public bool MoveNext()
                 {
                     using (_exceptionInterceptor._queryContext.ConcurrencyDetector.EnterCriticalSection())
@@ -132,6 +139,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                             {
                                 _innerEnumerator = _exceptionInterceptor._innerEnumerable.GetEnumerator();
                             }
+
                             return _innerEnumerator.MoveNext();
                         }
                         catch (Exception exception)
@@ -223,61 +231,28 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             IList<EntityTrackingInfo> entityTrackingInfos,
             IList<Func<TElement, object>> entityAccessors)
         {
-            return groupings
-                .Select(
-                    g =>
-                        new TrackingGrouping<TKey, TElement>(
-                            g,
-                            queryContext,
-                            entityTrackingInfos,
-                            entityAccessors));
-        }
+            queryContext.BeginTrackingQuery();
 
-        private sealed class TrackingGrouping<TKey, TElement> : IGrouping<TKey, TElement>
-        {
-            private readonly IGrouping<TKey, TElement> _grouping;
-            private readonly QueryContext _queryContext;
-            private readonly IList<EntityTrackingInfo> _entityTrackingInfos;
-            private readonly IList<Func<TElement, object>> _entityAccessors;
-
-            public TrackingGrouping(
-                IGrouping<TKey, TElement> grouping,
-                QueryContext queryContext,
-                IList<EntityTrackingInfo> entityTrackingInfos,
-                IList<Func<TElement, object>> entityAccessors)
+            foreach (var grouping in groupings)
             {
-                _grouping = grouping;
-                _queryContext = queryContext;
-                _entityTrackingInfos = entityTrackingInfos;
-                _entityAccessors = entityAccessors;
-            }
-
-            public TKey Key => _grouping.Key;
-
-            public IEnumerator<TElement> GetEnumerator()
-            {
-                _queryContext.BeginTrackingQuery();
-
-                foreach (var result in _grouping)
+                foreach (var result in grouping)
                 {
                     if (result != null)
                     {
-                        for (var i = 0; i < _entityTrackingInfos.Count; i++)
+                        for (var i = 0; i < entityTrackingInfos.Count; i++)
                         {
-                            var entity = _entityAccessors[i](result);
+                            var entity = entityAccessors[i](result);
 
                             if (entity != null)
                             {
-                                _queryContext.StartTracking(entity, _entityTrackingInfos[i]);
+                                queryContext.StartTracking(entity, entityTrackingInfos[i]);
                             }
                         }
                     }
-
-                    yield return result;
                 }
-            }
 
-            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+                yield return grouping;
+            }
         }
 
         /// <summary>

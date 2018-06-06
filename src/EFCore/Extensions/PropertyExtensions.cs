@@ -5,8 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 
@@ -44,10 +46,10 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         /// <summary>
-        ///     Gets a value indicating whether or not the property can persist unicode characters.
+        ///     Gets a value indicating whether or not the property can persist Unicode characters.
         /// </summary>
-        /// <param name="property"> The property to get the unicode setting for. </param>
-        /// <returns> The unicode setting, or null if none if defined. </returns>
+        /// <param name="property"> The property to get the Unicode setting for. </param>
+        /// <returns> The Unicode setting, or null if none if defined. </returns>
         public static bool? IsUnicode([NotNull] this IProperty property)
         {
             Check.NotNull(property, nameof(property));
@@ -142,5 +144,37 @@ namespace Microsoft.EntityFrameworkCore
         public static IEnumerable<IKey> GetContainingKeys([NotNull] this IProperty property)
             => Check.NotNull(property, nameof(property)).AsProperty().Keys
                ?? Enumerable.Empty<IKey>();
+
+        /// <summary>
+        ///     Gets the type that the property value will be converted to before being sent to the database provider.
+        /// </summary>
+        /// <param name="property"> The property. </param>
+        /// <returns> The provider type, or <c>null</c> if none has been set. </returns>
+        public static Type GetProviderClrType([NotNull] this IProperty property)
+            => (Type)Check.NotNull(property, nameof(property))[CoreAnnotationNames.ProviderClrType];
+
+        /// <summary>
+        ///     Gets the custom <see cref="ValueConverter" /> set for this property.
+        /// </summary>
+        /// <param name="property"> The property. </param>
+        /// <returns> The converter, or <c>null</c> if none has been set. </returns>
+        public static ValueConverter GetValueConverter([NotNull] this IProperty property)
+            => (ValueConverter)Check.NotNull(property, nameof(property))[CoreAnnotationNames.ValueConverter];
+
+        /// <summary>
+        ///     Gets the <see cref="ValueComparer" /> for this property, or null if none is set.
+        /// </summary>
+        /// <param name="property"> The property. </param>
+        /// <returns> The comparer, or <c>null</c> if none has been set. </returns>
+        public static ValueComparer GetValueComparer([NotNull] this IProperty property)
+            => (ValueComparer)Check.NotNull(property, nameof(property))[CoreAnnotationNames.ValueComparer];
+
+        /// <summary>
+        ///     Gets the <see cref="ValueComparer" /> for this property, or null if none is set.
+        /// </summary>
+        /// <param name="property"> The property. </param>
+        /// <returns> The comparer, or <c>null</c> if none has been set. </returns>
+        public static ValueComparer GetKeyValueComparer([NotNull] this IProperty property)
+            => (ValueComparer)Check.NotNull(property, nameof(property))[CoreAnnotationNames.KeyValueComparer];
     }
 }

@@ -5,12 +5,12 @@ using System;
 using System.Data.SqlClient;
 using JetBrains.Annotations;
 
-namespace Microsoft.EntityFrameworkCore.Storage.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal
 {
     /// <summary>
     ///     Detects the exceptions caused by SQL Server transient failures.
     /// </summary>
-    public class SqlServerTransientExceptionDetector
+    public static class SqlServerTransientExceptionDetector
     {
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -111,10 +111,10 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                         // The instance of SQL Server you attempted to connect to does not support encryption.
                         case 20:
                             return true;
-                            // This exception can be thrown even if the operation completed succesfully, so it's safer to let the application fail.
-                            // DBNETLIB Error Code: -2
-                            // Timeout expired. The timeout period elapsed prior to completion of the operation or the server is not responding. The statement has been terminated.
-                            //case -2:
+                        // This exception can be thrown even if the operation completed succesfully, so it's safer to let the application fail.
+                        // DBNETLIB Error Code: -2
+                        // Timeout expired. The timeout period elapsed prior to completion of the operation or the server is not responding. The statement has been terminated.
+                        //case -2:
                     }
                 }
 

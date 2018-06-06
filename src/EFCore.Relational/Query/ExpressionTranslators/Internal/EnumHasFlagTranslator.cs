@@ -5,7 +5,6 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.Query.Expressions;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
@@ -57,15 +56,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
                 var convertedObjectExpression = Expression.Convert(methodCallExpression.Object, objectType);
                 var convertedArgumentExpression = Expression.Convert(argument, objectType);
 
-                var bitwiseArgumentExpression
-                    = objectType == typeof(long) && argument is ConstantExpression
-                        ? (Expression)new ExplicitCastExpression(argument, objectType)
-                        : convertedArgumentExpression;
-
                 return Expression.Equal(
                     Expression.And(
                         convertedObjectExpression,
-                        bitwiseArgumentExpression),
+                        convertedArgumentExpression),
                     convertedArgumentExpression);
             }
 

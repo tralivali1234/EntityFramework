@@ -13,6 +13,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    // Issue#11266 This type is being used by provider code. Do not break.
     public abstract class RelationalConventionSetBuilder : IConventionSetBuilder
     {
         /// <summary>
@@ -50,9 +51,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             var sharedTableConvention = new SharedTableConvention();
 
+            var discriminatorConvention = new DiscriminatorConvention();
             conventionSet.EntityTypeAddedConventions.Add(new RelationalTableAttributeConvention());
             conventionSet.EntityTypeAddedConventions.Add(sharedTableConvention);
-            conventionSet.BaseEntityTypeChangedConventions.Add(new DiscriminatorConvention());
+            conventionSet.EntityTypeRemovedConventions.Add(discriminatorConvention);
+            conventionSet.BaseEntityTypeChangedConventions.Add(discriminatorConvention);
             conventionSet.BaseEntityTypeChangedConventions.Add(
                 new TableNameFromDbSetConvention(Dependencies.Context?.Context, Dependencies.SetFinder));
             conventionSet.EntityTypeAnnotationChangedConventions.Add(sharedTableConvention);
@@ -61,7 +64,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             conventionSet.ForeignKeyUniquenessChangedConventions.Add(sharedTableConvention);
             conventionSet.ForeignKeyOwnershipChangedConventions.Add(sharedTableConvention);
 
-            conventionSet.ModelBuiltConventions.Add(new RelationalTypeMappingConvention(Dependencies.TypeMapper));
             conventionSet.ModelBuiltConventions.Add(sharedTableConvention);
 
             conventionSet.ModelAnnotationChangedConventions.Add(new RelationalDbFunctionConvention());
@@ -81,6 +83,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             {
                 throw new InvalidOperationException();
             }
+
             var index = conventionsList.IndexOf(oldConvention);
             conventionsList.RemoveAt(index);
             conventionsList.Insert(index, newConvention);

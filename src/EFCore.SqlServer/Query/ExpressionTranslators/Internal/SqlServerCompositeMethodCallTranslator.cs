@@ -2,8 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Query.ExpressionTranslators;
 
-namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Query.ExpressionTranslators.Internal
 {
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -16,7 +17,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
             new SqlServerContainsOptimizedTranslator(),
             new SqlServerConvertTranslator(),
             new SqlServerDateAddTranslator(),
+            new SqlServerDateDiffTranslator(),
             new SqlServerEndsWithOptimizedTranslator(),
+            new SqlServerFreeTextMethodCallTranslator(),
             new SqlServerMathTranslator(),
             new SqlServerNewGuidTranslator(),
             new SqlServerObjectToStringTranslator(),
@@ -28,7 +31,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
             new SqlServerStringToUpperTranslator(),
             new SqlServerStringTrimEndTranslator(),
             new SqlServerStringTrimStartTranslator(),
-            new SqlServerStringTrimTranslator()
+            new SqlServerStringTrimTranslator(),
+            new SqlServerStringIndexOfTranslator()
         };
 
         /// <summary>

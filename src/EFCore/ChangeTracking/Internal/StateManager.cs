@@ -41,8 +41,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         private TrackingQueryMode _trackingQueryMode = TrackingQueryMode.Simple;
         private IEntityType _singleQueryModeEntityType;
 
-        private readonly bool _sensitiveLoggingEnabled;
-        private readonly IDiagnosticsLogger<DbLoggerCategory.Update> _updateLogger;
+        private readonly IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> _changeTrackingLogger;
         private readonly IInternalEntityEntryFactory _internalEntityEntryFactory;
         private readonly IInternalEntityEntrySubscriber _internalEntityEntrySubscriber;
         private readonly IModel _model;
@@ -68,11 +67,24 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
             if (dependencies.LoggingOptions.IsSensitiveDataLoggingEnabled)
             {
-                _sensitiveLoggingEnabled = true;
+                SensitiveLoggingEnabled = true;
             }
 
-            _updateLogger = dependencies.UpdateLogger;
+            UpdateLogger = dependencies.UpdateLogger;
+            _changeTrackingLogger = dependencies.ChangeTrackingLogger;
         }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool SensitiveLoggingEnabled { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IDiagnosticsLogger<DbLoggerCategory.Update> UpdateLogger { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -143,7 +155,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             {
                 _trackingQueryMode = TrackingQueryMode.Multiple;
 
-                var entityType = _model.FindEntityType(entity.GetType());
+                var entityType = _model.FindRuntimeEntityType(entity.GetType());
                 if (entityType == null)
                 {
                     if (_model.HasEntityTypeWithDefiningNavigation(entity.GetType()))
@@ -153,13 +165,20 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                                 entity.GetType().ShortDisplayName(),
                                 "." + nameof(EntityEntry.Reference) + "()." + nameof(ReferenceEntry.TargetEntry)));
                     }
+
                     throw new InvalidOperationException(CoreStrings.EntityTypeNotFound(entity.GetType().ShortDisplayName()));
+                }
+
+                if (entityType.IsQueryType)
+                {
+                    throw new InvalidOperationException(CoreStrings.QueryTypeNotValid(entityType.DisplayName()));
                 }
 
                 entry = _internalEntityEntryFactory.Create(this, entityType, entity);
 
                 _entityReferenceMap[entity] = entry;
             }
+
             return entry;
         }
 
@@ -178,6 +197,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
                 AddToReferenceMap(entry);
             }
+
             return entry;
         }
 
@@ -197,9 +217,14 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                     ? value
                     : property.ClrType.GetDefaultValue();
             }
+
             var valueBuffer = new ValueBuffer(valuesArray);
 
-            var entity = entityType.HasClrType() ? EntityMaterializerSource.GetMaterializer(entityType)(valueBuffer) : null;
+            var entity = entityType.HasClrType()
+                ? EntityMaterializerSource.GetMaterializer(entityType)(
+                    new MaterializationContext(valueBuffer, Context))
+                : null;
+
             var entry = _internalEntityEntryFactory.Create(this, entityType, entity, valueBuffer);
 
             AddToReferenceMap(entry);
@@ -216,7 +241,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 foreach (var otherType in _model.GetEntityTypes(entityType.Name)
                     .Where(et => et != entityType && TryGetEntry(mapKey, et) != null))
                 {
-                    _updateLogger.DuplicateDependentEntityTypeInstanceWarning(entityType, otherType);
+                    UpdateLogger.DuplicateDependentEntityTypeInstanceWarning(entityType, otherType);
                 }
 
                 if (!_dependentTypeReferenceMap.TryGetValue(entityType, out var entries))
@@ -256,7 +281,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         public virtual InternalEntityEntry StartTrackingFromQuery(
             IEntityType baseEntityType,
             object entity,
-            ValueBuffer valueBuffer,
+            in ValueBuffer valueBuffer,
             ISet<IForeignKey> handledForeignKeys)
         {
             var existingEntry = TryGetEntry(entity);
@@ -270,8 +295,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             var newEntry = _internalEntityEntryFactory.Create(
                 this,
                 baseEntityType.ClrType == clrType
+                || baseEntityType.HasDefiningNavigation()
                     ? baseEntityType
-                    : _model.FindEntityType(clrType),
+                    : _model.FindRuntimeEntityType(clrType),
                 entity, valueBuffer);
 
             foreach (var key in baseEntityType.GetKeys())
@@ -302,7 +328,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual InternalEntityEntry TryGetEntry(IKey key, ValueBuffer valueBuffer, bool throwOnNullKey)
+        public virtual InternalEntityEntry TryGetEntry(IKey key, in ValueBuffer valueBuffer, bool throwOnNullKey)
             => GetOrCreateIdentityMap(key).TryGetEntry(valueBuffer, throwOnNullKey);
 
         /// <summary>
@@ -321,7 +347,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             foreach (var keyValue in _dependentTypeReferenceMap)
             {
                 // ReSharper disable once CheckForReferenceEqualityInstead.2
-                if (Equals(keyValue.Key.ClrType, type)
+                if (keyValue.Key.ClrType.IsAssignableFrom(type)
                     && keyValue.Value.TryGetValue(entity, out var foundEntry))
                 {
                     if (found)
@@ -336,6 +362,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                                 entity.GetType().ShortDisplayName(),
                                 "." + nameof(EntityEntry.Reference) + "()." + nameof(ReferenceEntry.TargetEntry)));
                     }
+
                     entry = foundEntry;
                     found = true;
                 }
@@ -360,7 +387,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         {
             if (_identityMap0 == null)
             {
-                _identityMap0 = key.GetIdentityMapFactory()(_sensitiveLoggingEnabled);
+                _identityMap0 = key.GetIdentityMapFactory()(SensitiveLoggingEnabled);
                 return _identityMap0;
             }
 
@@ -371,7 +398,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
             if (_identityMap1 == null)
             {
-                _identityMap1 = key.GetIdentityMapFactory()(_sensitiveLoggingEnabled);
+                _identityMap1 = key.GetIdentityMapFactory()(SensitiveLoggingEnabled);
                 return _identityMap1;
             }
 
@@ -387,9 +414,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
             if (!_identityMaps.TryGetValue(key, out var identityMap))
             {
-                identityMap = key.GetIdentityMapFactory()(_sensitiveLoggingEnabled);
+                identityMap = key.GetIdentityMapFactory()(SensitiveLoggingEnabled);
                 _identityMaps[key] = identityMap;
             }
+
             return identityMap;
         }
 
@@ -420,6 +448,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             {
                 return null;
             }
+
             return identityMap;
         }
 
@@ -429,8 +458,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public virtual IEnumerable<InternalEntityEntry> Entries => _entityReferenceMap.Values
             .Concat(_dependentTypeReferenceMap.Values.SelectMany(e => e.Values))
-            .Where(e => e.EntityState != EntityState.Detached
-                        && (e.SharedIdentityEntry == null || e.EntityState != EntityState.Deleted));
+            .Where(
+                e => e.EntityState != EntityState.Detached
+                     && (e.SharedIdentityEntry == null || e.EntityState != EntityState.Deleted));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -438,7 +468,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         /// </summary>
         public virtual InternalEntityEntry StartTracking(InternalEntityEntry entry)
         {
-            var entityType = entry.EntityType;
+            var entityType = (EntityType)entry.EntityType;
 
             if (entry.StateManager != this)
             {
@@ -509,7 +539,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
                 foreach (var keyValuePair in _referencedUntrackedEntities.Value.ToList())
                 {
-                    var untrackedEntityType = _model.FindEntityType(keyValuePair.Key.GetType());
+                    var untrackedEntityType = _model.FindRuntimeEntityType(keyValuePair.Key.GetType());
                     if (navigations.Any(n => n.GetTargetType().IsAssignableFrom(untrackedEntityType))
                         || untrackedEntityType.GetNavigations().Any(n => n.GetTargetType().IsAssignableFrom(entityType)))
                     {
@@ -579,6 +609,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 danglers = new List<Tuple<INavigation, InternalEntityEntry>>();
                 _referencedUntrackedEntities.Value.Add(referencedEntity, danglers);
             }
+
             danglers.Add(Tuple.Create(navigation, referencedFromEntry));
         }
 
@@ -595,6 +626,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 {
                     _referencedUntrackedEntities.Value.Remove(referencedEntity);
                 }
+
                 return danglers;
             }
 
@@ -740,7 +772,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             }
 
             var entriesToSave = GetInternalEntriesToSave();
-            if (!entriesToSave.Any())
+            if (entriesToSave.Count == 0)
             {
                 return 0;
             }
@@ -762,6 +794,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 {
                     entry.DiscardStoreGeneratedValues();
                 }
+
                 throw;
             }
         }
@@ -784,12 +817,12 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                       || e.EntityState == EntityState.Added)
                      && e.HasConceptualNull).ToList())
             {
-                entry.HandleConceptualNulls();
+                entry.HandleConceptualNulls(SensitiveLoggingEnabled);
             }
 
             foreach (var entry in Entries.Where(e => e.EntityState == EntityState.Deleted).ToList())
             {
-                entry.CascadeDelete();
+                CascadeDelete(entry);
             }
 
             return Entries
@@ -799,6 +832,52 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                          || e.EntityState == EntityState.Deleted)
                 .Select(e => e.PrepareToSave())
                 .ToList();
+        }
+
+        private void CascadeDelete(InternalEntityEntry entry)
+        {
+            foreach (var fk in entry.EntityType.GetReferencingForeignKeys())
+            {
+                foreach (var dependent in (GetDependentsFromNavigation(entry, fk)
+                                           ?? GetDependents(entry, fk)).ToList())
+                {
+                    if (dependent.EntityState != EntityState.Deleted
+                        && dependent.EntityState != EntityState.Detached)
+                    {
+                        if (fk.DeleteBehavior == DeleteBehavior.Cascade)
+                        {
+                            var cascadeState = dependent.EntityState == EntityState.Added
+                                ? EntityState.Detached
+                                : EntityState.Deleted;
+
+                            if (SensitiveLoggingEnabled)
+                            {
+                                UpdateLogger.CascadeDeleteSensitive(dependent, entry, cascadeState);
+                            }
+                            else
+                            {
+                                UpdateLogger.CascadeDelete(dependent, entry, cascadeState);
+                            }
+
+                            dependent.SetEntityState(cascadeState);
+
+                            CascadeDelete(dependent);
+                        }
+                        else if (fk.DeleteBehavior != DeleteBehavior.Restrict)
+                        {
+                            foreach (var dependentProperty in fk.Properties)
+                            {
+                                dependent[dependentProperty] = null;
+                            }
+
+                            if (dependent.HasConceptualNull)
+                            {
+                                dependent.HandleConceptualNulls(SensitiveLoggingEnabled);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -836,6 +915,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 {
                     entry.DiscardStoreGeneratedValues();
                 }
+
                 throw;
             }
         }
@@ -883,12 +963,66 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             AcceptAllChanges(changedEntries);
         }
 
-        private static void AcceptAllChanges(IEnumerable<InternalEntityEntry> changedEntries)
+        private static void AcceptAllChanges(IReadOnlyList<InternalEntityEntry> changedEntries)
         {
-            foreach (var entry in changedEntries)
+            // ReSharper disable once ForCanBeConvertedToForeach
+            for (var entryIndex = 0; entryIndex < changedEntries.Count; entryIndex++)
             {
-                entry.AcceptChanges();
+                changedEntries[entryIndex].AcceptChanges();
             }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public event EventHandler<EntityTrackedEventArgs> Tracked;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual void OnTracked(InternalEntityEntry internalEntityEntry, bool fromQuery)
+        {
+            var @event = Tracked;
+
+            if (SensitiveLoggingEnabled)
+            {
+                _changeTrackingLogger.StartedTrackingSensitive(internalEntityEntry);
+            }
+            else
+            {
+                _changeTrackingLogger.StartedTracking(internalEntityEntry);
+            }
+
+            @event?.Invoke(Context.ChangeTracker, new EntityTrackedEventArgs(internalEntityEntry, fromQuery));
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public event EventHandler<EntityStateChangedEventArgs> StateChanged;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual void OnStateChanged(InternalEntityEntry internalEntityEntry, EntityState oldState)
+        {
+            var @event = StateChanged;
+            var newState = internalEntityEntry.EntityState;
+
+            if (SensitiveLoggingEnabled)
+            {
+                _changeTrackingLogger.StateChangedSensitive(internalEntityEntry, oldState, newState);
+            }
+            else
+            {
+                _changeTrackingLogger.StateChanged(internalEntityEntry, oldState, newState);
+            }
+
+            @event?.Invoke(Context.ChangeTracker, new EntityStateChangedEventArgs(internalEntityEntry, oldState, newState));
         }
     }
 }

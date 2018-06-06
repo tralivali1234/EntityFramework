@@ -14,6 +14,28 @@ namespace Microsoft.EntityFrameworkCore.Metadata
     public class RelationalBuilderExtensionsTest
     {
         [Fact]
+        public void Can_set_fixed_length()
+        {
+            var modelBuilder = CreateConventionModelBuilder();
+
+            modelBuilder
+                .Entity<Customer>()
+                .Property(e => e.Name)
+                .IsFixedLength();
+
+            var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("Name");
+
+            Assert.True(property.Relational().IsFixedLength);
+
+            modelBuilder
+                .Entity<Customer>()
+                .Property(e => e.Name)
+                .IsFixedLength(false);
+
+            Assert.False(property.Relational().IsFixedLength);
+        }
+
+        [Fact]
         public void Can_write_index_builder_extension_with_where_clauses()
         {
             var builder = CreateConventionModelBuilder();
@@ -190,8 +212,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata
 
             var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("EnumValue");
 
-            Assert.Equal(typeof(ulong), property.Relational().DefaultValue.GetType());
-            Assert.Equal((ulong)2, property.Relational().DefaultValue);
+            Assert.Equal(typeof(MyEnum), property.Relational().DefaultValue.GetType());
+            Assert.Equal(MyEnum.Tue, property.Relational().DefaultValue);
             Assert.Equal(ValueGenerated.OnAdd, property.ValueGenerated);
         }
 
@@ -868,12 +890,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             modelBuilder
                 .HasSequence<int>(
                     "Snook", b =>
-                        {
-                            b.IncrementsBy(11)
-                                .StartsAt(1729)
-                                .HasMin(111)
-                                .HasMax(2222);
-                        });
+                    {
+                        b.IncrementsBy(11)
+                            .StartsAt(1729)
+                            .HasMin(111)
+                            .HasMax(2222);
+                    });
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook");
 
@@ -888,12 +910,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             modelBuilder
                 .HasSequence(
                     typeof(int), "Snook", b =>
-                        {
-                            b.IncrementsBy(11)
-                                .StartsAt(1729)
-                                .HasMin(111)
-                                .HasMax(2222);
-                        });
+                    {
+                        b.IncrementsBy(11)
+                            .StartsAt(1729)
+                            .HasMin(111)
+                            .HasMax(2222);
+                    });
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook");
 

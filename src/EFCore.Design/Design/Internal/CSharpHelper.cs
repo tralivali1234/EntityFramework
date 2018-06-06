@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
@@ -137,6 +138,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 { typeof(Guid), (c, v) => c.Literal((Guid)v) },
                 { typeof(int), (c, v) => c.Literal((int)v) },
                 { typeof(long), (c, v) => c.Literal((long)v) },
+                { typeof(NestedClosureCodeFragment), (c, v) => c.Fragment((NestedClosureCodeFragment)v) },
+                { typeof(object[]), (c, v) => c.Literal((object[])v) },
+                { typeof(object[,]), (c, v) => c.Literal((object[,])v) },
                 { typeof(sbyte), (c, v) => c.Literal((sbyte)v) },
                 { typeof(short), (c, v) => c.Literal((short)v) },
                 { typeof(string), (c, v) => c.Literal((string)v) },
@@ -268,6 +272,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 {
                     uniqueIdentifier = identifier + qualifier++;
                 }
+
                 scope.Add(uniqueIdentifier);
                 identifier = uniqueIdentifier;
             }
@@ -298,6 +303,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                         .Append('.');
                 }
             }
+
             return @namespace.Length > 0 ? @namespace.Remove(@namespace.Length - 1, 1).ToString() : "_";
         }
 
@@ -371,7 +377,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         /// </summary>
         public virtual string Literal(double value) => EnsureDecimalPlaces(value.ToString("R", CultureInfo.InvariantCulture));
 
-        private string EnsureDecimalPlaces(string number) => number.IndexOf('.') >= 0 ? number : number + ".0";
+        private static string EnsureDecimalPlaces(string number) => number.IndexOf('.') >= 0 ? number : number + ".0";
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -395,7 +401,7 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string Literal(long value) => value + "L";
+        public virtual string Literal(long value) => value.ToString(CultureInfo.InvariantCulture) + "L";
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -454,6 +460,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual string Literal<T>(IReadOnlyList<T> values) =>
+            Array(values);
+
+        private string Array(IEnumerable values) =>
             "new[] { " + string.Join(", ", values.Cast<object>().Select(UnknownLiteral)) + " }";
 
         /// <summary>
@@ -576,8 +585,50 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 return Literal(enumValue);
             }
 
+            if (value is Array array)
+            {
+                return Array(array);
+            }
+
             throw new InvalidOperationException(DesignStrings.UnknownLiteral(value.GetType()));
         }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual string Fragment(MethodCallCodeFragment fragment)
+        {
+            var builder = new StringBuilder();
+
+            var current = fragment;
+            while (current != null)
+            {
+                builder
+                    .Append(".")
+                    .Append(current.Method)
+                    .Append("(");
+
+                for (var i = 0; i < current.Arguments.Count; i++)
+                {
+                    if (i != 0)
+                    {
+                        builder.Append(", ");
+                    }
+
+                    builder.Append(UnknownLiteral(current.Arguments[i]));
+                }
+
+                builder.Append(")");
+
+                current = current.ChainedCall;
+            }
+
+            return builder.ToString();
+        }
+
+        private string Fragment(NestedClosureCodeFragment fragment)
+            => fragment.Parameter + " => " + fragment.Parameter + Fragment(fragment.MethodCall);
 
         private static bool IsIdentifierStartCharacter(char ch)
         {
@@ -591,10 +642,12 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 return ch <= 'Z'
                        || ch == '_';
             }
+
             if (ch <= 'z')
             {
                 return true;
             }
+
             if (ch <= '\u007F') // max ASCII
             {
                 return false;
@@ -616,10 +669,12 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
                 return ch <= 'Z'
                        || ch == '_';
             }
+
             if (ch <= 'z')
             {
                 return true;
             }
+
             if (ch <= '\u007F')
             {
                 return false;

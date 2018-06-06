@@ -7,7 +7,7 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace Microsoft.EntityFrameworkCore.Internal
+namespace Microsoft.EntityFrameworkCore.SqlServer.Internal
 {
     /// <summary>
     ///		This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
     public static class SqlServerStrings
     {
         private static readonly ResourceManager _resourceManager
-            = new ResourceManager("Microsoft.EntityFrameworkCore.Properties.SqlServerStrings", typeof(SqlServerStrings).GetTypeInfo().Assembly);
+            = new ResourceManager("Microsoft.EntityFrameworkCore.SqlServer.Properties.SqlServerStrings", typeof(SqlServerStrings).GetTypeInfo().Assembly);
 
         /// <summary>
         ///     Identity value generation cannot be used for the property '{property}' on entity type '{entityType}' because the property type is '{propertyType}'. Identity value generation can only be used with signed integer properties.
@@ -33,6 +33,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => string.Format(
                 GetString("UnqualifiedDataType", nameof(dataType)),
                 dataType);
+
+        /// <summary>
+        ///     Data type '{dataType}' for property '{property}' is not supported in this form. Either specify the length explicitly in the type name, for example as '{dataType}(16)', or remove the data type and use APIs such as HasMaxLength to allow EF choose the data type.
+        /// </summary>
+        public static string UnqualifiedDataTypeOnProperty([CanBeNull] object dataType, [CanBeNull] object property)
+            => string.Format(
+                GetString("UnqualifiedDataTypeOnProperty", nameof(dataType), nameof(property)),
+                dataType, property);
 
         /// <summary>
         ///     SQL Server sequences cannot be used to generate values for the property '{property}' on entity type '{entityType}' because the property type is '{propertyType}'. Sequences can only be used with integer properties.
@@ -61,18 +69,19 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("AlterIdentityColumn");
 
         /// <summary>
-        ///     An exception has been raised that is likely due to a transient failure. If you are connecting to a SQL Azure database consider using SqlAzureExecutionStrategy.
+        ///     An exception has been raised that is likely due to a transient failure. Consider enabling transient error resiliency by adding 'EnableRetryOnFailure()' to the 'UseSqlServer' call.
         /// </summary>
         public static string TransientExceptionDetected
             => GetString("TransientExceptionDetected");
 
         /// <summary>
-        ///     No type was specified for the decimal column '{property}' on entity type '{entityType}'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values using 'ForHasColumnType()'.
+        ///     No type was specified for the decimal column '{property}' on entity type '{entityType}'. This will cause values to be silently truncated if they do not fit in the default precision and scale. Explicitly specify the SQL server column type that can accommodate all the values using 'HasColumnType()'.
         /// </summary>
         public static readonly EventDefinition<string, string> LogDefaultDecimalTypeColumn
             = new EventDefinition<string, string>(
                 SqlServerEventId.DecimalTypeDefaultWarning,
                 LogLevel.Warning,
+                "SqlServerEventId.DecimalTypeDefaultWarning",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Warning,
                     SqlServerEventId.DecimalTypeDefaultWarning,
@@ -85,6 +94,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 SqlServerEventId.ByteIdentityColumnWarning,
                 LogLevel.Warning,
+                "SqlServerEventId.ByteIdentityColumnWarning",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Warning,
                     SqlServerEventId.ByteIdentityColumnWarning,
@@ -121,6 +131,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 SqlServerEventId.DefaultSchemaFound,
                 LogLevel.Debug,
+                "SqlServerEventId.DefaultSchemaFound",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     SqlServerEventId.DefaultSchemaFound,
@@ -133,6 +144,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 SqlServerEventId.TypeAliasFound,
                 LogLevel.Debug,
+                "SqlServerEventId.TypeAliasFound",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     SqlServerEventId.TypeAliasFound,
@@ -145,6 +157,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new FallbackEventDefinition(
                 SqlServerEventId.ColumnFound,
                 LogLevel.Debug,
+                "SqlServerEventId.ColumnFound",
                 _resourceManager.GetString("LogFoundColumn"));
 
         /// <summary>
@@ -154,6 +167,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, string, string>(
                 SqlServerEventId.ForeignKeyFound,
                 LogLevel.Debug,
+                "SqlServerEventId.ForeignKeyFound",
                 LoggerMessage.Define<string, string, string, string>(
                     LogLevel.Debug,
                     SqlServerEventId.ForeignKeyFound,
@@ -166,6 +180,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, string>(
                 SqlServerEventId.ForeignKeyReferencesMissingPrincipalTableWarning,
                 LogLevel.Warning,
+                "SqlServerEventId.ForeignKeyReferencesMissingPrincipalTableWarning",
                 LoggerMessage.Define<string, string, string>(
                     LogLevel.Warning,
                     SqlServerEventId.ForeignKeyReferencesMissingPrincipalTableWarning,
@@ -178,6 +193,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 SqlServerEventId.MissingSchemaWarning,
                 LogLevel.Warning,
+                "SqlServerEventId.MissingSchemaWarning",
                 LoggerMessage.Define<string>(
                     LogLevel.Warning,
                     SqlServerEventId.MissingSchemaWarning,
@@ -190,6 +206,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 SqlServerEventId.MissingTableWarning,
                 LogLevel.Warning,
+                "SqlServerEventId.MissingTableWarning",
                 LoggerMessage.Define<string>(
                     LogLevel.Warning,
                     SqlServerEventId.MissingTableWarning,
@@ -202,6 +219,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new FallbackEventDefinition(
                 SqlServerEventId.SequenceFound,
                 LogLevel.Debug,
+                "SqlServerEventId.SequenceFound",
                 _resourceManager.GetString("LogFoundSequence"));
 
         /// <summary>
@@ -211,6 +229,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 SqlServerEventId.TableFound,
                 LogLevel.Debug,
+                "SqlServerEventId.TableFound",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     SqlServerEventId.TableFound,
@@ -237,6 +256,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, bool>(
                 SqlServerEventId.IndexFound,
                 LogLevel.Debug,
+                "SqlServerEventId.IndexFound",
                 LoggerMessage.Define<string, string, bool>(
                     LogLevel.Debug,
                     SqlServerEventId.IndexFound,
@@ -249,6 +269,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 SqlServerEventId.PrimaryKeyFound,
                 LogLevel.Debug,
+                "SqlServerEventId.PrimaryKeyFound",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     SqlServerEventId.PrimaryKeyFound,
@@ -261,6 +282,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 SqlServerEventId.UniqueConstraintFound,
                 LogLevel.Debug,
+                "SqlServerEventId.UniqueConstraintFound",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     SqlServerEventId.UniqueConstraintFound,
@@ -273,6 +295,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, string, string>(
                 SqlServerEventId.ForeignKeyPrincipalColumnMissingWarning,
                 LogLevel.Warning,
+                "SqlServerEventId.ForeignKeyPrincipalColumnMissingWarning",
                 LoggerMessage.Define<string, string, string, string>(
                     LogLevel.Warning,
                     SqlServerEventId.ForeignKeyPrincipalColumnMissingWarning,
@@ -285,6 +308,18 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => string.Format(
                 GetString("InvalidTableToIncludeInScaffolding", nameof(table)),
                 table);
+
+        /// <summary>
+        ///     The 'FreeText' method is not supported because the query has switched to client-evaluation. Inspect the log to determine which query expressions are triggering client-evaluation.
+        /// </summary>
+        public static string FreeTextFunctionOnClient
+            => GetString("FreeTextFunctionOnClient");
+
+        /// <summary>
+        ///     The expression passed to the 'propertyReference' parameter of the 'FreeText' method is not a valid reference to a property. The expression should represent a reference to a full-text indexed property on the object referenced in the from clause: 'from e in context.Entities where EF.Functions.FreeText(e.SomeProperty, textToSearchFor) select e'
+        /// </summary>
+        public static string InvalidColumnNameForFreeText
+            => GetString("InvalidColumnNameForFreeText");
 
         private static string GetString(string name, params string[] formatterNames)
         {

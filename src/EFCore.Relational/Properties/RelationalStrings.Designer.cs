@@ -81,12 +81,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("RelationalNotInUse");
 
         /// <summary>
-        ///     The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used when the property value is 'null'.
+        ///     The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'.
         /// </summary>
         public static readonly EventDefinition<string, string> LogBoolWithDefaultWarning
             = new EventDefinition<string, string>(
                 RelationalEventId.BoolWithDefaultWarning,
                 LogLevel.Warning,
+                "RelationalEventId.BoolWithDefaultWarning",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Warning,
                     RelationalEventId.BoolWithDefaultWarning,
@@ -117,6 +118,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ConnectionOpening,
                 LogLevel.Debug,
+                "RelationalEventId.ConnectionOpening",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     RelationalEventId.ConnectionOpening,
@@ -129,6 +131,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ConnectionOpened,
                 LogLevel.Debug,
+                "RelationalEventId.ConnectionOpened",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     RelationalEventId.ConnectionOpened,
@@ -141,6 +144,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ConnectionClosing,
                 LogLevel.Debug,
+                "RelationalEventId.ConnectionClosing",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     RelationalEventId.ConnectionClosing,
@@ -153,6 +157,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ConnectionClosed,
                 LogLevel.Debug,
+                "RelationalEventId.ConnectionClosed",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     RelationalEventId.ConnectionClosed,
@@ -165,6 +170,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ConnectionError,
                 LogLevel.Error,
+                "RelationalEventId.ConnectionError",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Error,
                     RelationalEventId.ConnectionError,
@@ -177,6 +183,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.TransactionStarted,
                 LogLevel.Debug,
+                "RelationalEventId.TransactionStarted",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     RelationalEventId.TransactionStarted,
@@ -189,6 +196,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.TransactionUsed,
                 LogLevel.Debug,
+                "RelationalEventId.TransactionUsed",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     RelationalEventId.TransactionUsed,
@@ -201,6 +209,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.TransactionCommitted,
                 LogLevel.Debug,
+                "RelationalEventId.TransactionCommitted",
                 LoggerMessage.Define(
                     LogLevel.Debug,
                     RelationalEventId.TransactionCommitted,
@@ -213,6 +222,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.TransactionRolledBack,
                 LogLevel.Debug,
+                "RelationalEventId.TransactionRolledBack",
                 LoggerMessage.Define(
                     LogLevel.Debug,
                     RelationalEventId.TransactionRolledBack,
@@ -225,6 +235,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.TransactionDisposed,
                 LogLevel.Debug,
+                "RelationalEventId.TransactionDisposed",
                 LoggerMessage.Define(
                     LogLevel.Debug,
                     RelationalEventId.TransactionDisposed,
@@ -237,6 +248,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.TransactionError,
                 LogLevel.Error,
+                "RelationalEventId.TransactionError",
                 LoggerMessage.Define(
                     LogLevel.Error,
                     RelationalEventId.TransactionError,
@@ -249,6 +261,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.DataReaderDisposing,
                 LogLevel.Debug,
+                "RelationalEventId.DataReaderDisposing",
                 LoggerMessage.Define(
                     LogLevel.Debug,
                     RelationalEventId.DataReaderDisposing,
@@ -325,6 +338,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.AmbientTransactionWarning,
                 LogLevel.Warning,
+                "RelationalEventId.AmbientTransactionWarning",
                 LoggerMessage.Define(
                     LogLevel.Warning,
                     RelationalEventId.AmbientTransactionWarning,
@@ -337,6 +351,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<object>(
                 RelationalEventId.QueryPossibleUnintendedUseOfEqualsWarning,
                 LogLevel.Warning,
+                "RelationalEventId.QueryPossibleUnintendedUseOfEqualsWarning",
                 LoggerMessage.Define<object>(
                     LogLevel.Warning,
                     RelationalEventId.QueryPossibleUnintendedUseOfEqualsWarning,
@@ -349,6 +364,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.QueryPossibleExceptionWithAggregateOperator,
                 LogLevel.Warning,
+                "RelationalEventId.QueryPossibleExceptionWithAggregateOperator",
                 LoggerMessage.Define(
                     LogLevel.Warning,
                     RelationalEventId.QueryPossibleExceptionWithAggregateOperator,
@@ -367,6 +383,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.MigrationGeneratingDownScript,
                 LogLevel.Debug,
+                "RelationalEventId.MigrationGeneratingDownScript",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     RelationalEventId.MigrationGeneratingDownScript,
@@ -379,6 +396,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.MigrationGeneratingUpScript,
                 LogLevel.Debug,
+                "RelationalEventId.MigrationGeneratingUpScript",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     RelationalEventId.MigrationGeneratingUpScript,
@@ -391,6 +409,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.MigrationApplying,
                 LogLevel.Information,
+                "RelationalEventId.MigrationApplying",
                 LoggerMessage.Define<string>(
                     LogLevel.Information,
                     RelationalEventId.MigrationApplying,
@@ -403,6 +422,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.MigrationReverting,
                 LogLevel.Information,
+                "RelationalEventId.MigrationReverting",
                 LoggerMessage.Define<string>(
                     LogLevel.Information,
                     RelationalEventId.MigrationReverting,
@@ -415,6 +435,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.MigrateUsingConnection,
                 LogLevel.Debug,
+                "RelationalEventId.MigrateUsingConnection",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     RelationalEventId.MigrateUsingConnection,
@@ -427,6 +448,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition(
                 RelationalEventId.MigrationsNotApplied,
                 LogLevel.Information,
+                "RelationalEventId.MigrationsNotApplied",
                 LoggerMessage.Define(
                     LogLevel.Information,
                     RelationalEventId.MigrationsNotApplied,
@@ -439,6 +461,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string>(
                 RelationalEventId.MigrationsNotFound,
                 LogLevel.Debug,
+                "RelationalEventId.MigrationsNotFound",
                 LoggerMessage.Define<string>(
                     LogLevel.Debug,
                     RelationalEventId.MigrationsNotFound,
@@ -461,20 +484,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 table, entityType, otherEntityType, keyName, primaryKey, otherName, otherPrimaryKey);
 
         /// <summary>
-        ///     Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between the primary key {primaryKey} and the primary key {otherPrimaryKey}.
+        ///     Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between their primary keys.
         /// </summary>
-        public static string IncompatibleTableNoRelationship([CanBeNull] object table, [CanBeNull] object entityType, [CanBeNull] object otherEntityType, [CanBeNull] object primaryKey, [CanBeNull] object otherPrimaryKey)
+        public static string IncompatibleTableNoRelationship([CanBeNull] object table, [CanBeNull] object entityType, [CanBeNull] object otherEntityType)
             => string.Format(
-                GetString("IncompatibleTableNoRelationship", nameof(table), nameof(entityType), nameof(otherEntityType), nameof(primaryKey), nameof(otherPrimaryKey)),
-                table, entityType, otherEntityType, primaryKey, otherPrimaryKey);
-
-        /// <summary>
-        ///     Cannot use table '{table}' for entity type '{dependentType}' since it has a relationship to a derived entity type '{principalType}'. Either point the relationship to the base type '{rootType}' or map '{dependentType}' to a different table.
-        /// </summary>
-        public static string IncompatibleTableDerivedPrincipal([CanBeNull] object table, [CanBeNull] object dependentType, [CanBeNull] object principalType, [CanBeNull] object rootType)
-            => string.Format(
-                GetString("IncompatibleTableDerivedPrincipal", nameof(table), nameof(dependentType), nameof(principalType), nameof(rootType)),
-                table, dependentType, principalType, rootType);
+                GetString("IncompatibleTableNoRelationship", nameof(table), nameof(entityType), nameof(otherEntityType)),
+                table, entityType, otherEntityType);
 
         /// <summary>
         ///     Property '{property}' on entity type '{entityType}' is part of a primary or alternate key but has a constant default value set. Constant default values are not useful for primary or alternate keys since these properties must always have non-null unqiue values.
@@ -483,6 +498,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ModelValidationKeyDefaultValueWarning,
                 LogLevel.Warning,
+                "RelationalEventId.ModelValidationKeyDefaultValueWarning",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Warning,
                     RelationalEventId.ModelValidationKeyDefaultValueWarning,
@@ -535,6 +551,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<object>(
                 RelationalEventId.QueryClientEvaluationWarning,
                 LogLevel.Warning,
+                "RelationalEventId.QueryClientEvaluationWarning",
                 LoggerMessage.Define<object>(
                     LogLevel.Warning,
                     RelationalEventId.QueryClientEvaluationWarning,
@@ -563,6 +580,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, System.Data.CommandType, int, string, string>(
                 RelationalEventId.CommandExecuting,
                 LogLevel.Debug,
+                "RelationalEventId.CommandExecuting",
                 LoggerMessage.Define<string, System.Data.CommandType, int, string, string>(
                     LogLevel.Debug,
                     RelationalEventId.CommandExecuting,
@@ -575,6 +593,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, System.Data.CommandType, int, string, string>(
                 RelationalEventId.CommandExecuted,
                 LogLevel.Information,
+                "RelationalEventId.CommandExecuted",
                 LoggerMessage.Define<string, string, System.Data.CommandType, int, string, string>(
                     LogLevel.Information,
                     RelationalEventId.CommandExecuted,
@@ -587,6 +606,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string, System.Data.CommandType, int, string, string>(
                 RelationalEventId.CommandError,
                 LogLevel.Error,
+                "RelationalEventId.CommandError",
                 LoggerMessage.Define<string, string, System.Data.CommandType, int, string, string>(
                     LogLevel.Error,
                     RelationalEventId.CommandError,
@@ -655,7 +675,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 firstEntityType, secondEntityType, keyValue, firstConflictingValues, secondConflictingValues, columns);
 
         /// <summary>
-        ///     The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
+        ///     The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
         /// </summary>
         public static string SharedRowEntryCountMismatch([CanBeNull] object entityType, [CanBeNull] object tableName, [CanBeNull] object missingEntityType, [CanBeNull] object state)
             => string.Format(
@@ -663,7 +683,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType, tableName, missingEntityType, state);
 
         /// <summary>
-        ///     The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.
+        ///     The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.
         /// </summary>
         public static string SharedRowEntryCountMismatchSensitive([CanBeNull] object entityType, [CanBeNull] object tableName, [CanBeNull] object missingEntityType, [CanBeNull] object keyValue, [CanBeNull] object state)
             => string.Format(
@@ -803,6 +823,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             = new EventDefinition<string, string>(
                 RelationalEventId.ConnectionError,
                 LogLevel.Debug,
+                "RelationalEventId.ConnectionError",
                 LoggerMessage.Define<string, string>(
                     LogLevel.Debug,
                     RelationalEventId.ConnectionError,
@@ -889,6 +910,108 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public static string InvalidMinBatchSize
             => GetString("InvalidMinBatchSize");
+
+        /// <summary>
+        ///     Expected a non-null value for query parameter '{parameter}'.
+        /// </summary>
+        public static string ExpectedNonNullParameter([CanBeNull] object parameter)
+            => string.Format(
+                GetString("ExpectedNonNullParameter", nameof(parameter)),
+                parameter);
+
+        /// <summary>
+        ///     Enlisted in an ambient transaction with isolation level '{isolationLevel}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogAmbientTransactionEnlisted
+            = new EventDefinition<string>(
+                RelationalEventId.AmbientTransactionEnlisted,
+                LogLevel.Debug,
+                "RelationalEventId.AmbientTransactionEnlisted",
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    RelationalEventId.AmbientTransactionEnlisted,
+                    _resourceManager.GetString("LogAmbientTransactionEnlisted")));
+
+        /// <summary>
+        ///     Enlisted in an explicit transaction with isolation level '{isolationLevel}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogExplicitTransactionEnlisted
+            = new EventDefinition<string>(
+                RelationalEventId.ExplicitTransactionEnlisted,
+                LogLevel.Debug,
+                "RelationalEventId.ExplicitTransactionEnlisted",
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    RelationalEventId.ExplicitTransactionEnlisted,
+                    _resourceManager.GetString("LogExplicitTransactionEnlisted")));
+
+        /// <summary>
+        ///     Executing update commands individually as the number of batchable commands ({batchableCommandsCount}) is smaller than the minimum batch size ({minBatchSize}).
+        /// </summary>
+        public static readonly EventDefinition<int, int> LogBatchSmallerThanMinBatchSize
+            = new EventDefinition<int, int>(
+                RelationalEventId.BatchSmallerThanMinBatchSize,
+                LogLevel.Debug,
+                "RelationalEventId.BatchSmallerThanMinBatchSize",
+                LoggerMessage.Define<int, int>(
+                    LogLevel.Debug,
+                    RelationalEventId.BatchSmallerThanMinBatchSize,
+                    _resourceManager.GetString("LogBatchSmallerThanMinBatchSize")));
+
+        /// <summary>
+        ///     Executing {batchCommandsCount} update commands as a batch.
+        /// </summary>
+        public static readonly EventDefinition<int> LogBatchReadyForExecution
+            = new EventDefinition<int>(
+                RelationalEventId.BatchReadyForExecution,
+                LogLevel.Debug,
+                "RelationalEventId.BatchReadyForExecution",
+                LoggerMessage.Define<int>(
+                    LogLevel.Debug,
+                    RelationalEventId.BatchReadyForExecution,
+                    _resourceManager.GetString("LogBatchReadyForExecution")));
+
+        /// <summary>
+        ///     A MigrationAttribute isn't specified on the '{class}' class.
+        /// </summary>
+        public static readonly EventDefinition<string> LogMigrationAttributeMissingWarning
+            = new EventDefinition<string>(
+                RelationalEventId.MigrationAttributeMissingWarning,
+                LogLevel.Warning,
+                "RelationalEventId.MigrationAttributeMissingWarning",
+                LoggerMessage.Define<string>(
+                    LogLevel.Warning,
+                    RelationalEventId.MigrationAttributeMissingWarning,
+                    _resourceManager.GetString("LogMigrationAttributeMissingWarning")));
+
+        /// <summary>
+        ///     A SQL parameter or literal was generated for the type '{type}' using the ValueConverter '{valueConverter}'. Review the generated SQL for correctness and consider evaluating the target expression in-memory instead.
+        /// </summary>
+        public static readonly EventDefinition<object, object> LogValueConversionSqlLiteralWarning
+            = new EventDefinition<object, object>(
+                RelationalEventId.ValueConversionSqlLiteralWarning,
+                LogLevel.Warning,
+                "RelationalEventId.ValueConversionSqlLiteralWarning",
+                LoggerMessage.Define<object, object>(
+                    LogLevel.Warning,
+                    RelationalEventId.ValueConversionSqlLiteralWarning,
+                    _resourceManager.GetString("LogValueConversionSqlLiteralWarning")));
+
+        /// <summary>
+        ///     The query type '{queryType}' cannot be mapped to a view bacause it is derived from '{baseType}'. Only base query types can be mapped to a view.
+        /// </summary>
+        public static string DerivedQueryTypeView([CanBeNull] object queryType, [CanBeNull] object baseType)
+            => string.Format(
+                GetString("DerivedQueryTypeView", nameof(queryType), nameof(baseType)),
+                queryType, baseType);
+
+        /// <summary>
+        ///     The '{mapping}' does not support 2.2 style type mapping. The database provider needs to be updated to support the full set of mapping customization.
+        /// </summary>
+        public static string RelationalCloneNotImplemented([CanBeNull] object mapping)
+            => string.Format(
+                GetString("RelationalCloneNotImplemented", nameof(mapping)),
+                mapping);
 
         private static string GetString(string name, params string[] formatterNames)
         {
